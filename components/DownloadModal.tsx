@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Download, Calendar, CheckSquare, Square, FileText, DollarSign, Eye, ArrowLeft } from 'lucide-react';
 import { GroupedData, FieldConfiguration } from '../types';
 import { generateHeaderRow } from '../utils/fieldMapping';
@@ -19,15 +19,13 @@ const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, groupedData, fiel
   const months = useMemo(() => Object.keys(groupedData).sort(), [groupedData]);
 
   // Initialize selection when opening
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       // Default to selecting all
       setSelectedMonths(new Set(months));
       setShowPreview(false);
     }
   }, [isOpen, months]);
-
-  if (!isOpen) return null;
 
   const toggleMonth = (month: string) => {
     const newSet = new Set(selectedMonths);
@@ -66,28 +64,30 @@ const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, groupedData, fiel
 
   // Generate Preview Content
   const previewContent = useMemo(() => {
-      if (!showPreview) return '';
-      
-      const header = generateHeaderRow(fieldConfig);
-      let lines = '';
-      let count = 0;
-      const maxPreview = 50;
-      
-      const sortedSelected: string[] = (Array.from(selectedMonths) as string[]).sort();
-      
-      for (const month of sortedSelected) {
-          const files = groupedData[month] || [];
-          for (const file of files) {
-              lines += file.csvLine;
-              count++;
-              if (count >= maxPreview) break;
-          }
-          if (count >= maxPreview) break;
-      }
+    if (!showPreview) return '';
 
-      const footer = count >= maxPreview ? `\n... (Vista previa truncada a los primeros ${maxPreview} registros de ${stats.files})` : '';
-      return header + lines + footer;
+    const header = generateHeaderRow(fieldConfig);
+    let lines = '';
+    let count = 0;
+    const maxPreview = 50;
+
+    const sortedSelected: string[] = (Array.from(selectedMonths) as string[]).sort();
+
+    for (const month of sortedSelected) {
+      const files = groupedData[month] || [];
+      for (const file of files) {
+        lines += file.csvLine;
+        count++;
+        if (count >= maxPreview) break;
+      }
+      if (count >= maxPreview) break;
+    }
+
+    const footer = count >= maxPreview ? `\n... (Vista previa truncada a los primeros ${maxPreview} registros de ${stats.files})` : '';
+    return header + lines + footer;
   }, [showPreview, selectedMonths, groupedData, fieldConfig, stats.files]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
