@@ -409,7 +409,7 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 flex justify-between items-center gap-4">
           <div className="flex flex-col space-y-1">
             <p className="text-sm text-gray-400">
-              &copy; {new Date().getFullYear()} DTE Converter Pro.
+              &copy; {new Date().getFullYear()} Facturas DTE Pro.
             </p>
             <p className="text-xs text-gray-400">
               Formato diseñado para ser compatible con los lineamientos del Ministerio de Hacienda de El Salvador.
