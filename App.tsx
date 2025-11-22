@@ -242,7 +242,7 @@ const App: React.FC = () => {
               <LayoutDashboard className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-xl font-bold text-gray-900 tracking-tight hidden md:block">
-              DTE Converter <span className={appMode === 'ventas' ? 'text-indigo-600' : 'text-emerald-600'}>Pro</span>
+              Facturas DTE <span className={appMode === 'ventas' ? 'text-indigo-600' : 'text-emerald-600'}>Pro</span>
             </h1>
           </div>
           
@@ -412,7 +412,9 @@ const App: React.FC = () => {
               &copy; {new Date().getFullYear()} DTE Converter Pro.
             </p>
             <p className="text-xs text-gray-400">
-              Formato diseñado para ser compatible con los lineamientos DTE y anexos F-07 del Ministerio de Hacienda de El Salvador. Revisa siempre tus archivos en{' '}
+              Formato diseñado para ser compatible con los lineamientos del Ministerio de Hacienda de El Salvador.
+              <br />
+              Revisa siempre tus archivos en{' '}
               <a
                 href="https://factura.gob.sv/"
                 target="_blank"
@@ -427,7 +429,7 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center space-x-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
              <CheckCircle className="w-3 h-3" />
-             <span>100% Seguro (Client-side)</span>
+             <span>100% Seguro</span>
           </div>
         </div>
       </footer>
