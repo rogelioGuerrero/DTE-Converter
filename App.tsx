@@ -4,9 +4,14 @@ import Stats from './components/Stats';
 import FileList from './components/FileList';
 import FieldManager from './components/FieldManager';
 import DownloadModal from './components/DownloadModal';
+import History from './components/History';
 import { processJsonContent, downloadCSV } from './utils/processor';
-import { VENTAS_CONFIG, COMPRAS_CONFIG, generateHeaderRow } from './utils/fieldMapping';
+import { VENTAS_CONFIG, COMPRAS_CONFIG } from './utils/fieldMapping';
+import { addHistoryEntry, computeSHA256 } from './utils/historyDb';
+import { consumeExportSlot, getUsageInfo } from './utils/usageLimit';
+
 import { GroupedData, ProcessedFile, FieldConfiguration, AppMode } from './types';
+
 import { LayoutDashboard, RefreshCw, Search, Download, CheckCircle, Settings2, ShoppingCart, FileSpreadsheet } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -17,12 +22,15 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showFieldManager, setShowFieldManager] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
-  
+
   // Application Mode: 'ventas' or 'compras'
   const [appMode, setAppMode] = useState<AppMode>('ventas');
 
   // Load config based on mode
   const [fieldConfig, setFieldConfig] = useState<FieldConfiguration>([]);
+
+  const MAX_EXPORTS_PER_DAY = 5;
+  const [usageInfo, setUsageInfo] = useState(() => getUsageInfo(MAX_EXPORTS_PER_DAY));
 
   // Initialize or switch config when mode changes
   useEffect(() => {
@@ -40,6 +48,25 @@ const App: React.FC = () => {
     setGroupedData({});
     setErrors([]);
   }, [appMode]);
+
+  // Track daily usage info for the free plan indicator
+  useEffect(() => {
+    const handler = () => {
+      setUsageInfo(getUsageInfo(MAX_EXPORTS_PER_DAY));
+    };
+
+    // Inicializar al montar
+    handler();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dte-usage-updated', handler);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('dte-usage-updated', handler);
+      }
+    };
+  }, []);
 
   // Save config when changed
   useEffect(() => {
@@ -145,22 +172,51 @@ const App: React.FC = () => {
     setSearchTerm('');
   };
 
-  const handleBatchDownload = (selectedMonths: string[]) => {
-    const header = generateHeaderRow(fieldConfig);
+  const handleBatchDownload = async (selectedMonths: string[]) => {
+    const slot = consumeExportSlot();
+    if (!slot.allowed) {
+      alert('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com');
+      setShowDownloadModal(false);
+      return;
+    }
+
     let allLines = "";
-    
-    // Sort months to ensure chronological order in CSV
-    selectedMonths.sort().forEach(month => {
-        const files = groupedData[month];
-        if (files) {
-            allLines += files.map(f => f.csvLine).join('');
-        }
+    let exportTotalAmount = 0;
+    let exportFileCount = 0;
+
+    const sortedMonths = [...selectedMonths].sort();
+
+    sortedMonths.forEach(month => {
+      const files = groupedData[month];
+      if (files && files.length > 0) {
+        files.forEach(f => {
+          allLines += f.csvLine;
+          exportTotalAmount += parseFloat(f.data.total);
+        });
+        exportFileCount += files.length;
+      }
     });
+
+    if (!allLines) {
+      setShowDownloadModal(false);
+      return;
+    }
 
     const prefix = appMode === 'ventas' ? 'VENTAS' : 'COMPRAS';
     const label = selectedMonths.length === Object.keys(groupedData).length ? 'CONSOLIDADO' : 'PARCIAL';
-    
-    downloadCSV(header + allLines, `REPORTE_${prefix}_${label}.csv`);
+    const fileName = `REPORTE_${prefix}_${label}.csv`;
+
+    const hash = await computeSHA256(allLines);
+    await addHistoryEntry({
+      timestamp: Date.now(),
+      mode: appMode,
+      fileName,
+      totalAmount: exportTotalAmount,
+      fileCount: exportFileCount,
+      hash,
+    });
+
+    downloadCSV(allLines, fileName);
     setShowDownloadModal(false);
   };
 
@@ -267,13 +323,23 @@ const App: React.FC = () => {
                     <h2 className="text-2xl font-bold text-gray-900">Dashboard de {appMode === 'ventas' ? 'Ventas' : 'Compras'}</h2>
                     <p className="text-gray-500 text-sm">Validación y cálculo completado</p>
                  </div>
-                 <button 
-                    onClick={() => setShowDownloadModal(true)}
-                    className="flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5"
-                 >
-                    <Download className="w-5 h-5" />
-                    <span>Exportar / Descargar</span>
-                 </button>
+                 <div className="flex flex-col items-stretch md:items-end gap-2">
+                   <button 
+                      onClick={() => setShowDownloadModal(true)}
+                      className="flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5"
+                   >
+                      <Download className="w-5 h-5" />
+                      <span>Exportar / Descargar</span>
+                   </button>
+                   <div className="relative group inline-flex items-center">
+                     <span className="text-[11px] text-gray-400 border border-dashed border-gray-300 rounded-full px-2 py-0.5 cursor-default">
+                       Plan gratuito: {Math.min(usageInfo.count, usageInfo.max)}/{usageInfo.max} exportaciones hoy
+                     </span>
+                     <div className="absolute z-10 hidden group-hover:block -top-14 right-0 w-64 px-3 py-2 rounded-lg bg-gray-900 text-[11px] text-gray-100 shadow-xl">
+                       Las exportaciones se cuentan por día calendario. Este límite aplica solo como demostración del servicio.
+                     </div>
+                   </div>
+                 </div>
               </div>
 
               <Stats 
@@ -292,6 +358,8 @@ const App: React.FC = () => {
               />
             </div>
           )}
+
+          <History />
 
           {/* Progress Overlay */}
           {isProcessing && (
@@ -336,10 +404,25 @@ const App: React.FC = () => {
       </main>
 
       <footer className="border-t border-gray-200 mt-auto bg-white/50">
-        <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <p className="text-sm text-gray-400">
-            &copy; {new Date().getFullYear()} DTE Converter Pro.
-          </p>
+        <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 flex justify-between items-center gap-4">
+          <div className="flex flex-col space-y-1">
+            <p className="text-sm text-gray-400">
+              &copy; {new Date().getFullYear()} DTE Converter Pro.
+            </p>
+            <p className="text-xs text-gray-400">
+              Formato diseñado para ser compatible con los lineamientos DTE y anexos F-07 del Ministerio de Hacienda de El Salvador. Revisa siempre tus archivos en{' '}
+              <a
+                href="https://factura.gob.sv/"
+                target="_blank"
+                rel="noreferrer"
+                className="underline decoration-dotted text-indigo-500 hover:text-indigo-600"
+                title="Ir al sitio oficial del Ministerio de Hacienda (factura.gob.sv) para consultar normativa y validar tus DTE."
+              >
+                factura.gob.sv
+              </a>{' '}
+              antes de presentarlos.
+            </p>
+          </div>
           <div className="flex items-center space-x-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
              <CheckCircle className="w-3 h-3" />
              <span>100% Seguro (Client-side)</span>

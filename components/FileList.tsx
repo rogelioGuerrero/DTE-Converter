@@ -3,6 +3,7 @@ import { GroupedData, ProcessedFile } from '../types';
 import { Download, FileText, AlertCircle, Calendar, Search, Eye, AlertTriangle, GripVertical, Trash2, CheckSquare, Minimize2 } from 'lucide-react';
 
 import { downloadCSV } from '../utils/processor';
+import { consumeExportSlot } from '../utils/usageLimit';
 import InvoiceDetailModal from './InvoiceDetailModal';
 
 interface FileListProps {
@@ -27,7 +28,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
   const months = Object.keys(groupedData).sort();
 
   // Helper for download header
-  const HEADER_ROW = "fecEmi;tipoDte;numeroControl;selloRecibido;codigoGeneracion;;nrc;nombre;totalExenta;totalNoSuj;totalGravada;valor;0.00;0.00;montoTotalOperacion;;1;2;1\n";
+  // const HEADER_ROW = "fecEmi;tipoDte;numeroControl;selloRecibido;codigoGeneracion;;nrc;nombre;totalExenta;totalNoSuj;totalGravada;valor;0.00;0.00;montoTotalOperacion;;1;2;1\n";
 
   // --- Selection Logic ---
 
@@ -87,16 +88,28 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
   };
 
   const handleDownload = (month: string) => {
+    const slot = consumeExportSlot();
+    if (!slot.allowed) {
+      alert('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com');
+      return;
+    }
+
     const files = groupedData[month];
-    const content = HEADER_ROW + files.map(f => f.csvLine).join('');
+    const content = files.map(f => f.csvLine).join('');
     downloadCSV(content, `${month}_datos_ventas.csv`);
   };
 
   const handleBulkDownload = () => {
+      const slot = consumeExportSlot();
+      if (!slot.allowed) {
+        alert('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com');
+        return;
+      }
+
       const selectedFiles = allVisibleFiles.filter(f => selectedIds.has(f.id));
       if (selectedFiles.length === 0) return;
       
-      const content = HEADER_ROW + selectedFiles.map(f => f.csvLine).join('');
+      const content = selectedFiles.map(f => f.csvLine).join('');
       downloadCSV(content, `seleccionados_export.csv`);
   };
 

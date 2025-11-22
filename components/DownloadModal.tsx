@@ -8,7 +8,7 @@ interface DownloadModalProps {
   groupedData: GroupedData;
   fieldConfig: FieldConfiguration;
   onClose: () => void;
-  onDownload: (selectedMonths: string[]) => void;
+  onDownload: (selectedMonths: string[]) => void | Promise<void>;
 }
 
 const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, groupedData, fieldConfig, onClose, onDownload }) => {

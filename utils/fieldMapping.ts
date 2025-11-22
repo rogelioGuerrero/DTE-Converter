@@ -55,10 +55,15 @@ export const COMPRAS_CONFIG: FieldConfiguration = [
   { id: 'c21', columnLetter: 'U', label: 'Número Anexo', sourceType: 'static', value: '3', transformation: 'none', enabled: true }, // Anexo 3 for Compras
 ];
 
-
 // Helper to get nested property safely
 const getNestedValue = (obj: any, path: string): any => {
   return path.split('.').reduce((prev, curr) => (prev ? prev[curr] : undefined), obj);
+};
+
+// Simple helper to sanitize text fields for CSV: remove commas and semicolons
+const sanitizeText = (value: string): string => {
+  // Reemplaza comas y punto y comas por espacio y colapsa espacios múltiples
+  return value.replace(/[;,]/g, ' ').replace(/\s+/g, ' ').trim();
 };
 
 export const extractValue = (data: DTEData, field: any): string => {
@@ -98,7 +103,9 @@ export const extractValue = (data: DTEData, field: any): string => {
       return '0.00';
 
     default:
-      return String(rawValue);
+      // Para valores de texto sin transformación específica, limpiamos caracteres
+      // que puedan romper el CSV (comas y punto y comas).
+      return sanitizeText(String(rawValue));
   }
 };
 

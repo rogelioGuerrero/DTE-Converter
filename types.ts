@@ -73,3 +73,14 @@ export interface FieldDefinition {
 export type FieldConfiguration = FieldDefinition[];
 
 export type AppMode = 'ventas' | 'compras';
+
+// --- Historial de exportaciones (IndexedDB) ---
+export interface HistoryEntry {
+  id?: number;
+  timestamp: number; // Epoch ms
+  mode: AppMode; // ventas o compras
+  fileName: string; // nombre del CSV generado
+  totalAmount: number; // monto total incluido en el archivo
+  fileCount: number; // número de documentos incluidos
+  hash: string; // hash SHA-256 del contenido CSV
+}
