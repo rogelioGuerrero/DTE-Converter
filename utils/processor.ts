@@ -42,7 +42,7 @@ export const processJsonContent = (
     // Extract essential metadata for grouping/display (kept separate from CSV line generation for UI purposes)
     const rawDate = data.identificacion.fecEmi || '';
     const dateParts = rawDate.split('-');
-    const mes = dateParts.length === 3 ? dateParts[1] : 'Unknown';
+    const yearMonth = dateParts.length === 3 ? `${dateParts[0]}-${dateParts[1]}` : 'Unknown';
     
     // Safety checks for display data
     const displayDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : rawDate;
@@ -71,7 +71,7 @@ export const processJsonContent = (
     return {
       id: uniqueId,
       fileName,
-      month: mes,
+      month: yearMonth,
       csvLine: linea,
       isValid: true,
       data: {

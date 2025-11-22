@@ -246,6 +246,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
                  </div>
                  <button
                     onClick={() => handleDownload(month)}
+                    title="Descargar CSV de este mes para la declaración del libro."
                     className="flex items-center space-x-2 bg-white border border-gray-200 hover:bg-gray-50 hover:border-indigo-300 text-indigo-600 px-4 py-2 rounded-lg transition-all text-sm font-medium shadow-sm"
                  >
                     <Download className="w-4 h-4" />

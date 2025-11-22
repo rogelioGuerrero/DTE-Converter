@@ -106,10 +106,12 @@ const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, groupedData, fiel
             )}
             <div>
                 <h3 className="font-bold text-xl text-gray-800">
-                    {showPreview ? 'Vista Previa CSV' : 'Exportar Reporte'}
+                    {showPreview ? 'Vista previa del reporte' : 'Reporte consolidado (interno)'}
                 </h3>
                 <p className="text-gray-500 text-sm">
-                    {showPreview ? 'Verificando estructura de datos (Header + 50 líneas)' : 'Selecciona los periodos a incluir en el CSV'}
+                    {showPreview 
+                      ? 'Previsualización del archivo: encabezado + primeros 50 registros (no es el archivo completo).'
+                      : 'Selecciona los meses que quieres incluir en el reporte consolidado (uso interno, no fiscal).'}
                 </p>
             </div>
           </div>
@@ -225,7 +227,7 @@ const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, groupedData, fiel
                 </span>
                 <span className="font-bold text-indigo-600 flex items-center">
                     <DollarSign className="w-4 h-4 mr-1" />
-                    ${stats.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {stats.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
              </div>
           </div>

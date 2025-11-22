@@ -204,7 +204,7 @@ const App: React.FC = () => {
 
     const prefix = appMode === 'ventas' ? 'VENTAS' : 'COMPRAS';
     const label = selectedMonths.length === Object.keys(groupedData).length ? 'CONSOLIDADO' : 'PARCIAL';
-    const fileName = `REPORTE_${prefix}_${label}.csv`;
+    const fileName = `REPORTE_INTERNO_${prefix}_${label}.csv`;
 
     const hash = await computeSHA256(allLines);
     await addHistoryEntry({
@@ -321,15 +321,16 @@ const App: React.FC = () => {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                  <div>
                     <h2 className="text-2xl font-bold text-gray-900">Dashboard de {appMode === 'ventas' ? 'Ventas' : 'Compras'}</h2>
-                    <p className="text-gray-500 text-sm">Validación y cálculo completado</p>
+                    <p className="text-gray-500 text-sm">Validación y cálculo completado. Para declarar ante Hacienda usa el CSV mensual de cada periodo.</p>
                  </div>
                  <div className="flex flex-col items-stretch md:items-end gap-2">
                    <button 
                       onClick={() => setShowDownloadModal(true)}
+                      title="Genera un reporte consolidado en CSV para análisis interno (no usar para declaración mensual)."
                       className="flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5"
                    >
                       <Download className="w-5 h-5" />
-                      <span>Exportar / Descargar</span>
+                      <span>Reporte consolidado (interno)</span>
                    </button>
                    <div className="relative group inline-flex items-center">
                      <span className="text-[11px] text-gray-400 border border-dashed border-gray-300 rounded-full px-2 py-0.5 cursor-default">
