@@ -106,7 +106,7 @@ const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, groupedData, fiel
             )}
             <div>
                 <h3 className="font-bold text-xl text-gray-800">
-                    {showPreview ? 'Vista previa del reporte' : 'Reporte consolidado (interno)'}
+                    {showPreview ? 'Vista previa del reporte' : 'Reporte consolidado'}
                 </h3>
                 <p className="text-gray-500 text-sm">
                     {showPreview 

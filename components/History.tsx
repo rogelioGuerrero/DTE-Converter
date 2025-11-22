@@ -53,7 +53,7 @@ const History: React.FC = () => {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-gray-800">Historial de exportaciones</h3>
-            <p className="text-xs text-gray-500">Registros guardados localmente en tu navegador (IndexedDB).</p>
+            <p className="text-xs text-gray-500">Registros guardados localmente en tu navegador.</p>
           </div>
         </div>
         <button

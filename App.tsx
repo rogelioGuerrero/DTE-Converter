@@ -326,11 +326,11 @@ const App: React.FC = () => {
                  <div className="flex flex-col items-stretch md:items-end gap-2">
                    <button 
                       onClick={() => setShowDownloadModal(true)}
-                      title="Genera un reporte consolidado en CSV para análisis interno (no usar para declaración mensual)."
+                      title="Genera un reporte consolidado en CSV para análisis y control interno (no usar para declaración mensual)."
                       className="flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5"
                    >
                       <Download className="w-5 h-5" />
-                      <span>Reporte consolidado (interno)</span>
+                      <span>Reporte consolidado</span>
                    </button>
                    <div className="relative group inline-flex items-center">
                      <span className="text-[11px] text-gray-400 border border-dashed border-gray-300 rounded-full px-2 py-0.5 cursor-default">
@@ -356,6 +356,7 @@ const App: React.FC = () => {
                 searchTerm={searchTerm} 
                 onReorder={handleReorder}
                 onRemoveFiles={handleRemoveFiles}
+                appMode={appMode}
               />
             </div>
           )}

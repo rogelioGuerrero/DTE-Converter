@@ -1,9 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { GroupedData, ProcessedFile } from '../types';
+import { GroupedData, ProcessedFile, AppMode } from '../types';
+
 import { Download, FileText, AlertCircle, Calendar, Search, Eye, AlertTriangle, GripVertical, Trash2, CheckSquare, Minimize2 } from 'lucide-react';
 
 import { downloadCSV } from '../utils/processor';
 import { consumeExportSlot } from '../utils/usageLimit';
+import { addHistoryEntry, computeSHA256 } from '../utils/historyDb';
+
 import InvoiceDetailModal from './InvoiceDetailModal';
 
 interface FileListProps {
@@ -12,9 +15,10 @@ interface FileListProps {
   searchTerm: string;
   onReorder: (month: string, newOrder: ProcessedFile[]) => void;
   onRemoveFiles: (ids: string[]) => void; // New prop for bulk deletion
+  appMode: AppMode;
 }
 
-const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, onReorder, onRemoveFiles }) => {
+const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, onReorder, onRemoveFiles, appMode }) => {
   const [selectedFile, setSelectedFile] = useState<ProcessedFile | null>(null);
   
   // Selection State
@@ -87,7 +91,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
       setSelectedIds(newSet);
   };
 
-  const handleDownload = (month: string) => {
+  const handleDownload = async (month: string) => {
     const slot = consumeExportSlot();
     if (!slot.allowed) {
       alert('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com');
@@ -95,8 +99,27 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
     }
 
     const files = groupedData[month];
+    if (!files || files.length === 0) return;
+
     const content = files.map(f => f.csvLine).join('');
-    downloadCSV(content, `${month}_datos_ventas.csv`);
+    if (!content) return;
+
+    const prefix = appMode === 'ventas' ? 'VENTAS' : 'COMPRAS';
+    const fileName = `LIBRO_${prefix}_${month}.csv`;
+    const totalAmount = files.reduce((sum, f) => sum + parseFloat(f.data.total), 0);
+    const fileCount = files.length;
+
+    const hash = await computeSHA256(content);
+    await addHistoryEntry({
+      timestamp: Date.now(),
+      mode: appMode,
+      fileName,
+      totalAmount,
+      fileCount,
+      hash,
+    });
+
+    downloadCSV(content, fileName);
   };
 
   const handleBulkDownload = () => {
