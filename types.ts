@@ -12,6 +12,7 @@ export interface DTEEmisor {
 }
 
 export interface DTEReceptor {
+  nit?: string;
   nrc: string;
   nombre: string;
 }

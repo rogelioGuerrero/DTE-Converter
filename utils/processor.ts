@@ -50,20 +50,39 @@ export const processJsonContent = (
     const displayDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : rawDate;
     const displayControl = data.identificacion.numeroControl || 'N/A';
     
+    // Función para normalizar NIT (quitar guiones y ceros a la izquierda)
+    const normalizeNit = (nit: string): string => {
+      if (!nit) return '';
+      return nit.replace(/[-\s]/g, '').replace(/^0+/, '');
+    };
+
     // Auto-detect mode if user has configured their NIT/NRC
     let effectiveMode: AppMode = mode === 'auto' ? 'ventas' : mode;
     
     if (settings.myNit || settings.myNrc) {
-      const emisorNit = data.emisor?.nit?.replace(/-/g, '') || '';
-      const emisorNrc = data.emisor?.nrc?.replace(/-/g, '') || '';
-      const myNitClean = settings.myNit.replace(/-/g, '');
-      const myNrcClean = settings.myNrc.replace(/-/g, '');
+      const emisorNit = normalizeNit(data.emisor?.nit || '');
+      const emisorNrc = normalizeNit(data.emisor?.nrc || '');
+      const receptorNit = normalizeNit(data.receptor?.nit || '');
+      const receptorNrc = normalizeNit(data.receptor?.nrc || '');
+      const myNitClean = normalizeNit(settings.myNit);
+      const myNrcClean = normalizeNit(settings.myNrc);
       
+      // Si yo soy el EMISOR → es una VENTA (yo vendo)
       const isMyCompanyEmitter = 
         (myNitClean && emisorNit === myNitClean) || 
         (myNrcClean && emisorNrc === myNrcClean);
       
-      effectiveMode = isMyCompanyEmitter ? 'ventas' : 'compras';
+      // Si yo soy el RECEPTOR → es una COMPRA (yo compro)
+      const isMyCompanyReceiver = 
+        (myNitClean && receptorNit === myNitClean) || 
+        (myNrcClean && receptorNrc === myNrcClean);
+      
+      if (isMyCompanyEmitter) {
+        effectiveMode = 'ventas';
+      } else if (isMyCompanyReceiver) {
+        effectiveMode = 'compras';
+      }
+      // Si no coincide ninguno, mantiene el modo por defecto
     }
 
     // Determine Counterparty Name based on Mode
