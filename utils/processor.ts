@@ -1,5 +1,6 @@
 import { DTEData, ProcessedFile, FieldConfiguration, AppMode } from '../types';
 import { extractValue, VENTAS_CONFIG } from './fieldMapping';
+import { loadSettings } from './settings';
 
 // Standard DTE Types for El Salvador
 const VALID_DTE_TYPES = [
@@ -20,8 +21,9 @@ export const processJsonContent = (
   fileName: string, 
   jsonContent: string, 
   config: FieldConfiguration = VENTAS_CONFIG,
-  mode: AppMode = 'ventas'
+  mode: AppMode | 'auto' = 'ventas'
 ): ProcessedFile => {
+  const settings = loadSettings();
   // Simple unique ID generation
   const uniqueId = Date.now().toString(36) + Math.random().toString(36).substr(2);
 
@@ -48,12 +50,28 @@ export const processJsonContent = (
     const displayDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : rawDate;
     const displayControl = data.identificacion.numeroControl || 'N/A';
     
+    // Auto-detect mode if user has configured their NIT/NRC
+    let effectiveMode: AppMode = mode === 'auto' ? 'ventas' : mode;
+    
+    if (settings.myNit || settings.myNrc) {
+      const emisorNit = data.emisor?.nit?.replace(/-/g, '') || '';
+      const emisorNrc = data.emisor?.nrc?.replace(/-/g, '') || '';
+      const myNitClean = settings.myNit.replace(/-/g, '');
+      const myNrcClean = settings.myNrc.replace(/-/g, '');
+      
+      const isMyCompanyEmitter = 
+        (myNitClean && emisorNit === myNitClean) || 
+        (myNrcClean && emisorNrc === myNrcClean);
+      
+      effectiveMode = isMyCompanyEmitter ? 'ventas' : 'compras';
+    }
+
     // Determine Counterparty Name based on Mode
     // Ventas (Sales) -> We want to see the Receptor (Client)
     // Compras (Purchases) -> We want to see the Emisor (Provider)
     let displayCounterparty = 'Sin Nombre';
     
-    if (mode === 'compras') {
+    if (effectiveMode === 'compras') {
        displayCounterparty = data.emisor?.nombre || 'Sin Proveedor';
     } else {
        displayCounterparty = data.receptor?.nombre || 'Sin Cliente';
