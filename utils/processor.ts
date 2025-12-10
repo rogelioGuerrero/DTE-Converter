@@ -50,22 +50,23 @@ export const processJsonContent = (
     const displayDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : rawDate;
     const displayControl = data.identificacion.numeroControl || 'N/A';
     
-    // Función para normalizar NIT (quitar guiones y ceros a la izquierda)
-    const normalizeNit = (nit: string): string => {
-      if (!nit) return '';
-      return nit.replace(/[-\s]/g, '').replace(/^0+/, '');
+    // Función para normalizar NIT/DUI (solo quitar guiones y espacios, NO quitar ceros)
+    // El cero inicial en DUI (ej: 02453099-6) es significativo
+    const normalizeId = (id: string): string => {
+      if (!id) return '';
+      return id.replace(/[-\s]/g, '');
     };
 
     // Auto-detect mode if user has configured their NIT/NRC
     let effectiveMode: AppMode = mode === 'auto' ? 'ventas' : mode;
     
     if (settings.myNit || settings.myNrc) {
-      const emisorNit = normalizeNit(data.emisor?.nit || '');
-      const emisorNrc = normalizeNit(data.emisor?.nrc || '');
-      const receptorNit = normalizeNit(data.receptor?.nit || '');
-      const receptorNrc = normalizeNit(data.receptor?.nrc || '');
-      const myNitClean = normalizeNit(settings.myNit);
-      const myNrcClean = normalizeNit(settings.myNrc);
+      const emisorNit = normalizeId(data.emisor?.nit || '');
+      const emisorNrc = normalizeId(data.emisor?.nrc || '');
+      const receptorNit = normalizeId(data.receptor?.nit || '');
+      const receptorNrc = normalizeId(data.receptor?.nrc || '');
+      const myNitClean = normalizeId(settings.myNit);
+      const myNrcClean = normalizeId(settings.myNrc);
       
       // Si yo soy el EMISOR → es una VENTA (yo vendo)
       const isMyCompanyEmitter = 

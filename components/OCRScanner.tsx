@@ -14,24 +14,33 @@ interface ExtractedData {
   email: string;
 }
 
-// Validación de NIT: formato 0000-000000-000-0
+// Validación de NIT/DUI
+// NIT tradicional: 14 dígitos (ej: 0614-0210-081052)
+// DUI (unificado con NIT): 9 dígitos (ej: 02453099-6) - el cero inicial ES significativo
 const validateNIT = (nit: string): { valid: boolean; message: string } => {
   if (!nit) return { valid: true, message: '' };
   const nitClean = nit.replace(/[\s-]/g, '');
   if (nitClean.length === 0) return { valid: true, message: '' };
   if (!/^\d+$/.test(nitClean)) return { valid: false, message: 'Solo números' };
-  if (nitClean.length !== 14) return { valid: false, message: `${nitClean.length}/14 dígitos` };
-  return { valid: true, message: 'Formato válido' };
+  
+  // Acepta NIT (14 dígitos) o DUI (9 dígitos)
+  if (nitClean.length === 14) {
+    return { valid: true, message: 'NIT válido' };
+  } else if (nitClean.length === 9) {
+    return { valid: true, message: 'DUI válido' };
+  } else {
+    return { valid: false, message: `${nitClean.length} dígitos (9 ó 14)` };
+  }
 };
 
-// Validación de NRC: formato 000000-0
+// Validación de NRC: formato 000000-0 (6-8 dígitos)
 const validateNRC = (nrc: string): { valid: boolean; message: string } => {
   if (!nrc) return { valid: true, message: '' };
   const nrcClean = nrc.replace(/[\s-]/g, '');
   if (nrcClean.length === 0) return { valid: true, message: '' };
   if (!/^\d+$/.test(nrcClean)) return { valid: false, message: 'Solo números' };
   if (nrcClean.length < 6 || nrcClean.length > 8) return { valid: false, message: 'Entre 6-8 dígitos' };
-  return { valid: true, message: 'Formato válido' };
+  return { valid: true, message: 'NRC válido' };
 };
 
 const OCRScanner: React.FC = () => {

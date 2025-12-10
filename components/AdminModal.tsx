@@ -133,19 +133,20 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                <div className="space-y-3">
                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Datos de mi Empresa</h4>
                  <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 mb-2">
-                    Estos datos ayudan a identificar automáticamente si un DTE es Compra o Venta.
+                    Ingresa al menos uno (NIT/DUI o NRC) para auto-detectar Compras vs Ventas.
                  </div>
                  
                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mi NIT</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Mi NIT / DUI</label>
                         <input
                             type="text"
                             value={settings.myNit}
                             onChange={(e) => setSettings({...settings, myNit: e.target.value})}
-                            placeholder="0000-000000-000-0"
+                            placeholder="02453099-6"
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
                         />
+                        <p className="text-[10px] text-gray-400 mt-1">9 dígitos (DUI) ó 14 dígitos (NIT)</p>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Mi NRC</label>
@@ -153,9 +154,10 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                             type="text"
                             value={settings.myNrc}
                             onChange={(e) => setSettings({...settings, myNrc: e.target.value})}
-                            placeholder="000000-0"
+                            placeholder="1571266"
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
                         />
+                        <p className="text-[10px] text-gray-400 mt-1">6-8 dígitos</p>
                     </div>
                  </div>
                </div>
