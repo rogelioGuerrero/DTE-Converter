@@ -3,6 +3,7 @@ import { Upload, ScanLine, Check, Loader2, Sparkles, Phone, Mail, Save, RotateCw
 import { addClient, getClients, deleteClient, ClientData } from '../utils/clientDb';
 import { extractDataFromImage } from '../utils/ocr';
 import { ToastContainer, useToast } from './Toast';
+import Tooltip from './Tooltip';
 
 interface ExtractedData {
   name: string;
@@ -333,27 +334,38 @@ const OCRScanner: React.FC = () => {
                     <h3 className="font-semibold text-gray-700">Datos del Cliente</h3>
                     <p className="text-[10px] text-gray-400">Edita o ingresa los datos manualmente</p>
                   </div>
-                  <button
-                    onClick={() => setShowClientHistory(!showClientHistory)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      showClientHistory 
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    <span>{clients.length}</span>
-                  </button>
+                  <Tooltip content="Ver clientes guardados" position="bottom">
+                    <button
+                      onClick={() => setShowClientHistory(!showClientHistory)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        showClientHistory 
+                          ? 'bg-blue-600 text-white' 
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>{clients.length}</span>
+                    </button>
+                  </Tooltip>
                </div>
                {ocrConfidence && (
-                 <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${
-                   ocrConfidence === 'high' ? 'bg-green-100 text-green-700' :
-                   ocrConfidence === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                   'bg-gray-100 text-gray-600'
-                 }`}>
-                   <Sparkles className="w-3 h-3"/>
-                   {ocrConfidence === 'high' ? 'Alta precisión' : ocrConfidence === 'medium' ? 'Precisión media' : 'Verificar datos'}
-                 </span>
+                 <Tooltip 
+                   content={ocrConfidence === 'high' 
+                     ? 'La IA detectó 4-5 campos correctamente' 
+                     : ocrConfidence === 'medium' 
+                       ? 'La IA detectó 2-3 campos, verifica el resto' 
+                       : 'Pocos campos detectados, ingresa manualmente'}
+                   position="left"
+                 >
+                   <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 cursor-help ${
+                     ocrConfidence === 'high' ? 'bg-green-100 text-green-700' :
+                     ocrConfidence === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                     'bg-gray-100 text-gray-600'
+                   }`}>
+                     <Sparkles className="w-3 h-3"/>
+                     {ocrConfidence === 'high' ? 'Alta precisión' : ocrConfidence === 'medium' ? 'Precisión media' : 'Verificar datos'}
+                   </span>
+                 </Tooltip>
                )}
             </div>
 
@@ -431,7 +443,9 @@ const OCRScanner: React.FC = () => {
                
                <div className="grid grid-cols-2 gap-4">
                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase mb-1"># NIT</label>
+                    <Tooltip content="NIT: 14 dígitos | DUI: 9 dígitos (ej: 02453099-6)" position="top">
+                      <label className="block text-xs font-medium text-gray-500 uppercase mb-1 cursor-help"># NIT / DUI</label>
+                    </Tooltip>
                     <div className="relative">
                       <input 
                           type="text" 
@@ -456,7 +470,9 @@ const OCRScanner: React.FC = () => {
                     </div>
                  </div>
                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase mb-1">NRC</label>
+                    <Tooltip content="Número de Registro de Contribuyente (6-8 dígitos)" position="top">
+                      <label className="block text-xs font-medium text-gray-500 uppercase mb-1 cursor-help">NRC</label>
+                    </Tooltip>
                     <div className="relative">
                       <input 
                           type="text" 

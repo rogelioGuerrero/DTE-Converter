@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Lock, Key, Eye, EyeOff, Save } from 'lucide-react';
+import { X, Lock, Key, Eye, EyeOff, Save, HelpCircle } from 'lucide-react';
+import Tooltip from './Tooltip';
 import { loadSettings, saveSettings, AppSettings } from '../utils/settings';
 
 interface AdminModalProps {
@@ -104,7 +105,12 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                <div className="space-y-3">
                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Integración IA</h4>
                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Google Gemini API Key</label>
+                    <div className="flex items-center gap-1 mb-1">
+                      <label className="block text-sm font-medium text-gray-700">Google Gemini API Key</label>
+                      <Tooltip content="Obtén tu API Key gratis en ai.google.dev" position="right">
+                        <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help" />
+                      </Tooltip>
+                    </div>
                     <div className="relative">
                         <input
                             type={showApiKey ? "text" : "password"}
@@ -138,7 +144,12 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                  
                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mi NIT / DUI</label>
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-sm font-medium text-gray-700">Mi NIT / DUI</label>
+                          <Tooltip content="Se usa para detectar si un DTE es compra o venta" position="top">
+                            <HelpCircle className="w-3 h-3 text-gray-400 cursor-help" />
+                          </Tooltip>
+                        </div>
                         <input
                             type="text"
                             value={settings.myNit}
@@ -149,7 +160,12 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                         <p className="text-[10px] text-gray-400 mt-1">9 dígitos (DUI) ó 14 dígitos (NIT)</p>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mi NRC</label>
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-sm font-medium text-gray-700">Mi NRC</label>
+                          <Tooltip content="Alternativa al NIT para identificar tu empresa" position="top">
+                            <HelpCircle className="w-3 h-3 text-gray-400 cursor-help" />
+                          </Tooltip>
+                        </div>
                         <input
                             type="text"
                             value={settings.myNrc}
