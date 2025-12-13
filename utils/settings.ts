@@ -3,6 +3,8 @@ export interface AppSettings {
   pin: string;
   myNit: string;
   myNrc: string;
+  aiProvider?: string;
+  aiModel?: string;
 }
 
 const SETTINGS_KEY = 'dte_app_settings';
@@ -12,6 +14,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   pin: '1321', // Default PIN as requested
   myNit: '',
   myNrc: '',
+  aiProvider: 'gemini',
+  aiModel: 'gemini-2.5-flash',
 };
 
 export const loadSettings = (): AppSettings => {

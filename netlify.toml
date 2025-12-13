@@ -1,0 +1,24 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[functions]
+  directory = "netlify/functions"
+
+[dev]
+  command = "npm run dev"
+  targetPort = 5173
+  port = 8888
+
+[[redirects]]
+  from = "/api/mh/transmitir"
+  to = "/.netlify/functions/mh-transmitir"
+  status = 200
+
+[[redirects]]
+  from = "/api/mh/consulta/*"
+  to = "/.netlify/functions/mh-consulta/:splat"
+  status = 200

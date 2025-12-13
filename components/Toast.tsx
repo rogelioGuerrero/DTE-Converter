@@ -51,7 +51,7 @@ const Toast: React.FC<ToastProps> = ({ message, type, onClose, duration = 4000 }
       }`}
     >
       <span className={iconStyles[type]}>{icons[type]}</span>
-      <p className="text-sm font-medium pr-2">{message}</p>
+      <p className="text-sm font-medium pr-2 whitespace-pre-line">{message}</p>
       <button
         onClick={() => {
           setIsLeaving(true);

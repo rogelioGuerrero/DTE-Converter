@@ -1,0 +1,459 @@
+import { useState, useEffect } from 'react';
+import { 
+  X, 
+  Send, 
+  CheckCircle2, 
+  XCircle, 
+  Loader2, 
+  FileSignature,
+  Wifi,
+  AlertTriangle,
+  Copy,
+  Download,
+  RefreshCw
+} from 'lucide-react';
+import { DTEJSON } from '../utils/dteGenerator';
+import TemplateSelector from './TemplateSelector';
+import { guardarDTEEnHistorial } from '../utils/dteHistoryDb';
+import { getCertificate } from '../utils/secureStorage';
+import { leerP12, firmarDTEConP12 } from '../utils/p12Handler';
+import { processDTE } from '../utils/mh/process';
+import { getMHMode } from '../utils/mh/config';
+import { transmitirDTESandbox } from '../utils/mh/sandboxClient';
+import { 
+  transmitirDTEMock, 
+  TransmisionResult,
+  EstadoTransmision
+} from '../utils/dteSignature';
+
+interface TransmisionModalProps {
+  dte: DTEJSON;
+  onClose: () => void;
+  onSuccess: (selloRecepcion: string, resultado: TransmisionResult) => void;
+  onGeneratePDF?: (dte: DTEJSON, resultado: TransmisionResult) => void;
+  ambiente?: '00' | '01';
+  logoUrl?: string;
+}
+
+const PASOS = [
+  { id: 'firmando', label: 'Firmando documento', icon: FileSignature },
+  { id: 'transmitiendo', label: 'Transmitiendo a MH', icon: Wifi },
+  { id: 'procesado', label: 'Procesado', icon: CheckCircle2 },
+];
+
+const TransmisionModal: React.FC<TransmisionModalProps> = ({
+  dte,
+  onClose,
+  onSuccess,
+  ambiente = '00',
+  logoUrl,
+}) => {
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [estado, setEstado] = useState<EstadoTransmision>('pendiente');
+  const [resultado, setResultado] = useState<TransmisionResult | null>(null);
+  const [, setJwsFirmado] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const iniciarTransmision = async () => {
+    setEstado('firmando');
+    setError(null);
+    setResultado(null);
+
+    try {
+      const processed = processDTE(dte);
+      if (processed.errores.length > 0) {
+        const rechazo: TransmisionResult = {
+          success: false,
+          estado: 'RECHAZADO',
+          codigoGeneracion: processed.dte.identificacion.codigoGeneracion,
+          numeroControl: processed.dte.identificacion.numeroControl,
+          fechaHoraRecepcion: new Date().toISOString(),
+          mensaje: 'Documento contiene errores de validación',
+          errores: processed.errores,
+        };
+        setResultado(rechazo);
+        setEstado('rechazado');
+        return;
+      }
+
+      const stored = await getCertificate();
+      if (!stored) {
+        throw new Error('No se encontró certificado. Completa el onboarding para poder firmar.');
+      }
+
+      const p12 = await leerP12(stored.certificate, stored.password);
+      if (!p12.success || !p12.privateKey || !p12.certificatePem) {
+        throw new Error(p12.error || 'No se pudo leer el certificado');
+      }
+
+      const firma = await firmarDTEConP12(processed.dte, p12.privateKey, p12.certificatePem);
+      if (!firma.success || !firma.jws) {
+        throw new Error(firma.error || 'Error al firmar');
+      }
+
+      setJwsFirmado(firma.jws);
+      setEstado('transmitiendo');
+
+      const mode = getMHMode();
+      const transmisionResult =
+        mode === 'mock'
+          ? await transmitirDTEMock(firma.jws, ambiente)
+          : mode === 'sandbox'
+            ? await transmitirDTESandbox(firma.jws, ambiente)
+            : (() => {
+                throw new Error('Transmisión en producción aún no implementada.');
+              })();
+      
+      setResultado(transmisionResult);
+      
+      if (transmisionResult.success) {
+        setEstado('procesado');
+        
+        // Guardar en historial local
+        try {
+          await guardarDTEEnHistorial(processed.dte, transmisionResult, ambiente);
+        } catch (historyError) {
+          console.error('Error guardando en historial:', historyError);
+        }
+        
+        if (transmisionResult.selloRecepcion) {
+          onSuccess(transmisionResult.selloRecepcion, transmisionResult);
+        }
+      } else {
+        setEstado('rechazado');
+      }
+    } catch (err) {
+      setEstado('error');
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  useEffect(() => {
+    iniciarTransmision();
+  }, []);
+
+  const handleCopiar = (texto: string, campo: string) => {
+    navigator.clipboard.writeText(texto);
+    setCopiedField(campo);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  
+  const getPasoActual = (): number => {
+    switch (estado) {
+      case 'firmando': return 0;
+      case 'transmitiendo': return 1;
+      case 'procesado': return 2;
+      default: return -1;
+    }
+  };
+
+  const renderProgreso = () => {
+    const pasoActual = getPasoActual();
+    
+    return (
+      <div className="space-y-4">
+        {PASOS.map((paso, index) => {
+          const Icon = paso.icon;
+          const isActive = index === pasoActual;
+          const isComplete = index < pasoActual || estado === 'procesado';
+          const isPending = index > pasoActual && estado !== 'procesado';
+          
+          return (
+            <div 
+              key={paso.id}
+              className={`
+                flex items-center gap-4 p-4 rounded-xl transition-all
+                ${isActive ? 'bg-indigo-50 border-2 border-indigo-200' : ''}
+                ${isComplete ? 'bg-green-50' : ''}
+                ${isPending ? 'opacity-40' : ''}
+              `}
+            >
+              <div className={`
+                w-10 h-10 rounded-full flex items-center justify-center
+                ${isComplete ? 'bg-green-500 text-white' : ''}
+                ${isActive ? 'bg-indigo-500 text-white' : ''}
+                ${isPending ? 'bg-gray-200 text-gray-400' : ''}
+              `}>
+                {isActive && estado !== 'procesado' ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : isComplete ? (
+                  <CheckCircle2 className="w-5 h-5" />
+                ) : (
+                  <Icon className="w-5 h-5" />
+                )}
+              </div>
+              <div className="flex-1">
+                <p className={`font-medium ${isComplete ? 'text-green-700' : isActive ? 'text-indigo-700' : 'text-gray-500'}`}>
+                  {paso.label}
+                </p>
+                {isActive && estado !== 'procesado' && (
+                  <p className="text-sm text-indigo-500 animate-pulse">Procesando...</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderExito = () => (
+    <div className="py-4">
+      {/* Header de éxito */}
+      <div className="text-center mb-4">
+        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+          <CheckCircle2 className="w-8 h-8 text-green-500" />
+        </div>
+        <h3 className="text-lg font-bold text-gray-900">¡DTE Transmitido!</h3>
+        <p className="text-sm text-gray-500">{resultado?.mensaje || 'Documento procesado correctamente'}</p>
+      </div>
+      
+      {/* Datos de la respuesta */}
+      <div className="space-y-3 mb-4">
+        {/* Sello de Recepción */}
+        {resultado?.selloRecepcion && (
+          <div className="bg-green-50 rounded-xl p-3 border border-green-100">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-medium text-green-700">Sello de Recepción</p>
+              <button
+                onClick={() => handleCopiar(resultado.selloRecepcion!, 'sello')}
+                className="text-xs text-green-600 hover:text-green-800 flex items-center gap-1"
+              >
+                {copiedField === 'sello' ? '¡Copiado!' : <><Copy className="w-3 h-3" /> Copiar</>}
+              </button>
+            </div>
+            <code className="text-xs font-mono text-green-800 break-all block">
+              {resultado.selloRecepcion}
+            </code>
+          </div>
+        )}
+
+        {/* Número de Control y Código Generación */}
+        <div className="grid grid-cols-2 gap-2">
+          {resultado?.numeroControl && (
+            <div className="bg-gray-50 rounded-lg p-2">
+              <p className="text-[10px] text-gray-500 uppercase">Número Control</p>
+              <p className="text-xs font-mono text-gray-800 truncate" title={resultado.numeroControl}>
+                {resultado.numeroControl}
+              </p>
+            </div>
+          )}
+          {resultado?.codigoGeneracion && (
+            <div className="bg-gray-50 rounded-lg p-2">
+              <p className="text-[10px] text-gray-500 uppercase">Código Generación</p>
+              <p className="text-xs font-mono text-gray-800 truncate" title={resultado.codigoGeneracion}>
+                {resultado.codigoGeneracion.substring(0, 8)}...
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Fecha de procesamiento */}
+        {resultado?.fechaHoraProcesamiento && (
+          <div className="flex items-center justify-between text-xs text-gray-500 px-1">
+            <span>Procesado:</span>
+            <span>{new Date(resultado.fechaHoraProcesamiento).toLocaleString()}</span>
+          </div>
+        )}
+
+        {/* Advertencias */}
+        {resultado?.advertencias && resultado.advertencias.length > 0 && (
+          <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+            <p className="text-xs font-medium text-amber-700 mb-2 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" /> Advertencias
+            </p>
+            <ul className="space-y-1">
+              {resultado.advertencias.map((adv, i) => (
+                <li key={i} className="text-xs text-amber-700">
+                  <span className="font-mono text-amber-600">[{adv.codigo}]</span> {adv.descripcion}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        </div>
+
+      {/* Botones de acción */}
+      <div className="space-y-2">
+        {resultado && (
+          <button
+            onClick={() => setShowTemplateSelector(true)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 font-medium shadow-lg shadow-indigo-200"
+          >
+            <Download className="w-4 h-4" />
+            Descargar PDF
+          </button>
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              const json = JSON.stringify({ dte, respuestaMH: resultado }, null, 2);
+              const blob = new Blob([json], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `DTE-${dte.identificacion.codigoGeneracion}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 text-sm"
+          >
+            <Download className="w-4 h-4" />
+            JSON
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 text-sm font-medium"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderError = () => (
+    <div className="py-4">
+      {/* Header de error */}
+      <div className="text-center mb-4">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+          <XCircle className="w-8 h-8 text-red-500" />
+        </div>
+        <h3 className="text-lg font-bold text-gray-900">
+          {estado === 'rechazado' ? 'DTE Rechazado' : 'Error de Transmisión'}
+        </h3>
+        <p className="text-sm text-gray-500">{resultado?.mensaje || error || 'Ocurrió un error'}</p>
+      </div>
+      
+      {/* Errores detallados */}
+      {resultado?.errores && resultado.errores.length > 0 && (
+        <div className="bg-red-50 rounded-xl p-3 mb-4 border border-red-100 max-h-48 overflow-y-auto">
+          <p className="text-xs font-medium text-red-700 mb-2">Errores de validación:</p>
+          <ul className="space-y-2">
+            {resultado.errores.map((err, i) => (
+              <li key={i} className="text-xs bg-white rounded-lg p-2 border border-red-100">
+                <div className="flex items-start gap-2">
+                  <XCircle className="w-3 h-3 text-red-500 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-red-800">
+                      <span className="font-mono text-red-600">[{err.codigo}]</span> {err.descripcion}
+                    </p>
+                    {err.campo && (
+                      <p className="text-red-600 font-mono text-[10px] mt-0.5">
+                        Campo: {err.campo}
+                      </p>
+                    )}
+                    {err.valorActual && err.valorEsperado && (
+                      <p className="text-red-500 text-[10px] mt-0.5">
+                        Valor: "{err.valorActual}" → Esperado: "{err.valorEsperado}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Código de generación si existe */}
+      {resultado?.codigoGeneracion && (
+        <div className="bg-gray-50 rounded-lg p-2 mb-4">
+          <p className="text-[10px] text-gray-500 uppercase">Código Generación</p>
+          <p className="text-xs font-mono text-gray-700">{resultado.codigoGeneracion}</p>
+        </div>
+      )}
+
+      {/* Botones */}
+      <div className="flex gap-3">
+        <button
+          onClick={onClose}
+          className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={iniciarTransmision}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Reintentar
+        </button>
+      </div>
+    </div>
+  );
+
+  // Mostrar selector de plantillas si está activo
+  if (showTemplateSelector && resultado) {
+    return (
+      <TemplateSelector
+        dte={dte}
+        resultado={resultado}
+        onClose={() => setShowTemplateSelector(false)}
+        logoUrl={logoUrl}
+      />
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className={`
+              w-10 h-10 rounded-xl flex items-center justify-center
+              ${estado === 'procesado' ? 'bg-green-100' : estado === 'rechazado' || estado === 'error' ? 'bg-red-100' : 'bg-indigo-100'}
+            `}>
+              <Send className={`
+                w-5 h-5
+                ${estado === 'procesado' ? 'text-green-600' : estado === 'rechazado' || estado === 'error' ? 'text-red-600' : 'text-indigo-600'}
+              `} />
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-900">Transmitir DTE</h2>
+              <p className="text-xs text-gray-500">
+                Ambiente: {ambiente === '00' ? 'Pruebas' : 'Producción'}
+              </p>
+            </div>
+          </div>
+          {(estado === 'procesado' || estado === 'rechazado' || estado === 'error') && (
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="p-4">
+          {estado === 'procesado' && renderExito()}
+          {(estado === 'rechazado' || estado === 'error') && renderError()}
+          {(estado === 'pendiente' || estado === 'firmando' || estado === 'transmitiendo') && renderProgreso()}
+        </div>
+
+        {/* Footer info */}
+        {(estado === 'firmando' || estado === 'transmitiendo') && (
+          <div className="px-4 pb-4">
+            <div className="bg-amber-50 rounded-lg p-3 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700">
+                {ambiente === '00' 
+                  ? 'Modo pruebas: No genera obligaciones fiscales reales.'
+                  : 'Modo producción: Este documento tendrá efectos fiscales reales.'
+                }
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default TransmisionModal;
