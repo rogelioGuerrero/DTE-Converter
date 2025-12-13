@@ -4,7 +4,6 @@ import {
   FileText, 
   Phone, 
   Mail, 
-  MapPin, 
   Building2,
   CheckCircle2,
   Send,
@@ -12,8 +11,15 @@ import {
   Camera,
   Sparkles,
 } from 'lucide-react';
-import { departamentos, getMunicipiosByDepartamento } from '../catalogos';
-import { validateNIT, validateNRC, validatePhone, validateEmail } from '../utils/validators';
+import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectUbicacion } from './formularios';
+import {
+  validateNIT,
+  validateNRC,
+  validatePhone,
+  validateEmail,
+  formatTextInput,
+  formatMultilineTextInput,
+} from '../utils/validators';
 import { savePendingClient, exportClientAsJson } from '../utils/qrClientCapture';
 import { extractDataFromImage } from '../utils/ocr';
 
@@ -39,10 +45,11 @@ const ClientFormPage: React.FC<ClientFormPageProps> = ({ vendorId }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const municipios = getMunicipiosByDepartamento(formData.department);
-
   const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    let processedValue = value;
+    if (field === 'name') processedValue = formatTextInput(value);
+    if (field === 'address') processedValue = formatMultilineTextInput(value);
+    setFormData(prev => ({ ...prev, [field]: processedValue }));
     // Clear error when user types
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -62,13 +69,13 @@ const ClientFormPage: React.FC<ClientFormPageProps> = ({ vendorId }) => {
           const extracted = await extractDataFromImage(base64);
           setFormData(prev => ({
             ...prev,
-            name: extracted.name || prev.name,
-            nit: extracted.nit || prev.nit,
-            nrc: extracted.nrc || prev.nrc,
+            name: extracted.name ? formatTextInput(extracted.name) : prev.name,
+            nit: extracted.nit ? extracted.nit : prev.nit,
+            nrc: extracted.nrc ? extracted.nrc : prev.nrc,
             activity: extracted.activity || prev.activity,
-            address: extracted.address || prev.address,
-            phone: extracted.phone || prev.phone,
-            email: extracted.email || prev.email,
+            address: extracted.address ? formatMultilineTextInput(extracted.address) : prev.address,
+            phone: extracted.phone ? extracted.phone : prev.phone,
+            email: extracted.email ? extracted.email : prev.email,
           }));
         } catch (err) {
           console.error('Error scanning:', err);
@@ -89,11 +96,9 @@ const ClientFormPage: React.FC<ClientFormPageProps> = ({ vendorId }) => {
       newErrors.name = 'El nombre es requerido';
     }
 
-    if (formData.nit) {
-      const nitResult = validateNIT(formData.nit);
-      if (!nitResult.valid) {
-        newErrors.nit = nitResult.message;
-      }
+    const nitResult = validateNIT(formData.nit);
+    if (!nitResult.valid) {
+      newErrors.nit = nitResult.message;
     }
 
     if (formData.nrc) {
@@ -245,119 +250,101 @@ const ClientFormPage: React.FC<ClientFormPageProps> = ({ vendorId }) => {
 
           {/* NIT */}
           <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-              <FileText className="w-4 h-4" />
-              NIT
-            </label>
-            <input
-              type="text"
+            <NitOrDuiField
+              label={
+                <>
+                  <FileText className="w-4 h-4" />
+                  NIT
+                </>
+              }
+              labelClassName="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1"
               value={formData.nit}
-              onChange={(e) => handleChange('nit', e.target.value)}
+              onChange={(nit) => handleChange('nit', nit)}
               placeholder="0000-000000-000-0"
-              className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                errors.nit ? 'border-red-300 bg-red-50' : 'border-gray-300'
-              }`}
+              validation={errors.nit ? { valid: false, message: errors.nit } : { valid: true, message: '' }}
+              showErrorWhenEmpty={!!errors.nit}
+              messageVariant="below-invalid"
+              colorMode="blue"
+              tone="neutral"
+              inputClassName={errors.nit ? 'bg-red-50' : ''}
             />
-            {errors.nit && <p className="text-xs text-red-500 mt-1">{errors.nit}</p>}
           </div>
 
           {/* NRC */}
           <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-              <Building2 className="w-4 h-4" />
-              NRC (Registro)
-            </label>
-            <input
-              type="text"
+            <NrcField
+              label={
+                <>
+                  <Building2 className="w-4 h-4" />
+                  NRC (Registro)
+                </>
+              }
+              labelClassName="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1"
               value={formData.nrc}
-              onChange={(e) => handleChange('nrc', e.target.value)}
+              onChange={(nrc) => handleChange('nrc', nrc)}
               placeholder="000000-0"
-              className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                errors.nrc ? 'border-red-300 bg-red-50' : 'border-gray-300'
-              }`}
+              validation={errors.nrc ? { valid: false, message: errors.nrc } : { valid: true, message: '' }}
+              showErrorWhenEmpty={!!errors.nrc}
+              messageVariant="below-invalid"
+              colorMode="blue"
+              tone="neutral"
+              inputClassName={errors.nrc ? 'bg-red-50' : ''}
             />
-            {errors.nrc && <p className="text-xs text-red-500 mt-1">{errors.nrc}</p>}
           </div>
 
           {/* Phone */}
           <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-              <Phone className="w-4 h-4" />
-              Telefono
-            </label>
-            <input
-              type="tel"
+            <PhoneField
+              label={
+                <>
+                  <Phone className="w-4 h-4" />
+                  Telefono
+                </>
+              }
+              labelClassName="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1"
               value={formData.phone}
-              onChange={(e) => handleChange('phone', e.target.value)}
+              onChange={(phone) => handleChange('phone', phone)}
               placeholder="0000-0000"
-              className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300'
-              }`}
+              type="tel"
+              validation={errors.phone ? { valid: false, message: errors.phone } : { valid: true, message: '' }}
+              showErrorWhenEmpty={!!errors.phone}
+              messageVariant="below-invalid"
+              colorMode="blue"
+              tone="neutral"
+              inputClassName={errors.phone ? 'bg-red-50' : ''}
             />
-            {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
           </div>
 
           {/* Email */}
           <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-              <Mail className="w-4 h-4" />
-              Correo Electronico
-            </label>
-            <input
-              type="email"
+            <EmailField
+              label={
+                <>
+                  <Mail className="w-4 h-4" />
+                  Correo Electronico
+                </>
+              }
+              labelClassName="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1"
               value={formData.email}
-              onChange={(e) => handleChange('email', e.target.value)}
+              onChange={(email) => handleChange('email', email)}
               placeholder="correo@ejemplo.com"
-              className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300'
-              }`}
+              validation={errors.email ? { valid: false, message: errors.email } : { valid: true, message: '' }}
+              showErrorWhenEmpty={!!errors.email}
+              messageVariant="below-invalid"
+              colorMode="blue"
+              tone="neutral"
+              inputClassName={errors.email ? 'bg-red-50' : ''}
             />
-            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </div>
 
-          {/* Department */}
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-              <MapPin className="w-4 h-4" />
-              Departamento
-            </label>
-            <select
-              value={formData.department}
-              onChange={(e) => {
-                handleChange('department', e.target.value);
-                handleChange('municipality', '');
-              }}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-            >
-              <option value="">Seleccionar...</option>
-              {departamentos.map((d) => (
-                <option key={d.codigo} value={d.codigo}>
-                  {d.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Municipality */}
-          {formData.department && (
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">
-                Municipio
-              </label>
-              <select
-                value={formData.municipality}
-                onChange={(e) => handleChange('municipality', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-              >
-                <option value="">Seleccionar...</option>
-                {municipios.map((m) => (
-                  <option key={m.codigo} value={m.codigo}>
-                    {m.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <SelectUbicacion
+            departamento={formData.department}
+            municipio={formData.municipality}
+            onDepartamentoChange={(codigo) => handleChange('department', codigo)}
+            onMunicipioChange={(codigo) => handleChange('municipality', codigo)}
+            layout="vertical"
+            size="lg"
+          />
 
           {/* Address */}
           <div>

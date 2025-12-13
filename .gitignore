@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+public/catalogos/
+700-DGII-MN-2021-26031.pdf
+700-DGII-MN-2021-26031.txt

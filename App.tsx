@@ -6,6 +6,7 @@ import DTEDashboard from './components/DTEDashboard';
 import AdminModal from './components/AdminModal';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import ClientFormPage from './components/ClientFormPage';
+import GlobalToastHost from './components/GlobalToastHost';
 import { LayoutDashboard, Users, FileText, CheckCircle, History } from 'lucide-react';
 
 type AppTab = 'batch' | 'clients' | 'factura' | 'historial';
@@ -23,7 +24,12 @@ const getVendorIdFromUrl = (): string | undefined => {
 const App: React.FC = () => {
   // Si estamos en /cliente, mostrar solo el formulario publico
   if (isClientFormPage()) {
-    return <ClientFormPage vendorId={getVendorIdFromUrl()} />;
+    return (
+      <>
+        <ClientFormPage vendorId={getVendorIdFromUrl()} />
+        <GlobalToastHost />
+      </>
+    );
   }
 
   const [activeTab, setActiveTab] = useState<AppTab>('clients');
@@ -190,6 +196,7 @@ const App: React.FC = () => {
       </footer>
       <AdminModal isOpen={showAdminModal} onClose={() => setShowAdminModal(false)} />
       <PWAInstallPrompt />
+      <GlobalToastHost />
     </div>
   );
 };

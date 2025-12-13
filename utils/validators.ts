@@ -37,3 +37,56 @@ export const validateEmail = (email: string): ValidationResult => {
   if (!emailRegex.test(email.trim())) return { valid: false, message: 'Formato inválido' };
   return { valid: true, message: 'Válido' };
 };
+
+export const formatEmailInput = (value: string): string => {
+  return (value || '').replace(/\s+/g, '').trim();
+};
+
+export const formatTextInput = (value: string): string => {
+  return (value || '').replace(/\s+/g, ' ').trim();
+};
+
+export const formatMultilineTextInput = (value: string): string => {
+  const normalized = (value || '').replace(/\r\n/g, '\n');
+  const lines = normalized.split('\n').map((line) => line.replace(/[ \t]+/g, ' ').trim());
+  return lines.join('\n').trim();
+};
+
+export const normalizeIdDigits = (value: string): string => {
+  return (value || '').replace(/\D/g, '');
+};
+
+export const formatNitOrDuiInput = (value: string): string => {
+  const digits = normalizeIdDigits(value).slice(0, 14);
+
+  if (digits.length <= 8) return digits;
+  if (digits.length === 9) return `${digits.slice(0, 8)}-${digits.slice(8)}`;
+
+  const part1 = digits.slice(0, 4);
+  const part2 = digits.slice(4, 10);
+  const part3 = digits.slice(10, 13);
+  const part4 = digits.slice(13, 14);
+  let formatted = part1;
+  if (part2) formatted += `-${part2}`;
+  if (part3) formatted += `-${part3}`;
+  if (part4) formatted += `-${part4}`;
+  return formatted;
+};
+
+export const formatNRCInput = (value: string): string => {
+  const digits = normalizeIdDigits(value).slice(0, 8);
+  if (digits.length <= 6) return digits;
+  return `${digits.slice(0, digits.length - 1)}-${digits.slice(-1)}`;
+};
+
+export const getNitOrDuiDigitsRemaining = (value: string): number => {
+  const digits = normalizeIdDigits(value);
+  const target = digits.length > 9 ? 14 : 9;
+  return Math.max(0, target - digits.length);
+};
+
+export const formatPhoneInput = (value: string): string => {
+  const digits = normalizeIdDigits(value).slice(0, 8);
+  if (digits.length <= 4) return digits;
+  return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+};

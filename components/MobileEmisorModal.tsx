@@ -1,8 +1,15 @@
 import React, { useMemo } from 'react';
 import { X, CheckCircle, AlertCircle, Building2 } from 'lucide-react';
 import { EmisorData } from '../utils/emisorDb';
-import { validateNIT, validateNRC, validatePhone, validateEmail } from '../utils/validators';
-import { departamentos, getMunicipiosByDepartamento } from '../catalogos';
+import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectActividad, SelectUbicacion } from './formularios';
+import {
+  validateNIT,
+  validateNRC,
+  validatePhone,
+  validateEmail,
+  formatTextInput,
+  formatMultilineTextInput,
+} from '../utils/validators';
 
 interface MobileEmisorModalProps {
   emisorForm: Omit<EmisorData, 'id'>;
@@ -63,11 +70,6 @@ const MobileEmisorModal: React.FC<MobileEmisorModalProps> = ({
       correo: validateEmail(emisorForm.correo),
     };
   }, [emisorForm]);
-
-  const municipios = useMemo(() => {
-    if (!emisorForm.departamento) return [];
-    return getMunicipiosByDepartamento(emisorForm.departamento);
-  }, [emisorForm.departamento]);
 
   // Verificar si el formulario es válido para guardar
   const canSave = useMemo(() => {
@@ -160,20 +162,48 @@ const MobileEmisorModal: React.FC<MobileEmisorModalProps> = ({
               Identificación Fiscal
             </h4>
             <div className="space-y-4">
-              {renderField(
-                'NIT',
-                emisorForm.nit,
-                (val) => setEmisorForm({ ...emisorForm, nit: val }),
-                validations.nit,
-                '0614-123456-123-4'
-              )}
-              {renderField(
-                'NRC',
-                emisorForm.nrc,
-                (val) => setEmisorForm({ ...emisorForm, nrc: val }),
-                validations.nrc,
-                '1234567-8'
-              )}
+              <NitOrDuiField
+                label="NIT"
+                labelClassName="text-sm font-medium text-gray-700 flex items-center gap-1"
+                required
+                value={emisorForm.nit}
+                onChange={(nit) => setEmisorForm({ ...emisorForm, nit })}
+                placeholder="0614-123456-123-4"
+                validation={validations.nit}
+                messageVariant="below-invalid"
+                colorMode="status"
+                inputClassName="px-4 py-3 rounded-xl focus:ring-opacity-20"
+                rightAdornment={
+                  emisorForm.nit.length > 0 ? (
+                    validations.nit.valid ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                    )
+                  ) : null
+                }
+              />
+              <NrcField
+                label="NRC"
+                labelClassName="text-sm font-medium text-gray-700 flex items-center gap-1"
+                required
+                value={emisorForm.nrc}
+                onChange={(nrc) => setEmisorForm({ ...emisorForm, nrc })}
+                placeholder="1234567-8"
+                validation={validations.nrc}
+                messageVariant="below-invalid"
+                colorMode="status"
+                inputClassName="px-4 py-3 rounded-xl focus:ring-opacity-20"
+                rightAdornment={
+                  emisorForm.nrc.length > 0 ? (
+                    validations.nrc.valid ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                    )
+                  ) : null
+                }
+              />
             </div>
           </div>
 
@@ -186,29 +216,36 @@ const MobileEmisorModal: React.FC<MobileEmisorModalProps> = ({
               {renderField(
                 'Razón Social',
                 emisorForm.nombre,
-                (val) => setEmisorForm({ ...emisorForm, nombre: val }),
+                (val) => setEmisorForm({ ...emisorForm, nombre: formatTextInput(val) }),
                 validations.nombre,
                 'Nombre legal del contribuyente'
               )}
               {renderField(
                 'Nombre Comercial',
                 emisorForm.nombreComercial || '',
-                (val) => setEmisorForm({ ...emisorForm, nombreComercial: val }),
+                (val) => setEmisorForm({ ...emisorForm, nombreComercial: formatTextInput(val) }),
                 validations.nombreComercial,
                 'Nombre comercial (opcional)',
                 false
               )}
-              {renderField(
-                'Código Actividad Económica',
-                emisorForm.actividadEconomica,
-                (val) => setEmisorForm({ ...emisorForm, actividadEconomica: val }),
-                validations.actividadEconomica,
-                '62010'
-              )}
+              <div>
+                <SelectActividad
+                  value={emisorForm.actividadEconomica}
+                  onChange={(codigo, descripcion) =>
+                    setEmisorForm({ ...emisorForm, actividadEconomica: codigo, descActividad: descripcion })
+                  }
+                  required
+                  label="Código Actividad Económica"
+                  placeholder="Buscar actividad..."
+                />
+                {!validations.actividadEconomica.valid && (
+                  <p className="text-xs text-red-500 mt-1">{validations.actividadEconomica.message}</p>
+                )}
+              </div>
               {renderField(
                 'Descripción Actividad',
                 emisorForm.descActividad || '',
-                (val) => setEmisorForm({ ...emisorForm, descActividad: val }),
+                (val) => setEmisorForm({ ...emisorForm, descActividad: formatTextInput(val) }),
                 validations.descActividad,
                 'Ej: Servicios de programación'
               )}
@@ -221,63 +258,23 @@ const MobileEmisorModal: React.FC<MobileEmisorModalProps> = ({
               Ubicación
             </h4>
             <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  Departamento <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={emisorForm.departamento}
-                  onChange={(e) =>
-                    setEmisorForm({
-                      ...emisorForm,
-                      departamento: e.target.value,
-                      municipio: '',
-                    })
-                  }
-                  className={`w-full mt-1 px-4 py-3 border rounded-xl ${
-                    emisorForm.departamento
-                      ? 'border-green-300'
-                      : 'border-gray-300'
-                  }`}
-                >
-                  <option value="">Seleccionar...</option>
-                  {departamentos.map((d) => (
-                    <option key={d.codigo} value={d.codigo}>
-                      {d.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  Municipio <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={emisorForm.municipio}
-                  onChange={(e) =>
-                    setEmisorForm({ ...emisorForm, municipio: e.target.value })
-                  }
-                  disabled={!emisorForm.departamento}
-                  className={`w-full mt-1 px-4 py-3 border rounded-xl ${
-                    emisorForm.municipio
-                      ? 'border-green-300'
-                      : 'border-gray-300'
-                  } ${!emisorForm.departamento ? 'bg-gray-100' : ''}`}
-                >
-                  <option value="">Seleccionar...</option>
-                  {municipios.map((m) => (
-                    <option key={m.codigo} value={m.codigo}>
-                      {m.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SelectUbicacion
+                departamento={emisorForm.departamento}
+                municipio={emisorForm.municipio}
+                onDepartamentoChange={(codigo) =>
+                  setEmisorForm({ ...emisorForm, departamento: codigo, municipio: '' })
+                }
+                onMunicipioChange={(codigo) => setEmisorForm({ ...emisorForm, municipio: codigo })}
+                required
+                showLabels
+                layout="vertical"
+                size="lg"
+              />
 
               {renderField(
                 'Dirección',
                 emisorForm.direccion,
-                (val) => setEmisorForm({ ...emisorForm, direccion: val }),
+                (val) => setEmisorForm({ ...emisorForm, direccion: formatMultilineTextInput(val) }),
                 validations.direccion,
                 'Calle, número, colonia, etc.'
               )}
@@ -290,24 +287,49 @@ const MobileEmisorModal: React.FC<MobileEmisorModalProps> = ({
               Contacto
             </h4>
             <div className="space-y-4">
-              {renderField(
-                'Teléfono',
-                emisorForm.telefono,
-                (val) => setEmisorForm({ ...emisorForm, telefono: val }),
-                validations.telefono,
-                '70001234',
-                true,
-                'tel'
-              )}
-              {renderField(
-                'Correo Electrónico',
-                emisorForm.correo,
-                (val) => setEmisorForm({ ...emisorForm, correo: val }),
-                validations.correo,
-                'correo@ejemplo.com',
-                true,
-                'email'
-              )}
+              <PhoneField
+                label="Teléfono"
+                labelClassName="text-sm font-medium text-gray-700 flex items-center gap-1"
+                required
+                value={emisorForm.telefono}
+                onChange={(telefono) => setEmisorForm({ ...emisorForm, telefono })}
+                placeholder="70001234"
+                type="tel"
+                validation={validations.telefono}
+                messageVariant="below-invalid"
+                colorMode="status"
+                inputClassName="px-4 py-3 rounded-xl focus:ring-opacity-20"
+                rightAdornment={
+                  emisorForm.telefono.length > 0 ? (
+                    validations.telefono.valid ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                    )
+                  ) : null
+                }
+              />
+              <EmailField
+                label="Correo Electrónico"
+                labelClassName="text-sm font-medium text-gray-700 flex items-center gap-1"
+                required
+                value={emisorForm.correo}
+                onChange={(correo) => setEmisorForm({ ...emisorForm, correo })}
+                placeholder="correo@ejemplo.com"
+                validation={validations.correo}
+                messageVariant="below-invalid"
+                colorMode="status"
+                inputClassName="px-4 py-3 rounded-xl focus:ring-opacity-20"
+                rightAdornment={
+                  emisorForm.correo.length > 0 ? (
+                    validations.correo.valid ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                    )
+                  ) : null
+                }
+              />
             </div>
           </div>
 

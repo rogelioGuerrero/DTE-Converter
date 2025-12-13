@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, MapPin } from 'lucide-react';
-import { departamentos, getMunicipiosByDepartamento } from '../../catalogos';
+import type { Departamento, Municipio } from '../../catalogos';
+import { loadDepartamentosMunicipios } from '../../utils/catalogosRuntime';
 
 interface SelectUbicacionProps {
   departamento: string;
@@ -27,7 +28,29 @@ const SelectUbicacion: React.FC<SelectUbicacionProps> = ({
   layout = 'horizontal',
   className = '',
 }) => {
-  const municipios = getMunicipiosByDepartamento(departamento);
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const data = await loadDepartamentosMunicipios();
+        if (!mounted) return;
+        setDepartamentos(data.departamentos || []);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const municipios: Municipio[] = useMemo(() => {
+    const depto = departamentos.find((d) => d.codigo === departamento);
+    return depto?.municipios || [];
+  }, [departamentos, departamento]);
 
   const sizeClasses = {
     sm: 'px-2 py-1 text-xs',
@@ -58,7 +81,7 @@ const SelectUbicacion: React.FC<SelectUbicacionProps> = ({
           <select
             value={departamento}
             onChange={(e) => handleDepartamentoChange(e.target.value)}
-            disabled={disabled}
+            disabled={disabled || isLoading || departamentos.length === 0}
             className={`
               w-full ${sizeClasses[size]} border border-gray-300 rounded-lg 
               focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
@@ -66,7 +89,7 @@ const SelectUbicacion: React.FC<SelectUbicacionProps> = ({
               disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed
             `}
           >
-            <option value="">Seleccionar...</option>
+            <option value="">{isLoading ? 'Cargando...' : 'Seleccionar...'}</option>
             {departamentos.map((d) => (
               <option key={d.codigo} value={d.codigo}>
                 {d.codigo} - {d.nombre}
@@ -88,7 +111,7 @@ const SelectUbicacion: React.FC<SelectUbicacionProps> = ({
           <select
             value={municipio}
             onChange={(e) => onMunicipioChange(e.target.value)}
-            disabled={disabled || !departamento}
+            disabled={disabled || isLoading || !departamento || departamentos.length === 0}
             className={`
               w-full ${sizeClasses[size]} border border-gray-300 rounded-lg 
               focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
@@ -96,7 +119,13 @@ const SelectUbicacion: React.FC<SelectUbicacionProps> = ({
               disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed
             `}
           >
-            <option value="">{departamento ? 'Seleccionar...' : 'Primero seleccione departamento'}</option>
+            <option value="">
+              {isLoading
+                ? 'Cargando...'
+                : departamento
+                  ? 'Seleccionar...'
+                  : 'Primero seleccione departamento'}
+            </option>
             {municipios.map((m) => (
               <option key={m.codigo} value={m.codigo}>
                 {m.codigo} - {m.nombre}

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Search, ChevronDown, Briefcase, X } from 'lucide-react';
-import { actividadesEconomicas, buscarActividades, ActividadEconomica } from '../../catalogos';
+import type { ActividadEconomica } from '../../catalogos';
+import { loadActividadesEconomicas } from '../../utils/catalogosRuntime';
 
 interface SelectActividadProps {
   value: string;
@@ -26,18 +27,29 @@ const SelectActividad: React.FC<SelectActividadProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [actividades, setActividades] = useState<ActividadEconomica[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
   // Obtener actividad seleccionada
   const selectedActividad = useMemo(() => {
-    return actividadesEconomicas.find(a => a.codigo === value);
-  }, [value]);
+    return actividades.find(a => a.codigo === value);
+  }, [value, actividades]);
+
+  const displayText = useMemo(() => {
+    if (selectedActividad) return `${selectedActividad.codigo} - ${selectedActividad.descripcion}`;
+    if (value) return value;
+    return placeholder;
+  }, [selectedActividad, value, placeholder]);
 
   // Filtrar actividades
   const filteredActividades = useMemo(() => {
-    if (search.trim()) {
-      return buscarActividades(search).slice(0, 50);
-    }
-    return actividadesEconomicas.slice(0, 50); // Limitar resultados
-  }, [search]);
+    const term = search.trim().toLowerCase();
+    const base = term
+      ? actividades.filter((a) => a.codigo.includes(term) || a.descripcion.toLowerCase().includes(term))
+      : actividades;
+
+    return base.slice(0, 50);
+  }, [search, actividades]);
 
   // Cerrar al hacer clic fuera
   useEffect(() => {
@@ -49,6 +61,27 @@ const SelectActividad: React.FC<SelectActividadProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (actividades.length > 0) return;
+
+    let mounted = true;
+    setIsLoading(true);
+    (async () => {
+      try {
+        const data = await loadActividadesEconomicas();
+        if (!mounted) return;
+        setActividades(data.actividadesEconomicas || []);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isOpen, actividades.length]);
 
   const handleSelect = (actividad: ActividadEconomica) => {
     onChange(actividad.codigo, actividad.descripcion);
@@ -83,14 +116,11 @@ const SelectActividad: React.FC<SelectActividadProps> = ({
           ${isOpen ? 'border-blue-500 ring-2 ring-blue-500' : 'border-gray-300'}
         `}
       >
-        <span className={`truncate ${selectedActividad ? 'text-gray-900' : 'text-gray-400'}`}>
-          {selectedActividad 
-            ? `${selectedActividad.codigo} - ${selectedActividad.descripcion}`
-            : placeholder
-          }
+        <span className={`truncate ${(selectedActividad || value) ? 'text-gray-900' : 'text-gray-400'}`}>
+          {displayText}
         </span>
         <div className="flex items-center gap-1">
-          {selectedActividad && !disabled && (
+          {!!value && !disabled && (
             <X 
               className="w-4 h-4 text-gray-400 hover:text-gray-600" 
               onClick={(e) => { e.stopPropagation(); handleClear(); }}
@@ -121,7 +151,9 @@ const SelectActividad: React.FC<SelectActividadProps> = ({
 
           {/* Results */}
           <div className="max-h-60 overflow-y-auto">
-            {filteredActividades.length === 0 ? (
+            {isLoading ? (
+              <p className="p-3 text-sm text-gray-400 text-center">Cargando...</p>
+            ) : filteredActividades.length === 0 ? (
               <p className="p-3 text-sm text-gray-400 text-center">Sin resultados</p>
             ) : (
               filteredActividades.map(actividad => (

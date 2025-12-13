@@ -10,7 +10,6 @@ import {
   generarDTE, ItemFactura, tiposDocumento, formasPago,
   calcularTotales, redondear, DTEJSON
 } from '../utils/dteGenerator';
-import { departamentos, getMunicipiosByDepartamento } from '../catalogos';
 import { ToastContainer, useToast } from './Toast';
 import Tooltip from './Tooltip';
 import TransmisionModal from './TransmisionModal';
@@ -18,10 +17,18 @@ import DTEPreviewModal from './DTEPreviewModal';
 import QRClientCapture from './QRClientCapture';
 import MobileFactura from './MobileFactura';
 import MobileEmisorModal from './MobileEmisorModal';
+import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectActividad, SelectUbicacion } from './formularios';
 import { hasCertificate, saveCertificate } from '../utils/secureStorage';
 import LogoUploader from './LogoUploader';
 import { leerP12, CertificadoInfo, formatearFechaCertificado, validarCertificadoDTE } from '../utils/p12Handler';
-import { validateNIT, validateNRC, validatePhone, validateEmail } from '../utils/validators';
+import {
+  validateNIT,
+  validateNRC,
+  validatePhone,
+  validateEmail,
+  formatTextInput,
+  formatMultilineTextInput,
+} from '../utils/validators';
 
 interface ItemForm {
   descripcion: string;
@@ -104,38 +111,6 @@ const FacturaGenerator: React.FC = () => {
     setHasCert(has);
   };
 
-  const formatNITInput = (value: string): string => {
-    const digits = value.replace(/\D/g, '').slice(0, 14);
-    if (digits.length <= 9) {
-      if (digits.length <= 8) return digits;
-      return `${digits.slice(0, 8)}-${digits.slice(8)}`;
-    }
-    const base = digits.padEnd(14, '');
-    const part1 = base.slice(0, 4);
-    const part2 = base.slice(4, 10).trimEnd();
-    const part3 = base.slice(10, 13).trimEnd();
-    const part4 = base.slice(13).trimEnd();
-    let formatted = part1;
-    if (part2) formatted += `-${part2}`;
-    if (part3) formatted += `-${part3}`;
-    if (part4) formatted += `-${part4}`;
-    return formatted;
-  };
-
-  const formatNRCInput = (value: string): string => {
-    const digits = value.replace(/\D/g, '').slice(0, 8);
-    if (digits.length <= 6) return digits;
-    const main = digits.slice(0, digits.length - 1);
-    const dv = digits.slice(-1);
-    return `${main}-${dv}`;
-  };
-
-  const formatPhoneInput = (value: string): string => {
-    const digits = value.replace(/\D/g, '').slice(0, 8);
-    if (digits.length <= 4) return digits;
-    return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-  };
-
   const loadData = async () => {
     const [emisorData, clientsData] = await Promise.all([
       getEmisor(),
@@ -152,8 +127,6 @@ const FacturaGenerator: React.FC = () => {
     c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
     c.nit.includes(clientSearch)
   );
-
-  const municipiosEmisor = getMunicipiosByDepartamento(emisorForm.departamento);
 
   const nitValidation = validateNIT(emisorForm.nit);
   const nrcValidationBase = validateNRC(emisorForm.nrc);
@@ -842,49 +815,35 @@ const FacturaGenerator: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">NIT <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
+                  <NitOrDuiField
+                    label="NIT"
+                    required
                     value={emisorForm.nit}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, nit: formatNITInput(e.target.value) })}
+                    onChange={(nit) => setEmisorForm({ ...emisorForm, nit })}
+                    validation={nitValidation}
                     placeholder="0000-000000-000-0"
-                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 outline-none font-mono ${
-                      emisorForm.nit
-                        ? nitValidation.valid
-                          ? 'border-green-300 focus:ring-green-500'
-                          : 'border-red-300 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-blue-500'
-                    }`}
+                    messageVariant="below-invalid"
+                    colorMode="status"
                   />
-                  {emisorForm.nit && !nitValidation.valid && (
-                    <p className="mt-1 text-xs text-red-500">{nitValidation.message}</p>
-                  )}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">NRC <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
+                  <NrcField
+                    label="NRC"
+                    required
                     value={emisorForm.nrc}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, nrc: formatNRCInput(e.target.value) })}
+                    onChange={(nrc) => setEmisorForm({ ...emisorForm, nrc })}
+                    validation={nrcValidation}
                     placeholder="000000-0"
-                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 outline-none font-mono ${
-                      emisorForm.nrc
-                        ? nrcValidation.valid
-                          ? 'border-green-300 focus:ring-green-500'
-                          : 'border-red-300 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-blue-500'
-                    }`}
+                    messageVariant="below-invalid"
+                    colorMode="status"
                   />
-                  {emisorForm.nrc && !nrcValidation.valid && (
-                    <p className="mt-1 text-xs text-red-500">{nrcValidation.message}</p>
-                  )}
                 </div>
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Nombre / Razón Social <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     value={emisorForm.nombre}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, nombre: e.target.value })}
+                    onChange={(e) => setEmisorForm({ ...emisorForm, nombre: formatTextInput(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                     placeholder="Nombre legal del contribuyente"
                   />
@@ -894,7 +853,7 @@ const FacturaGenerator: React.FC = () => {
                   <input
                     type="text"
                     value={emisorForm.nombreComercial}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, nombreComercial: e.target.value })}
+                    onChange={(e) => setEmisorForm({ ...emisorForm, nombreComercial: formatTextInput(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                     placeholder="Nombre comercial (opcional)"
                   />
@@ -906,13 +865,12 @@ const FacturaGenerator: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Código Actividad <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
+                  <SelectActividad
                     value={emisorForm.actividadEconomica}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, actividadEconomica: e.target.value })}
-                    placeholder="Ej: 62020"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                    onChange={(codigo, descripcion) => setEmisorForm({ ...emisorForm, actividadEconomica: codigo, descActividad: descripcion })}
+                    required
+                    label="Código Actividad"
+                    placeholder="Buscar actividad..."
                   />
                 </div>
                 <div>
@@ -920,85 +878,56 @@ const FacturaGenerator: React.FC = () => {
                   <input
                     type="text"
                     value={emisorForm.descActividad}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, descActividad: e.target.value })}
+                    onChange={(e) => setEmisorForm({ ...emisorForm, descActividad: formatTextInput(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                     placeholder="Ej: Servicios de programación"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Departamento <span className="text-red-500">*</span></label>
-                  <select
-                    value={emisorForm.departamento}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, departamento: e.target.value, municipio: '' })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    <option value="">Seleccionar...</option>
-                    {departamentos.map(d => (
-                      <option key={d.codigo} value={d.codigo}>{d.codigo} - {d.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Municipio <span className="text-red-500">*</span></label>
-                  <select
-                    value={emisorForm.municipio}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, municipio: e.target.value })}
-                    disabled={!emisorForm.departamento}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-50"
-                  >
-                    <option value="">Seleccionar...</option>
-                    {municipiosEmisor.map(m => (
-                      <option key={m.codigo} value={m.codigo}>{m.codigo} - {m.nombre}</option>
-                    ))}
-                  </select>
+                <div className="col-span-2">
+                  <SelectUbicacion
+                    departamento={emisorForm.departamento}
+                    municipio={emisorForm.municipio}
+                    onDepartamentoChange={(codigo) => setEmisorForm({ ...emisorForm, departamento: codigo, municipio: '' })}
+                    onMunicipioChange={(codigo) => setEmisorForm({ ...emisorForm, municipio: codigo })}
+                    required
+                    showLabels
+                    layout="horizontal"
+                    size="md"
+                  />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Dirección <span className="text-red-500">*</span></label>
                   <textarea
                     value={emisorForm.direccion}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, direccion: e.target.value })}
+                    onChange={(e) => setEmisorForm({ ...emisorForm, direccion: formatMultilineTextInput(e.target.value) })}
                     rows={2}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                     placeholder="Calle, número, colonia, etc."
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Teléfono <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
+                  <PhoneField
+                    label="Teléfono"
+                    required
                     value={emisorForm.telefono}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, telefono: formatPhoneInput(e.target.value) })}
+                    onChange={(telefono) => setEmisorForm({ ...emisorForm, telefono })}
+                    validation={telefonoValidation}
                     placeholder="0000-0000"
-                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 outline-none font-mono ${
-                      emisorForm.telefono
-                        ? telefonoValidation.valid
-                          ? 'border-green-300 focus:ring-green-500'
-                          : 'border-red-300 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-blue-500'
-                    }`}
+                    messageVariant="below-invalid"
+                    colorMode="status"
                   />
-                  {emisorForm.telefono && !telefonoValidation.valid && (
-                    <p className="mt-1 text-xs text-red-500">{telefonoValidation.message}</p>
-                  )}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Correo <span className="text-red-500">*</span></label>
-                  <input
-                    type="email"
+                  <EmailField
+                    label="Correo"
+                    required
                     value={emisorForm.correo}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, correo: e.target.value })}
+                    onChange={(correo) => setEmisorForm({ ...emisorForm, correo })}
+                    validation={correoValidation}
                     placeholder="correo@ejemplo.com"
-                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 outline-none ${
-                      emisorForm.correo
-                        ? correoValidation.valid
-                          ? 'border-green-300 focus:ring-green-500'
-                          : 'border-red-300 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-blue-500'
-                    }`}
+                    messageVariant="below-invalid"
+                    colorMode="status"
                   />
-                  {emisorForm.correo && !correoValidation.valid && (
-                    <p className="mt-1 text-xs text-red-500">{correoValidation.message}</p>
-                  )}
                 </div>
                 <div className="col-span-2 mt-2 pt-4 border-t border-gray-100">
                   <div className="flex items-center justify-between mb-3">

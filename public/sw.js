@@ -38,6 +38,27 @@ self.addEventListener('fetch', (event) => {
   // Ignorar requests a APIs externas
   if (!event.request.url.startsWith(self.location.origin)) return;
 
+  const url = new URL(event.request.url);
+  const isCatalogos = url.pathname.startsWith('/catalogos/');
+
+  if (isCatalogos) {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
+        return fetch(event.request)
+          .then((response) => {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+            return response;
+          })
+          .catch(() => new Response('Offline', { status: 503 }));
+      })
+    );
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {

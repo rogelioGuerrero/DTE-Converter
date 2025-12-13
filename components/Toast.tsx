@@ -75,11 +75,12 @@ interface ToastItem {
 interface ToastContainerProps {
   toasts: ToastItem[];
   removeToast: (id: number) => void;
+  className?: string;
 }
 
-export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, removeToast }) => {
+export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, removeToast, className }) => {
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+    <div className={className || "fixed bottom-6 right-6 z-50 flex flex-col gap-2"}>
       {toasts.map((toast, index) => (
         <div key={toast.id} style={{ transform: `translateY(-${index * 8}px)` }}>
           <Toast

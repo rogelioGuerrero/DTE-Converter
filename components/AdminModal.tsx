@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Lock, Key, Eye, EyeOff, Save, HelpCircle } from 'lucide-react';
 import Tooltip from './Tooltip';
 import { loadSettings, saveSettings, AppSettings } from '../utils/settings';
+import { NitOrDuiField, NrcField } from './formularios';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -150,12 +151,15 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                             <HelpCircle className="w-3 h-3 text-gray-400 cursor-help" />
                           </Tooltip>
                         </div>
-                        <input
-                            type="text"
+                        <NitOrDuiField
+                            label={null}
                             value={settings.myNit}
-                            onChange={(e) => setSettings({...settings, myNit: e.target.value})}
+                            onChange={(myNit) => setSettings({ ...settings, myNit })}
                             placeholder="02453099-6"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
+                            messageVariant="none"
+                            colorMode="blue"
+                            tone="neutral"
+                            inputClassName="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
                         />
                         <p className="text-[10px] text-gray-400 mt-1">9 dígitos (DUI) ó 14 dígitos (NIT)</p>
                     </div>
@@ -166,12 +170,15 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                             <HelpCircle className="w-3 h-3 text-gray-400 cursor-help" />
                           </Tooltip>
                         </div>
-                        <input
-                            type="text"
+                        <NrcField
+                            label={null}
                             value={settings.myNrc}
-                            onChange={(e) => setSettings({...settings, myNrc: e.target.value})}
+                            onChange={(myNrc) => setSettings({ ...settings, myNrc })}
                             placeholder="1571266"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
+                            messageVariant="none"
+                            colorMode="blue"
+                            tone="neutral"
+                            inputClassName="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
                         />
                         <p className="text-[10px] text-gray-400 mt-1">6-8 dígitos</p>
                     </div>

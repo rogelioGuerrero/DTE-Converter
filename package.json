@@ -4,9 +4,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/generate-catalogos.mjs",
     "dev": "vite",
     "dev:netlify": "npx netlify-cli dev",
+    "prebuild": "node scripts/generate-catalogos.mjs",
     "build": "tsc && vite build",
+    "prepreview": "node scripts/generate-catalogos.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

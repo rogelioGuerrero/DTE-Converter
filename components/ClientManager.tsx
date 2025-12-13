@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Loader2, Phone, Mail, Save, Search, Users, Trash2, 
-  Download, FileUp, Plus, Edit3, ChevronDown, Building2,
+  Loader2, Save, Search, Users, Trash2, 
+  Download, FileUp, Plus, Edit3, Building2,
   ScanLine
 } from 'lucide-react';
 import { 
@@ -10,8 +10,19 @@ import {
 import { extractDataFromImage } from '../utils/ocr';
 import { ToastContainer, useToast } from './Toast';
 import Tooltip from './Tooltip';
-import { departamentos, getMunicipiosByDepartamento } from '../catalogos';
-import { validateNIT, validateNRC, validatePhone, validateEmail } from '../utils/validators';
+import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectUbicacion } from './formularios';
+import {
+  validateNIT,
+  validateNRC,
+  validatePhone,
+  validateEmail,
+  formatNitOrDuiInput,
+  formatNRCInput,
+  formatPhoneInput,
+  formatEmailInput,
+  formatTextInput,
+  formatMultilineTextInput,
+} from '../utils/validators';
 
 interface FormData {
   nit: string;
@@ -72,8 +83,6 @@ const ClientManager: React.FC = () => {
     client.nombreComercial?.toLowerCase().includes(clientSearch.toLowerCase())
   );
 
-  const municipios = getMunicipiosByDepartamento(formData.departamento);
-
   // Validaciones
   const nitValidation = validateNIT(formData.nit);
   const nrcValidation = validateNRC(formData.nrc);
@@ -91,16 +100,16 @@ const ClientManager: React.FC = () => {
   const handleSelectClient = (client: ClientData) => {
     setSelectedClient(client);
     setFormData({
-      nit: client.nit,
-      name: client.name,
-      nrc: client.nrc,
-      nombreComercial: client.nombreComercial || '',
-      actividadEconomica: client.actividadEconomica || '',
+      nit: formatNitOrDuiInput(client.nit),
+      name: formatTextInput(client.name),
+      nrc: formatNRCInput(client.nrc),
+      nombreComercial: formatTextInput(client.nombreComercial || ''),
+      actividadEconomica: formatTextInput(client.actividadEconomica || ''),
       departamento: client.departamento || '',
       municipio: client.municipio || '',
-      direccion: client.direccion || '',
-      email: client.email,
-      telefono: client.telefono,
+      direccion: formatMultilineTextInput(client.direccion || ''),
+      email: formatEmailInput(client.email),
+      telefono: formatPhoneInput(client.telefono),
     });
     setIsEditing(false);
   };
@@ -195,11 +204,13 @@ const ClientManager: React.FC = () => {
           const extracted = await extractDataFromImage(base64);
           setFormData(prev => ({
             ...prev,
-            name: extracted.name || prev.name,
-            nit: extracted.nit || prev.nit,
-            nrc: extracted.nrc || prev.nrc,
-            actividadEconomica: extracted.activity || prev.actividadEconomica,
-            direccion: extracted.address || prev.direccion,
+            name: extracted.name ? formatTextInput(extracted.name) : prev.name,
+            nit: extracted.nit ? formatNitOrDuiInput(extracted.nit) : prev.nit,
+            nrc: extracted.nrc ? formatNRCInput(extracted.nrc) : prev.nrc,
+            actividadEconomica: extracted.activity ? formatTextInput(extracted.activity) : prev.actividadEconomica,
+            direccion: extracted.address ? formatMultilineTextInput(extracted.address) : prev.direccion,
+            telefono: extracted.phone ? formatPhoneInput(extracted.phone) : prev.telefono,
+            email: extracted.email ? formatEmailInput(extracted.email) : prev.email,
           }));
           addToast('Datos extraídos con IA', 'success');
         } catch {
@@ -213,10 +224,6 @@ const ClientManager: React.FC = () => {
       setIsProcessingOCR(false);
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const handleDepartamentoChange = (codigo: string) => {
-    setFormData(prev => ({ ...prev, departamento: codigo, municipio: '' }));
   };
 
   return (
@@ -383,48 +390,31 @@ const ClientManager: React.FC = () => {
                   
                   {/* NIT */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
-                      NIT / DUI <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={formData.nit}
-                        onChange={(e) => setFormData({ ...formData, nit: e.target.value })}
-                        disabled={!isEditing}
-                        placeholder="0000-000000-000-0"
-                        className={`w-full px-3 py-2 border rounded-lg text-sm font-mono disabled:bg-gray-50 disabled:text-gray-600 ${
-                          formData.nit && !nitValidation.valid ? 'border-red-300' : formData.nit && nitValidation.valid ? 'border-green-300' : 'border-gray-300'
-                        } focus:ring-2 focus:ring-blue-500 outline-none`}
-                      />
-                      {formData.nit && (
-                        <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-medium ${nitValidation.valid ? 'text-green-600' : 'text-red-500'}`}>
-                          {nitValidation.message}
-                        </span>
-                      )}
-                    </div>
+                    <NitOrDuiField
+                      label="NIT / DUI"
+                      required
+                      value={formData.nit}
+                      onChange={(nit) => setFormData({ ...formData, nit })}
+                      validation={nitValidation}
+                      disabled={!isEditing}
+                      placeholder="0000-000000-000-0"
+                      messageVariant="overlay-when-value"
+                      colorMode="blue"
+                    />
                   </div>
 
                   {/* NRC */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase mb-1">NRC</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={formData.nrc}
-                        onChange={(e) => setFormData({ ...formData, nrc: e.target.value })}
-                        disabled={!isEditing}
-                        placeholder="000000-0"
-                        className={`w-full px-3 py-2 border rounded-lg text-sm font-mono disabled:bg-gray-50 disabled:text-gray-600 ${
-                          formData.nrc && !nrcValidation.valid ? 'border-red-300' : formData.nrc && nrcValidation.valid ? 'border-green-300' : 'border-gray-300'
-                        } focus:ring-2 focus:ring-blue-500 outline-none`}
-                      />
-                      {formData.nrc && (
-                        <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-medium ${nrcValidation.valid ? 'text-green-600' : 'text-red-500'}`}>
-                          {nrcValidation.message}
-                        </span>
-                      )}
-                    </div>
+                    <NrcField
+                      label="NRC"
+                      value={formData.nrc}
+                      onChange={(nrc) => setFormData({ ...formData, nrc })}
+                      validation={nrcValidation}
+                      disabled={!isEditing}
+                      placeholder="000000-0"
+                      messageVariant="overlay-when-value"
+                      colorMode="blue"
+                    />
                   </div>
 
                   {/* Nombre */}
@@ -435,7 +425,7 @@ const ClientManager: React.FC = () => {
                     <input
                       type="text"
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, name: formatTextInput(e.target.value) })}
                       disabled={!isEditing}
                       placeholder="Nombre completo del cliente"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-600 focus:ring-2 focus:ring-blue-500 outline-none"
@@ -448,7 +438,7 @@ const ClientManager: React.FC = () => {
                     <input
                       type="text"
                       value={formData.nombreComercial}
-                      onChange={(e) => setFormData({ ...formData, nombreComercial: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, nombreComercial: formatTextInput(e.target.value) })}
                       disabled={!isEditing}
                       placeholder="Personalizar nombre comercial"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-600 focus:ring-2 focus:ring-blue-500 outline-none"
@@ -461,7 +451,7 @@ const ClientManager: React.FC = () => {
                     <input
                       type="text"
                       value={formData.actividadEconomica}
-                      onChange={(e) => setFormData({ ...formData, actividadEconomica: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, actividadEconomica: formatTextInput(e.target.value) })}
                       disabled={!isEditing}
                       placeholder="Giro o actividad económica"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-600 focus:ring-2 focus:ring-blue-500 outline-none"
@@ -469,41 +459,17 @@ const ClientManager: React.FC = () => {
                   </div>
 
                   {/* Departamento */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Departamento</label>
-                    <div className="relative">
-                      <select
-                        value={formData.departamento}
-                        onChange={(e) => handleDepartamentoChange(e.target.value)}
-                        disabled={!isEditing}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-600 focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
-                      >
-                        <option value="">Seleccionar...</option>
-                        {departamentos.map((d) => (
-                          <option key={d.codigo} value={d.codigo}>{d.codigo} - {d.nombre}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-
-                  {/* Municipio */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Municipio</label>
-                    <div className="relative">
-                      <select
-                        value={formData.municipio}
-                        onChange={(e) => setFormData({ ...formData, municipio: e.target.value })}
-                        disabled={!isEditing || !formData.departamento}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-600 focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
-                      >
-                        <option value="">Seleccionar...</option>
-                        {municipios.map((m) => (
-                          <option key={m.codigo} value={m.codigo}>{m.codigo} - {m.nombre}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    </div>
+                  <div className="col-span-2">
+                    <SelectUbicacion
+                      departamento={formData.departamento}
+                      municipio={formData.municipio}
+                      onDepartamentoChange={(codigo) => setFormData(prev => ({ ...prev, departamento: codigo, municipio: '' }))}
+                      onMunicipioChange={(codigo) => setFormData(prev => ({ ...prev, municipio: codigo }))}
+                      disabled={!isEditing}
+                      showLabels
+                      layout="horizontal"
+                      size="md"
+                    />
                   </div>
 
                   {/* Dirección */}
@@ -511,7 +477,7 @@ const ClientManager: React.FC = () => {
                     <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Dirección Complemento</label>
                     <textarea
                       value={formData.direccion}
-                      onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, direccion: formatMultilineTextInput(e.target.value) })}
                       disabled={!isEditing}
                       rows={2}
                       placeholder="Digite el complemento de la dirección"
@@ -521,50 +487,32 @@ const ClientManager: React.FC = () => {
 
                   {/* Email */}
                   <div>
-                    <label className="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase mb-1">
-                      <Mail className="w-3 h-3" /> Correo electrónico <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        disabled={!isEditing}
-                        placeholder="cliente@ejemplo.com"
-                        className={`w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-600 ${
-                          formData.email && !emailValidation.valid ? 'border-red-300' : formData.email && emailValidation.valid ? 'border-green-300' : 'border-gray-300'
-                        } focus:ring-2 focus:ring-blue-500 outline-none`}
-                      />
-                      {formData.email && (
-                        <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-medium ${emailValidation.valid ? 'text-green-600' : 'text-red-500'}`}>
-                          {emailValidation.message}
-                        </span>
-                      )}
-                    </div>
+                    <EmailField
+                      label="Correo electrónico"
+                      required
+                      value={formData.email}
+                      onChange={(email) => setFormData({ ...formData, email })}
+                      validation={emailValidation}
+                      disabled={!isEditing}
+                      placeholder="cliente@ejemplo.com"
+                      messageVariant="overlay-when-value"
+                      colorMode="blue"
+                    />
                   </div>
 
                   {/* Teléfono */}
                   <div>
-                    <label className="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase mb-1">
-                      <Phone className="w-3 h-3" /> Teléfono <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={formData.telefono}
-                        onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                        disabled={!isEditing}
-                        placeholder="2222-2222"
-                        className={`w-full px-3 py-2 border rounded-lg text-sm font-mono disabled:bg-gray-50 disabled:text-gray-600 ${
-                          formData.telefono && !phoneValidation.valid ? 'border-red-300' : formData.telefono && phoneValidation.valid ? 'border-green-300' : 'border-gray-300'
-                        } focus:ring-2 focus:ring-blue-500 outline-none`}
-                      />
-                      {formData.telefono && (
-                        <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-medium ${phoneValidation.valid ? 'text-green-600' : 'text-red-500'}`}>
-                          {phoneValidation.message}
-                        </span>
-                      )}
-                    </div>
+                    <PhoneField
+                      label="Teléfono"
+                      required
+                      value={formData.telefono}
+                      onChange={(telefono) => setFormData({ ...formData, telefono })}
+                      validation={phoneValidation}
+                      disabled={!isEditing}
+                      placeholder="2222-2222"
+                      messageVariant="overlay-when-value"
+                      colorMode="blue"
+                    />
                   </div>
 
                 </div>

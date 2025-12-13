@@ -26,8 +26,16 @@ import {
   redondear,
   DTEJSON,
 } from '../utils/dteGenerator';
-import { departamentos, getMunicipiosByDepartamento } from '../catalogos';
-import { validateNIT, validateNRC, validatePhone, validateEmail } from '../utils/validators';
+import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectUbicacion } from './formularios';
+import {
+  validateNIT,
+  validateNRC,
+  validatePhone,
+  validateEmail,
+  getNitOrDuiDigitsRemaining,
+  formatTextInput,
+  formatMultilineTextInput,
+} from '../utils/validators';
 
 interface MobileFacturaProps {
   onShowQR: () => void;
@@ -110,8 +118,6 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
       c.nit.includes(clientSearch)
   );
 
-  const municipiosNuevoCliente = getMunicipiosByDepartamento(newClientForm.departamento);
-
   const addItem = () => {
     if (!newItem.descripcion || newItem.precioUni <= 0) return;
     const item: ItemForm = {
@@ -155,23 +161,19 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
 
   const totales = calcularTotales(itemsParaCalculo);
 
-  const formatNITInput = (value: string): string => {
-    const digits = value.replace(/\D/g, '').slice(0, 14);
-    if (digits.length <= 4) return digits;
-    if (digits.length <= 10) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-    if (digits.length <= 13) return `${digits.slice(0, 4)}-${digits.slice(4, 10)}-${digits.slice(10)}`;
-    return `${digits.slice(0, 4)}-${digits.slice(4, 10)}-${digits.slice(10, 13)}-${digits.slice(13)}`;
-  };
-
-  const getNITDigitsRemaining = (nit: string): number => {
-    const digits = nit.replace(/\D/g, '');
-    return Math.max(0, 14 - digits.length);
-  };
-
   const handleNewClientChange = (field: keyof NewClientForm, value: string) => {
     let processedValue = value;
-    if (field === 'nit') {
-      processedValue = formatNITInput(value);
+    if (field === 'name') {
+      processedValue = formatTextInput(value);
+    }
+    if (field === 'nombreComercial') {
+      processedValue = formatTextInput(value);
+    }
+    if (field === 'actividadEconomica') {
+      processedValue = formatTextInput(value);
+    }
+    if (field === 'direccion') {
+      processedValue = formatMultilineTextInput(value);
     }
     setNewClientForm(prev => ({ ...prev, [field]: processedValue }));
     if (newClientErrors[field]) {
@@ -660,45 +662,60 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
             <div className="space-y-4">
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
-                    NIT / DUI <span className="text-red-500">*</span>
-                    {newClientForm.nit && getNITDigitsRemaining(newClientForm.nit) > 0 && (
-                      <span className="ml-2 text-blue-500 font-normal">
-                        ({getNITDigitsRemaining(newClientForm.nit)} dígitos)
-                      </span>
-                    )}
-                    {newClientForm.nit && getNITDigitsRemaining(newClientForm.nit) === 0 && (
-                      <span className="ml-2 text-green-500 font-normal">✓</span>
-                    )}
-                  </label>
-                  <input
-                    type="text"
+                  <NitOrDuiField
+                    label={
+                      <>
+                        NIT / DUI <span className="text-red-500">*</span>
+                        {newClientForm.nit && getNitOrDuiDigitsRemaining(newClientForm.nit) > 0 && (
+                          <span className="ml-2 text-blue-500 font-normal">
+                            {getNitOrDuiDigitsRemaining(newClientForm.nit)}
+                          </span>
+                        )}
+                        {newClientForm.nit && getNitOrDuiDigitsRemaining(newClientForm.nit) === 0 && (
+                          <span className="ml-2 text-green-500 font-normal">✓</span>
+                        )}
+                      </>
+                    }
+                    labelClassName="block text-xs font-medium text-gray-500 uppercase mb-1"
                     value={newClientForm.nit}
-                    onChange={(e) => handleNewClientChange('nit', e.target.value)}
+                    onChange={(nit) => handleNewClientChange('nit', nit)}
                     placeholder="0000-000000-000-0"
-                    className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none ${
-                      newClientErrors.nit ? 'border-red-300 bg-red-50' : 
-                      newClientForm.nit && getNITDigitsRemaining(newClientForm.nit) === 0 ? 'border-green-300 bg-green-50' : 'border-gray-300'
-                    }`}
+                    validation={
+                      newClientErrors.nit
+                        ? { valid: false, message: newClientErrors.nit }
+                        : { valid: true, message: '' }
+                    }
+                    showErrorWhenEmpty={!!newClientErrors.nit}
+                    messageVariant="below-invalid"
+                    colorMode="blue"
+                    tone="neutral"
+                    inputClassName={
+                      newClientErrors.nit
+                        ? 'bg-red-50'
+                        : newClientForm.nit && getNitOrDuiDigitsRemaining(newClientForm.nit) === 0
+                          ? 'border-green-300 bg-green-50'
+                          : ''
+                    }
                   />
-                  {newClientErrors.nit && (
-                    <p className="mt-1 text-xs text-red-500">{newClientErrors.nit}</p>
-                  )}
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">NRC</label>
-                  <input
-                    type="text"
+                  <NrcField
+                    label="NRC"
+                    labelClassName="block text-xs font-medium text-gray-500 uppercase mb-1"
                     value={newClientForm.nrc}
-                    onChange={(e) => handleNewClientChange('nrc', e.target.value)}
+                    onChange={(nrc) => handleNewClientChange('nrc', nrc)}
                     placeholder="000000-0"
-                    className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none ${
-                      newClientErrors.nrc ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                    }`}
+                    validation={
+                      newClientErrors.nrc
+                        ? { valid: false, message: newClientErrors.nrc }
+                        : { valid: true, message: '' }
+                    }
+                    showErrorWhenEmpty={!!newClientErrors.nrc}
+                    messageVariant="below-invalid"
+                    colorMode="blue"
+                    tone="neutral"
+                    inputClassName={newClientErrors.nrc ? 'bg-red-50' : ''}
                   />
-                  {newClientErrors.nrc && (
-                    <p className="mt-1 text-xs text-red-500">{newClientErrors.nrc}</p>
-                  )}
                 </div>
               </div>
 
@@ -742,31 +759,15 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
 
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Departamento</label>
-                  <select
-                    value={newClientForm.departamento}
-                    onChange={(e) => handleNewClientChange('departamento', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    <option value="">Seleccionar...</option>
-                    {departamentos.map((d) => (
-                      <option key={d.codigo} value={d.codigo}>{d.codigo} - {d.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Municipio</label>
-                  <select
-                    value={newClientForm.municipio}
-                    onChange={(e) => handleNewClientChange('municipio', e.target.value)}
-                    disabled={!newClientForm.departamento}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-50"
-                  >
-                    <option value="">Seleccionar...</option>
-                    {municipiosNuevoCliente.map((m) => (
-                      <option key={m.codigo} value={m.codigo}>{m.codigo} - {m.nombre}</option>
-                    ))}
-                  </select>
+                  <SelectUbicacion
+                    departamento={newClientForm.departamento}
+                    municipio={newClientForm.municipio}
+                    onDepartamentoChange={(codigo) => handleNewClientChange('departamento', codigo)}
+                    onMunicipioChange={(codigo) => handleNewClientChange('municipio', codigo)}
+                    showLabels
+                    layout="vertical"
+                    size="md"
+                  />
                 </div>
               </div>
 
@@ -782,35 +783,53 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Teléfono <span className="text-red-500">*</span></label>
-                <input
-                  type="tel"
+                <PhoneField
+                  label={
+                    <>
+                      Teléfono <span className="text-red-500">*</span>
+                    </>
+                  }
+                  labelClassName="block text-xs font-medium text-gray-500 uppercase mb-1"
                   value={newClientForm.telefono}
-                  onChange={(e) => handleNewClientChange('telefono', e.target.value)}
+                  onChange={(telefono) => handleNewClientChange('telefono', telefono)}
                   placeholder="70001234"
-                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none ${
-                    newClientErrors.telefono ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                  }`}
+                  type="tel"
+                  validation={
+                    newClientErrors.telefono
+                      ? { valid: false, message: newClientErrors.telefono }
+                      : { valid: true, message: '' }
+                  }
+                  showErrorWhenEmpty={!!newClientErrors.telefono}
+                  messageVariant="below-invalid"
+                  colorMode="blue"
+                  tone="neutral"
+                  fontMono={false}
+                  inputClassName={newClientErrors.telefono ? 'bg-red-50' : ''}
                 />
-                {newClientErrors.telefono && (
-                  <p className="mt-1 text-xs text-red-500">{newClientErrors.telefono}</p>
-                )}
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Correo Electrónico <span className="text-red-500">*</span></label>
-                <input
-                  type="email"
+                <EmailField
+                  label={
+                    <>
+                      Correo Electrónico <span className="text-red-500">*</span>
+                    </>
+                  }
+                  labelClassName="block text-xs font-medium text-gray-500 uppercase mb-1"
                   value={newClientForm.email}
-                  onChange={(e) => handleNewClientChange('email', e.target.value)}
+                  onChange={(email) => handleNewClientChange('email', email)}
                   placeholder="correo@ejemplo.com"
-                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none ${
-                    newClientErrors.email ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                  }`}
+                  validation={
+                    newClientErrors.email
+                      ? { valid: false, message: newClientErrors.email }
+                      : { valid: true, message: '' }
+                  }
+                  showErrorWhenEmpty={!!newClientErrors.email}
+                  messageVariant="below-invalid"
+                  colorMode="blue"
+                  tone="neutral"
+                  inputClassName={newClientErrors.email ? 'bg-red-50' : ''}
                 />
-                {newClientErrors.email && (
-                  <p className="mt-1 text-xs text-red-500">{newClientErrors.email}</p>
-                )}
               </div>
             </div>
 
