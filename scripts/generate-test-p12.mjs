@@ -4,9 +4,12 @@
 import fs from 'fs';
 import forge from 'node-forge';
 
-const PASSWORD = '1234';
+const PASSWORD = process.env.TEST_P12_PASSWORD;
 
 async function main() {
+  if (!PASSWORD) {
+    throw new Error('Falta definir TEST_P12_PASSWORD');
+  }
   console.log('Generando certificado de prueba para DTE...');
 
   // Generar par de llaves RSA 2048
@@ -56,7 +59,7 @@ async function main() {
 
   console.log('Archivo .p12 de prueba generado:');
   console.log(`  Ruta: ${outPath}`);
-  console.log(`  Contraseña: ${PASSWORD}`);
+  console.log('  Contraseña: (definida en TEST_P12_PASSWORD)');
 }
 
 main().catch((err) => {
