@@ -1,3 +1,5 @@
+import { getStore } from '@netlify/blobs';
+
 const json = (statusCode, body, extraHeaders = {}) => ({
   statusCode,
   headers: {
@@ -58,7 +60,7 @@ const cleanOld = (clients) => {
 
 const isValidStatus = (s) => s === 'pending' || s === 'imported' || s === 'dismissed';
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   const cors = corsHeaders(event);
 
   if (event.httpMethod === 'OPTIONS') {
@@ -80,13 +82,6 @@ exports.handler = async (event) => {
 
   if (typeof event.body === 'string' && event.body.length > 50_000) {
     return json(413, { error: 'Payload too large' }, cors);
-  }
-
-  let getStore;
-  try {
-    ({ getStore } = await import('@netlify/blobs'));
-  } catch (err) {
-    return json(500, { error: err?.message || 'Failed to load blobs module' }, cors);
   }
 
   const store = getStore('dte-pending-clients');
