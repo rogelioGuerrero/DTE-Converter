@@ -1,4 +1,4 @@
-import { getStore } from '@netlify/blobs';
+import { getStore, connectLambda } from '@netlify/blobs';
 
 const json = (statusCode, body, extraHeaders = {}) => ({
   statusCode,
@@ -60,7 +60,8 @@ const cleanOld = (clients) => {
 
 const isValidStatus = (s) => s === 'pending' || s === 'imported' || s === 'dismissed';
 
-export const handler = async (event) => {
+export const handler = async (event, context) => {
+  connectLambda(event);
   const cors = corsHeaders(event);
 
   if (event.httpMethod === 'OPTIONS') {
