@@ -5,14 +5,21 @@ export interface ValidationResult {
   message: string;
 }
 
+export const faltanDigitosMessage = (remaining: number): string => {
+  if (remaining <= 0) return '';
+  if (remaining === 1) return 'Falta 1 dígito';
+  return `Faltan ${remaining} dígitos`;
+};
+
 export const validateNIT = (nit: string): ValidationResult => {
-  if (!nit) return { valid: false, message: '9' };
+  if (!nit) return { valid: false, message: faltanDigitosMessage(9) };
   const nitClean = nit.replace(/[\s-]/g, '');
   if (!/^\d+$/.test(nitClean)) return { valid: false, message: 'Solo números' };
   if (nitClean.length === 14) return { valid: true, message: '' };
   if (nitClean.length === 9) return { valid: true, message: '' };
+  if (nitClean.length > 14) return { valid: false, message: '9 ó 14 dígitos' };
   const target = nitClean.length > 9 ? 14 : 9;
-  return { valid: false, message: `${Math.max(0, target - nitClean.length)}` };
+  return { valid: false, message: faltanDigitosMessage(target - nitClean.length) };
 };
 
 export const validateNRC = (nrc: string): ValidationResult => {
@@ -20,16 +27,17 @@ export const validateNRC = (nrc: string): ValidationResult => {
   const nrcClean = nrc.replace(/[\s-]/g, '');
   if (nrcClean.length === 0) return { valid: true, message: '' };
   if (!/^\d+$/.test(nrcClean)) return { valid: false, message: 'Solo números' };
-  if (nrcClean.length < 6) return { valid: false, message: `${6 - nrcClean.length}` };
+  if (nrcClean.length < 6) return { valid: false, message: faltanDigitosMessage(6 - nrcClean.length) };
   if (nrcClean.length > 8) return { valid: false, message: '6-8 dígitos' };
   return { valid: true, message: '' };
 };
 
 export const validatePhone = (phone: string): ValidationResult => {
-  if (!phone) return { valid: false, message: '8' };
+  if (!phone) return { valid: false, message: faltanDigitosMessage(8) };
   const phoneClean = phone.replace(/[\s-]/g, '');
   if (!/^\d+$/.test(phoneClean)) return { valid: false, message: 'Solo números' };
-  if (phoneClean.length !== 8) return { valid: false, message: `${Math.max(0, 8 - phoneClean.length)}` };
+  if (phoneClean.length < 8) return { valid: false, message: faltanDigitosMessage(8 - phoneClean.length) };
+  if (phoneClean.length > 8) return { valid: false, message: '8 dígitos' };
   return { valid: true, message: '' };
 };
 
