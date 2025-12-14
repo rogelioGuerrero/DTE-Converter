@@ -6,12 +6,13 @@ export interface ValidationResult {
 }
 
 export const validateNIT = (nit: string): ValidationResult => {
-  if (!nit) return { valid: false, message: 'Requerido' };
+  if (!nit) return { valid: false, message: '9' };
   const nitClean = nit.replace(/[\s-]/g, '');
   if (!/^\d+$/.test(nitClean)) return { valid: false, message: 'Solo números' };
-  if (nitClean.length === 14) return { valid: true, message: 'NIT válido' };
-  if (nitClean.length === 9) return { valid: true, message: 'DUI válido' };
-  return { valid: false, message: `${nitClean.length} dígitos (9 ó 14)` };
+  if (nitClean.length === 14) return { valid: true, message: '' };
+  if (nitClean.length === 9) return { valid: true, message: '' };
+  const target = nitClean.length > 9 ? 14 : 9;
+  return { valid: false, message: `${Math.max(0, target - nitClean.length)}` };
 };
 
 export const validateNRC = (nrc: string): ValidationResult => {
@@ -19,23 +20,24 @@ export const validateNRC = (nrc: string): ValidationResult => {
   const nrcClean = nrc.replace(/[\s-]/g, '');
   if (nrcClean.length === 0) return { valid: true, message: '' };
   if (!/^\d+$/.test(nrcClean)) return { valid: false, message: 'Solo números' };
-  if (nrcClean.length < 6 || nrcClean.length > 8) return { valid: false, message: '6-8 dígitos' };
-  return { valid: true, message: 'Válido' };
+  if (nrcClean.length < 6) return { valid: false, message: `${6 - nrcClean.length}` };
+  if (nrcClean.length > 8) return { valid: false, message: '6-8 dígitos' };
+  return { valid: true, message: '' };
 };
 
 export const validatePhone = (phone: string): ValidationResult => {
-  if (!phone) return { valid: false, message: 'Requerido' };
+  if (!phone) return { valid: false, message: '8' };
   const phoneClean = phone.replace(/[\s-]/g, '');
   if (!/^\d+$/.test(phoneClean)) return { valid: false, message: 'Solo números' };
-  if (phoneClean.length !== 8) return { valid: false, message: '8 dígitos' };
-  return { valid: true, message: 'Válido' };
+  if (phoneClean.length !== 8) return { valid: false, message: `${Math.max(0, 8 - phoneClean.length)}` };
+  return { valid: true, message: '' };
 };
 
 export const validateEmail = (email: string): ValidationResult => {
   if (!email) return { valid: false, message: 'Requerido' };
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email.trim())) return { valid: false, message: 'Formato inválido' };
-  return { valid: true, message: 'Válido' };
+  return { valid: true, message: '' };
 };
 
 export const formatEmailInput = (value: string): string => {

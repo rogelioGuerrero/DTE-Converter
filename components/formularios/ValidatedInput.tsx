@@ -51,7 +51,14 @@ const ValidatedInput: React.FC<ValidatedInputProps> = ({
   rightAdornment,
 }) => {
   const hasValue = !!value;
-  const v = validation || (validate ? validate(value) : { valid: true, message: '' });
+  const computed = validate ? validate(value) : { valid: true, message: '' };
+  const v = validation
+    ? !validation.valid
+      ? validation
+      : validation.message
+        ? validation
+        : computed
+    : computed;
 
   const considerValidationState = hasValue || showErrorWhenEmpty;
 
