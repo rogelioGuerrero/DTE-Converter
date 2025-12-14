@@ -21,6 +21,7 @@ import {
   formatMultilineTextInput,
 } from '../utils/validators';
 import { savePendingClient, savePendingClientApi, exportClientAsJson } from '../utils/qrClientCapture';
+import { emitGlobalToast } from '../utils/globalToast';
 import { extractDataFromImage } from '../utils/ocr';
 
 interface ClientFormPageProps {
@@ -138,12 +139,19 @@ const ClientFormPage: React.FC<ClientFormPageProps> = ({ vendorId }) => {
           setIsSubmitted(true);
           return;
         }
+
+        emitGlobalToast(
+          'No se pudo enviar al emisor. Verifica que el vendedor esté online y vuelve a intentar.',
+          'error'
+        );
+        return;
       }
       // Fallback a localStorage si no hay vendorId o falla la API
       savePendingClient(formData);
       setIsSubmitted(true);
     } catch (err) {
       console.error('Error submitting:', err);
+      emitGlobalToast('Error al enviar. Intenta de nuevo.', 'error');
     } finally {
       setIsSubmitting(false);
     }

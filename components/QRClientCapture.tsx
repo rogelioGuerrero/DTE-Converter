@@ -73,7 +73,7 @@ const QRClientCapture: React.FC<QRClientCaptureProps> = ({ onClientImported, onC
     if (v) {
       // Intentar cargar desde API
       const apiClients = await getUnimportedClientsApi(v);
-      if (apiClients.length > 0) {
+      if (apiClients) {
         setPendingClients(apiClients);
         return;
       }

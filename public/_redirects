@@ -1,1 +1,4 @@
+/api/mh/transmitir    /.netlify/functions/mh-transmitir    200
+/api/mh/consulta/*    /.netlify/functions/mh-consulta/:splat    200
+/api/pending-clients  /.netlify/functions/pending-clients  200
 /*    /index.html   200

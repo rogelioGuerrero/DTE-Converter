@@ -155,6 +155,11 @@ export const savePendingClientApi = async (
       console.error('API error saving client:', res.status);
       return null;
     }
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.error('API error saving client: unexpected content-type:', contentType);
+      return null;
+    }
     return await res.json();
   } catch (err) {
     console.error('Network error saving client:', err);
@@ -165,21 +170,27 @@ export const savePendingClientApi = async (
 // Obtener clientes pendientes via API (llamado por el emisor)
 export const getUnimportedClientsApi = async (
   vendorId: string
-): Promise<PendingClient[]> => {
+): Promise<PendingClient[] | null> => {
   try {
     const res = await fetch(`${API_ENDPOINT}?v=${encodeURIComponent(vendorId)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
     });
     if (!res.ok) {
       console.error('API error fetching clients:', res.status);
-      return [];
+      return null;
+    }
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.error('API error fetching clients: unexpected content-type:', contentType);
+      return null;
     }
     const data = await res.json();
     return Array.isArray(data) ? data : [];
   } catch (err) {
     console.error('Network error fetching clients:', err);
-    return [];
+    return null;
   }
 };
 
