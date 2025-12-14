@@ -13,7 +13,7 @@ import {
 
 interface MobileEmisorModalProps {
   emisorForm: Omit<EmisorData, 'id'>;
-  setEmisorForm: (form: Omit<EmisorData, 'id'>) => void;
+  setEmisorForm: React.Dispatch<React.SetStateAction<Omit<EmisorData, 'id'>>>;
   onSave: () => void;
   onClose: () => void;
   isSaving: boolean;
@@ -272,9 +272,9 @@ const MobileEmisorModal: React.FC<MobileEmisorModalProps> = ({
                 departamento={emisorForm.departamento}
                 municipio={emisorForm.municipio}
                 onDepartamentoChange={(codigo) =>
-                  setEmisorForm({ ...emisorForm, departamento: codigo, municipio: '' })
+                  setEmisorForm((prev) => ({ ...prev, departamento: codigo, municipio: '' }))
                 }
-                onMunicipioChange={(codigo) => setEmisorForm({ ...emisorForm, municipio: codigo })}
+                onMunicipioChange={(codigo) => setEmisorForm((prev) => ({ ...prev, municipio: codigo }))}
                 required
                 showLabels
                 layout="vertical"

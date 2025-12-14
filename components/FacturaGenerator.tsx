@@ -887,8 +887,10 @@ const FacturaGenerator: React.FC = () => {
                   <SelectUbicacion
                     departamento={emisorForm.departamento}
                     municipio={emisorForm.municipio}
-                    onDepartamentoChange={(codigo) => setEmisorForm({ ...emisorForm, departamento: codigo, municipio: '' })}
-                    onMunicipioChange={(codigo) => setEmisorForm({ ...emisorForm, municipio: codigo })}
+                    onDepartamentoChange={(codigo) =>
+                      setEmisorForm((prev) => ({ ...prev, departamento: codigo, municipio: '' }))
+                    }
+                    onMunicipioChange={(codigo) => setEmisorForm((prev) => ({ ...prev, municipio: codigo }))}
                     required
                     showLabels
                     layout="horizontal"
