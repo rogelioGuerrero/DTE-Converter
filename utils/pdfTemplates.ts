@@ -2,6 +2,7 @@
 // 4 estilos profesionales para generar valor agregado
 
 import { DTEJSON } from './dteGenerator';
+import { tiposDocumento } from './dteGenerator';
 import { TransmisionResult } from './dteSignature';
 
 export type TemplateName = 'clasica' | 'moderna' | 'minimalista' | 'ejecutiva';
@@ -97,19 +98,9 @@ export const PLANTILLAS: TemplateConfig[] = [
 
 // Obtener nombre del tipo de documento
 const getTipoDocumentoNombre = (codigo: string): string => {
-  const tipos: Record<string, string> = {
-    '01': 'FACTURA',
-    '03': 'COMPROBANTE DE CRÉDITO FISCAL',
-    '05': 'NOTA DE CRÉDITO',
-    '06': 'NOTA DE DÉBITO',
-    '07': 'NOTA DE REMISIÓN',
-    '08': 'LIQUIDACIÓN',
-    '09': 'DTE DE EXPORTACIÓN',
-    '11': 'FACTURA DE EXPORTACIÓN',
-    '14': 'FACTURA DE SUJETO EXCLUIDO',
-    '15': 'COMPROBANTE DE DONACIÓN',
-  };
-  return tipos[codigo] || 'DOCUMENTO TRIBUTARIO ELECTRÓNICO';
+  const tipo = tiposDocumento.find((t) => t.codigo === codigo);
+  if (!tipo) return 'DOCUMENTO TRIBUTARIO ELECTRÓNICO';
+  return tipo.descripcion.replace(/\s*\(.*?\)\s*/g, ' ').trim().toUpperCase();
 };
 
 // Formatear fecha
@@ -228,7 +219,7 @@ const generarPlantillaClasica = (dte: DTEJSON, resultado?: TransmisionResult, co
 </head>
 <body>
   <div class="container" style="position: relative;">
-    <div class="version">Ver.3</div>
+    <div class="version">Ver.${dte.identificacion.version}</div>
     <div class="header">
       ${logoUrl && cfg.mostrarLogo ? `<img src="${logoUrl}" alt="Logo" style="max-height:30px;max-width:100px;margin-bottom:4px;" />` : ''}
       <h1>DOCUMENTO TRIBUTARIO ELECTRÓNICO</h1>
@@ -257,20 +248,20 @@ const generarPlantillaClasica = (dte: DTEJSON, resultado?: TransmisionResult, co
         ${cfg.mostrarNombreComercial && dte.emisor.nombreComercial ? `<div class="field"><span class="label">Nombre Comercial:</span><span class="value">${dte.emisor.nombreComercial}</span></div>` : ''}
         <div class="field"><span class="label">NIT:</span><span class="value">${dte.emisor.nit}</span></div>
         <div class="field"><span class="label">NRC:</span><span class="value">${dte.emisor.nrc}</span></div>
-        ${cfg.mostrarActividad ? `<div class="field"><span class="label">Actividad:</span><span class="value">${dte.emisor.descActividad || 'N/A'}</span></div>` : ''}
-        ${cfg.mostrarDireccion ? `<div class="field"><span class="label">Dirección:</span><span class="value">${dte.emisor.direccion?.complemento || 'N/A'}</span></div>` : ''}
-        ${cfg.mostrarTelefono ? `<div class="field"><span class="label">Teléfono:</span><span class="value">${dte.emisor.telefono || 'N/A'}</span></div>` : ''}
-        <div class="field"><span class="label">Correo:</span><span class="value">${dte.emisor.correo || 'N/A'}</span></div>
+        ${cfg.mostrarActividad ? `<div class="field"><span class="label">Actividad:</span><span class="value">${dte.emisor.descActividad || '—'}</span></div>` : ''}
+        ${cfg.mostrarDireccion ? `<div class="field"><span class="label">Dirección:</span><span class="value">${dte.emisor.direccion?.complemento || '—'}</span></div>` : ''}
+        ${cfg.mostrarTelefono ? `<div class="field"><span class="label">Teléfono:</span><span class="value">${dte.emisor.telefono || '—'}</span></div>` : ''}
+        <div class="field"><span class="label">Correo:</span><span class="value">${dte.emisor.correo || '—'}</span></div>
       </div>
       <div class="party">
         <h3>Receptor</h3>
         <div class="field"><span class="label">Razón Social:</span><span class="value">${dte.receptor.nombre}</span></div>
-        <div class="field"><span class="label">NIT/DUI:</span><span class="value">${dte.receptor.numDocumento || 'N/A'}</span></div>
+        <div class="field"><span class="label">NIT/DUI:</span><span class="value">${dte.receptor.numDocumento || '—'}</span></div>
         ${dte.receptor.nrc ? `<div class="field"><span class="label">NRC:</span><span class="value">${dte.receptor.nrc}</span></div>` : ''}
-        ${cfg.mostrarActividad ? `<div class="field"><span class="label">Actividad:</span><span class="value">${dte.receptor.descActividad || 'N/A'}</span></div>` : ''}
-        ${cfg.mostrarDireccion ? `<div class="field"><span class="label">Dirección:</span><span class="value">${dte.receptor.direccion?.complemento || 'N/A'}</span></div>` : ''}
-        ${cfg.mostrarTelefono ? `<div class="field"><span class="label">Teléfono:</span><span class="value">${dte.receptor.telefono || 'N/A'}</span></div>` : ''}
-        <div class="field"><span class="label">Correo:</span><span class="value">${dte.receptor.correo || 'N/A'}</span></div>
+        ${cfg.mostrarActividad ? `<div class="field"><span class="label">Actividad:</span><span class="value">${dte.receptor.descActividad || '—'}</span></div>` : ''}
+        ${cfg.mostrarDireccion ? `<div class="field"><span class="label">Dirección:</span><span class="value">${dte.receptor.direccion?.complemento || '—'}</span></div>` : ''}
+        ${cfg.mostrarTelefono ? `<div class="field"><span class="label">Teléfono:</span><span class="value">${dte.receptor.telefono || '—'}</span></div>` : ''}
+        <div class="field"><span class="label">Correo:</span><span class="value">${dte.receptor.correo || '—'}</span></div>
       </div>
     </div>
 
@@ -435,16 +426,16 @@ const generarPlantillaModerna = (dte: DTEJSON, resultado?: TransmisionResult, co
         <div class="field"><span class="label">Razón Social</span><span class="value">${dte.emisor.nombre}</span></div>
         <div class="field"><span class="label">NIT</span><span class="value">${dte.emisor.nit}</span></div>
         <div class="field"><span class="label">NRC</span><span class="value">${dte.emisor.nrc}</span></div>
-        ${cfg.mostrarDireccion ? `<div class="field"><span class="label">Dirección</span><span class="value">${dte.emisor.direccion?.complemento || 'N/A'}</span></div>` : ''}
-        ${cfg.mostrarTelefono ? `<div class="field"><span class="label">Teléfono</span><span class="value">${dte.emisor.telefono || 'N/A'}</span></div>` : ''}
+        ${cfg.mostrarDireccion ? `<div class="field"><span class="label">Dirección</span><span class="value">${dte.emisor.direccion?.complemento || '—'}</span></div>` : ''}
+        ${cfg.mostrarTelefono ? `<div class="field"><span class="label">Teléfono</span><span class="value">${dte.emisor.telefono || '—'}</span></div>` : ''}
         <div class="field"><span class="label">Correo</span><span class="value">${dte.emisor.correo}</span></div>
       </div>
       <div class="party-card receptor">
         <h3>📥 Receptor</h3>
         <div class="field"><span class="label">Razón Social</span><span class="value">${dte.receptor.nombre}</span></div>
-        <div class="field"><span class="label">NIT/DUI</span><span class="value">${dte.receptor.numDocumento || 'N/A'}</span></div>
+        <div class="field"><span class="label">NIT/DUI</span><span class="value">${dte.receptor.numDocumento || '—'}</span></div>
         ${dte.receptor.nrc ? `<div class="field"><span class="label">NRC</span><span class="value">${dte.receptor.nrc}</span></div>` : ''}
-        ${cfg.mostrarDireccion ? `<div class="field"><span class="label">Dirección</span><span class="value">${dte.receptor.direccion?.complemento || 'N/A'}</span></div>` : ''}
+        ${cfg.mostrarDireccion ? `<div class="field"><span class="label">Dirección</span><span class="value">${dte.receptor.direccion?.complemento || '—'}</span></div>` : ''}
         <div class="field"><span class="label">Correo</span><span class="value">${dte.receptor.correo}</span></div>
       </div>
     </div>
@@ -742,14 +733,14 @@ const generarPlantillaEjecutiva = (dte: DTEJSON, resultado?: TransmisionResult, 
           <h3>Emisor</h3>
           <p class="name">${dte.emisor.nombre}</p>
           <p class="detail"><strong>NIT:</strong> ${dte.emisor.nit} | <strong>NRC:</strong> ${dte.emisor.nrc}</p>
-          ${cfg.mostrarActividad ? `<p class="detail"><strong>Actividad:</strong> ${dte.emisor.descActividad || 'N/A'}</p>` : ''}
+          ${cfg.mostrarActividad ? `<p class="detail"><strong>Actividad:</strong> ${dte.emisor.descActividad || '—'}</p>` : ''}
           ${cfg.mostrarDireccion ? `<p class="detail">${dte.emisor.direccion?.complemento || ''}</p>` : ''}
-          ${cfg.mostrarTelefono ? `<p class="detail"><strong>Tel:</strong> ${dte.emisor.telefono || 'N/A'} | <strong>Email:</strong> ${dte.emisor.correo}</p>` : `<p class="detail"><strong>Email:</strong> ${dte.emisor.correo}</p>`}
+          ${cfg.mostrarTelefono ? `<p class="detail"><strong>Tel:</strong> ${dte.emisor.telefono || '—'} | <strong>Email:</strong> ${dte.emisor.correo}</p>` : `<p class="detail"><strong>Email:</strong> ${dte.emisor.correo}</p>`}
         </div>
         <div class="party">
           <h3>Receptor</h3>
           <p class="name">${dte.receptor.nombre}</p>
-          <p class="detail"><strong>Documento:</strong> ${dte.receptor.numDocumento || 'N/A'}${dte.receptor.nrc ? ` | <strong>NRC:</strong> ${dte.receptor.nrc}` : ''}</p>
+          <p class="detail"><strong>Documento:</strong> ${dte.receptor.numDocumento || '—'}${dte.receptor.nrc ? ` | <strong>NRC:</strong> ${dte.receptor.nrc}` : ''}</p>
           ${cfg.mostrarActividad && dte.receptor.descActividad ? `<p class="detail"><strong>Actividad:</strong> ${dte.receptor.descActividad}</p>` : ''}
           ${cfg.mostrarDireccion && dte.receptor.direccion ? `<p class="detail">${dte.receptor.direccion.complemento}</p>` : ''}
           <p class="detail"><strong>Email:</strong> ${dte.receptor.correo}</p>

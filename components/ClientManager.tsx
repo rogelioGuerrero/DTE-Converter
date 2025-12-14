@@ -10,7 +10,7 @@ import {
 import { extractDataFromImage } from '../utils/ocr';
 import { ToastContainer, useToast } from './Toast';
 import Tooltip from './Tooltip';
-import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectUbicacion } from './formularios';
+import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectActividad, SelectUbicacion } from './formularios';
 import {
   validateNIT,
   validateNRC,
@@ -30,6 +30,7 @@ interface FormData {
   nrc: string;
   nombreComercial: string;
   actividadEconomica: string;
+  descActividad: string;
   departamento: string;
   municipio: string;
   direccion: string;
@@ -43,6 +44,7 @@ const emptyForm: FormData = {
   nrc: '',
   nombreComercial: '',
   actividadEconomica: '',
+  descActividad: '',
   departamento: '',
   municipio: '',
   direccion: '',
@@ -104,7 +106,8 @@ const ClientManager: React.FC = () => {
       name: formatTextInput(client.name),
       nrc: formatNRCInput(client.nrc),
       nombreComercial: formatTextInput(client.nombreComercial || ''),
-      actividadEconomica: formatTextInput(client.actividadEconomica || ''),
+      actividadEconomica: client.actividadEconomica || '',
+      descActividad: client.descActividad || '',
       departamento: client.departamento || '',
       municipio: client.municipio || '',
       direccion: formatMultilineTextInput(client.direccion || ''),
@@ -207,7 +210,12 @@ const ClientManager: React.FC = () => {
             name: extracted.name ? formatTextInput(extracted.name) : prev.name,
             nit: extracted.nit ? formatNitOrDuiInput(extracted.nit) : prev.nit,
             nrc: extracted.nrc ? formatNRCInput(extracted.nrc) : prev.nrc,
-            actividadEconomica: extracted.activity ? formatTextInput(extracted.activity) : prev.actividadEconomica,
+            actividadEconomica: extracted.activity && /^\d{5,6}$/.test(formatTextInput(extracted.activity))
+              ? formatTextInput(extracted.activity)
+              : prev.actividadEconomica,
+            descActividad: extracted.activity && !/^\d{5,6}$/.test(formatTextInput(extracted.activity))
+              ? formatTextInput(extracted.activity)
+              : prev.descActividad,
             direccion: extracted.address ? formatMultilineTextInput(extracted.address) : prev.direccion,
             telefono: extracted.phone ? formatPhoneInput(extracted.phone) : prev.telefono,
             email: extracted.email ? formatEmailInput(extracted.email) : prev.email,
@@ -447,14 +455,14 @@ const ClientManager: React.FC = () => {
 
                   {/* Actividad Económica */}
                   <div className="col-span-2">
-                    <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Actividad Económica</label>
-                    <input
-                      type="text"
+                    <SelectActividad
                       value={formData.actividadEconomica}
-                      onChange={(e) => setFormData({ ...formData, actividadEconomica: formatTextInput(e.target.value) })}
+                      onChange={(codigo, descripcion) =>
+                        setFormData((prev) => ({ ...prev, actividadEconomica: codigo, descActividad: descripcion }))
+                      }
                       disabled={!isEditing}
-                      placeholder="Giro o actividad económica"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-600 focus:ring-2 focus:ring-blue-500 outline-none"
+                      label="Actividad Económica"
+                      placeholder="Escribe una actividad..."
                     />
                   </div>
 

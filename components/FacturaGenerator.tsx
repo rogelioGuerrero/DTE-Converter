@@ -869,18 +869,18 @@ const FacturaGenerator: React.FC = () => {
                     value={emisorForm.actividadEconomica}
                     onChange={(codigo, descripcion) => setEmisorForm({ ...emisorForm, actividadEconomica: codigo, descActividad: descripcion })}
                     required
-                    label="Código Actividad"
-                    placeholder="Buscar actividad..."
+                    label="Actividad Económica"
+                    placeholder="Escribe una actividad..."
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Descripción Actividad <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Código Actividad <span className="text-red-500">*</span></label>
                   <input
                     type="text"
-                    value={emisorForm.descActividad}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, descActividad: formatTextInput(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="Ej: Servicios de programación"
+                    value={emisorForm.actividadEconomica}
+                    readOnly
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 text-gray-700 font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Se completa al seleccionar"
                   />
                 </div>
                 <div className="col-span-2">

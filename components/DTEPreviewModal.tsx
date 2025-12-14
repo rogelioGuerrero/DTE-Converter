@@ -12,6 +12,7 @@ import {
   Hash
 } from 'lucide-react';
 import { DTEJSON } from '../utils/dteGenerator';
+import { tiposDocumento } from '../utils/dteGenerator';
 
 interface DTEPreviewModalProps {
   dte: DTEJSON;
@@ -30,6 +31,8 @@ const DTEPreviewModal: React.FC<DTEPreviewModalProps> = ({
 }) => {
   const [showJSON, setShowJSON] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const tipoDoc = tiposDocumento.find((t) => t.codigo === dte.identificacion.tipoDte);
 
   const handleCopy = () => {
     onCopy();
@@ -64,11 +67,24 @@ const DTEPreviewModal: React.FC<DTEPreviewModalProps> = ({
           {/* Identificación */}
           <div className="bg-gray-50 rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2 text-sm">
+              <FileText className="w-4 h-4 text-gray-400" />
+              <span className="text-gray-500">Tipo:</span>
+              <span className="text-gray-700">
+                {dte.identificacion.tipoDte}
+                {tipoDoc ? ` - ${tipoDoc.descripcion}` : ''}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
               <Hash className="w-4 h-4 text-gray-400" />
               <span className="text-gray-500">Código:</span>
               <code className="font-mono text-xs bg-white px-2 py-0.5 rounded border text-gray-700">
                 {dte.identificacion.codigoGeneracion.substring(0, 16)}...
               </code>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <FileText className="w-4 h-4 text-gray-400" />
+              <span className="text-gray-500">Versión:</span>
+              <span className="text-gray-700">{dte.identificacion.version}</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <FileText className="w-4 h-4 text-gray-400" />

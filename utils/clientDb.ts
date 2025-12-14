@@ -7,6 +7,7 @@ export interface ClientData {
   nrc: string;
   nombreComercial: string;
   actividadEconomica: string;
+  descActividad?: string;
   departamento: string;
   municipio: string;
   direccion: string;
@@ -105,6 +106,7 @@ export const importClients = async (jsonString: string): Promise<{ imported: num
       nrc: client.nrc || '',
       nombreComercial: client.nombreComercial || '',
       actividadEconomica: client.actividadEconomica || '',
+      descActividad: client.descActividad || '',
       departamento: client.departamento || '',
       municipio: client.municipio || '',
       direccion: client.direccion || '',

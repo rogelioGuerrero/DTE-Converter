@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Search, ChevronDown, Briefcase, X } from 'lucide-react';
+import { ChevronDown, Briefcase, X } from 'lucide-react';
 import type { ActividadEconomica } from '../../catalogos';
 import { loadActividadesEconomicas } from '../../utils/catalogosRuntime';
 
@@ -36,10 +36,10 @@ const SelectActividad: React.FC<SelectActividadProps> = ({
   }, [value, actividades]);
 
   const displayText = useMemo(() => {
-    if (selectedActividad) return `${selectedActividad.codigo} - ${selectedActividad.descripcion}`;
+    if (selectedActividad) return selectedActividad.descripcion;
     if (value) return value;
-    return placeholder;
-  }, [selectedActividad, value, placeholder]);
+    return '';
+  }, [selectedActividad]);
 
   // Filtrar actividades
   const filteredActividades = useMemo(() => {
@@ -94,6 +94,21 @@ const SelectActividad: React.FC<SelectActividadProps> = ({
     setSearch('');
   };
 
+  const openDropdown = () => {
+    if (disabled) return;
+    setIsOpen(true);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
+  const closeDropdown = () => {
+    setIsOpen(false);
+    setSearch('');
+  };
+
+  const inputValue = isOpen ? search : (displayText || '');
+
   return (
     <div className={`relative ${className}`} ref={containerRef}>
       {label && (
@@ -103,52 +118,71 @@ const SelectActividad: React.FC<SelectActividadProps> = ({
         </label>
       )}
 
-      {/* Trigger Button */}
-      <button
-        type="button"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        disabled={disabled}
-        className={`
-          w-full px-3 py-2 text-left border rounded-lg text-sm
-          flex items-center justify-between gap-2
-          focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none
-          disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed
-          ${isOpen ? 'border-blue-500 ring-2 ring-blue-500' : 'border-gray-300'}
-        `}
-      >
-        <span className={`truncate ${(selectedActividad || value) ? 'text-gray-900' : 'text-gray-400'}`}>
-          {displayText}
-        </span>
-        <div className="flex items-center gap-1">
+      {/* Input */}
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          onFocus={() => openDropdown()}
+          onChange={(e) => {
+            if (!disabled && !isOpen) setIsOpen(true);
+            setSearch(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              closeDropdown();
+            }
+            if (e.key === 'Enter') {
+              const first = filteredActividades[0];
+              if (isOpen && first) {
+                e.preventDefault();
+                handleSelect(first);
+              }
+            }
+          }}
+          disabled={disabled}
+          placeholder={selectedActividad ? '' : placeholder}
+          className={`
+            w-full px-3 py-2 pr-10 border rounded-lg text-sm
+            focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none
+            disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed
+            ${isOpen ? 'border-blue-500 ring-2 ring-blue-500' : 'border-gray-300'}
+          `}
+        />
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
           {!!value && !disabled && (
-            <X 
-              className="w-4 h-4 text-gray-400 hover:text-gray-600" 
-              onClick={(e) => { e.stopPropagation(); handleClear(); }}
-            />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                handleClear();
+                openDropdown();
+              }}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
           )}
-          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              if (isOpen) closeDropdown();
+              else openDropdown();
+            }}
+            disabled={disabled}
+            className="text-gray-400"
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          </button>
         </div>
-      </button>
+      </div>
 
       {/* Dropdown */}
       {isOpen && (
         <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-          {/* Search */}
-          <div className="p-2 border-b border-gray-100">
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por código o descripción..."
-                className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                autoFocus
-              />
-            </div>
-          </div>
-
           {/* Results */}
           <div className="max-h-60 overflow-y-auto">
             {isLoading ? (

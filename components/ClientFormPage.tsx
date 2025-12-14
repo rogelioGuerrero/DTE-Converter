@@ -20,7 +20,7 @@ import {
   formatTextInput,
   formatMultilineTextInput,
 } from '../utils/validators';
-import { savePendingClient, exportClientAsJson } from '../utils/qrClientCapture';
+import { savePendingClient, savePendingClientApi, exportClientAsJson } from '../utils/qrClientCapture';
 import { extractDataFromImage } from '../utils/ocr';
 
 interface ClientFormPageProps {
@@ -131,7 +131,15 @@ const ClientFormPage: React.FC<ClientFormPageProps> = ({ vendorId }) => {
 
     setIsSubmitting(true);
     try {
-      // Guardar en localStorage (para cuando el vendedor revise)
+      // Intentar guardar via API (sincronizacion entre dispositivos)
+      if (vendorId) {
+        const result = await savePendingClientApi(vendorId, formData);
+        if (result?.id) {
+          setIsSubmitted(true);
+          return;
+        }
+      }
+      // Fallback a localStorage si no hay vendorId o falla la API
       savePendingClient(formData);
       setIsSubmitted(true);
     } catch (err) {

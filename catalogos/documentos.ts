@@ -14,7 +14,6 @@ export interface CatalogoItemNum {
 // CAT-002: Tipo de Documento
 export const tiposDocumento: CatalogoItem[] = [
   { codigo: '01', descripcion: 'Factura Electrónica (FE)' },
-  { codigo: '02', descripcion: 'Factura de Exportación Electrónica (FEXE)' },
   { codigo: '03', descripcion: 'Comprobante de Crédito Fiscal Electrónico (CCFE)' },
   { codigo: '04', descripcion: 'Nota de Remisión Electrónica (NRE)' },
   { codigo: '05', descripcion: 'Nota de Crédito Electrónica (NCE)' },
@@ -22,8 +21,9 @@ export const tiposDocumento: CatalogoItem[] = [
   { codigo: '07', descripcion: 'Comprobante de Retención Electrónico (CRE)' },
   { codigo: '08', descripcion: 'Comprobante de Liquidación Electrónico (CLE)' },
   { codigo: '09', descripcion: 'Documento Contable de Liquidación Electrónico (DCLE)' },
-  { codigo: '10', descripcion: 'Factura de Sujeto Excluido Electrónica (FSEE)' },
-  { codigo: '11', descripcion: 'Comprobante de Donación Electrónico (CDE)' },
+  { codigo: '11', descripcion: 'Factura de Exportación Electrónica (FEXE)' },
+  { codigo: '14', descripcion: 'Factura de Sujeto Excluido Electrónica (FSEE)' },
+  { codigo: '15', descripcion: 'Comprobante de Donación Electrónico (CDE)' },
 ];
 
 // CAT-003: Tipo de Transmisión

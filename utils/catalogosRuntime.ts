@@ -20,6 +20,8 @@ const DB_NAME = 'dte-catalogos-db';
 const DB_VERSION = 1;
 const STORE_NAME = 'catalogos';
 
+const CATALOGOS_URL_VERSION = '2';
+
 const memoryCache = new Map<CatalogKey, CatalogValueMap[CatalogKey]>();
 let offlineToastShown = false;
 
@@ -67,28 +69,32 @@ const fetchJson = async <T>(url: string): Promise<T> => {
 
 export const loadDepartamentosMunicipios = async (): Promise<CatalogValueMap['departamentosMunicipios']> => {
   const cached = await getCached('departamentosMunicipios');
-  if (cached) return cached;
+  if (cached && cached.departamentos.length > 0) return cached;
 
   try {
-    const data = await fetchJson<CatalogValueMap['departamentosMunicipios']>('/catalogos/departamentosMunicipios.json');
+    const data = await fetchJson<CatalogValueMap['departamentosMunicipios']>(
+      `/catalogos/departamentosMunicipios.json?v=${CATALOGOS_URL_VERSION}`
+    );
     await setCached('departamentosMunicipios', data);
     return data;
   } catch {
     showOfflineToastOnce();
-    return { departamentos: [] };
+    return cached || { departamentos: [] };
   }
 };
 
 export const loadActividadesEconomicas = async (): Promise<CatalogValueMap['actividadesEconomicas']> => {
   const cached = await getCached('actividadesEconomicas');
-  if (cached) return cached;
+  if (cached && cached.actividadesEconomicas.length > 0) return cached;
 
   try {
-    const data = await fetchJson<CatalogValueMap['actividadesEconomicas']>('/catalogos/actividadesEconomicas.json');
+    const data = await fetchJson<CatalogValueMap['actividadesEconomicas']>(
+      `/catalogos/actividadesEconomicas.json?v=${CATALOGOS_URL_VERSION}`
+    );
     await setCached('actividadesEconomicas', data);
     return data;
   } catch {
     showOfflineToastOnce();
-    return { actividadesEconomicas: [], actividadesComunes: [] };
+    return cached || { actividadesEconomicas: [], actividadesComunes: [] };
   }
 };

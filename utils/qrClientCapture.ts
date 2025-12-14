@@ -1,10 +1,12 @@
 // Sistema de captura de datos de cliente via QR
 // Genera un ID unico para cada sesion de captura y almacena los datos recibidos
+// Usa Netlify Function para sincronizacion entre dispositivos
 
 import { ClientData } from './clientDb';
 
 const STORAGE_KEY = 'dte_pending_clients';
 const SESSION_KEY = 'dte_vendor_session';
+const API_ENDPOINT = '/api/pending-clients';
 
 export interface PendingClient {
   id: string;
@@ -132,4 +134,87 @@ export const importClientFromJson = (jsonString: string): Partial<ClientData> | 
     console.error('Error parsing client JSON');
   }
   return null;
+};
+
+// ============================================
+// API Functions (Netlify Function backend)
+// ============================================
+
+// Guardar cliente pendiente via API (llamado desde el formulario del cliente)
+export const savePendingClientApi = async (
+  vendorId: string,
+  clientData: Partial<ClientData>
+): Promise<{ id: string } | null> => {
+  try {
+    const res = await fetch(`${API_ENDPOINT}?v=${encodeURIComponent(vendorId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create', data: clientData }),
+    });
+    if (!res.ok) {
+      console.error('API error saving client:', res.status);
+      return null;
+    }
+    return await res.json();
+  } catch (err) {
+    console.error('Network error saving client:', err);
+    return null;
+  }
+};
+
+// Obtener clientes pendientes via API (llamado por el emisor)
+export const getUnimportedClientsApi = async (
+  vendorId: string
+): Promise<PendingClient[]> => {
+  try {
+    const res = await fetch(`${API_ENDPOINT}?v=${encodeURIComponent(vendorId)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      console.error('API error fetching clients:', res.status);
+      return [];
+    }
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error('Network error fetching clients:', err);
+    return [];
+  }
+};
+
+// Marcar cliente como importado via API
+export const markClientImportedApi = async (
+  vendorId: string,
+  clientId: string
+): Promise<boolean> => {
+  try {
+    const res = await fetch(`${API_ENDPOINT}?v=${encodeURIComponent(vendorId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'setStatus', id: clientId, status: 'imported' }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('Network error marking client imported:', err);
+    return false;
+  }
+};
+
+// Descartar cliente pendiente via API
+export const dismissPendingClientApi = async (
+  vendorId: string,
+  clientId: string
+): Promise<boolean> => {
+  try {
+    const res = await fetch(`${API_ENDPOINT}?v=${encodeURIComponent(vendorId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'setStatus', id: clientId, status: 'dismissed' }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('Network error dismissing client:', err);
+    return false;
+  }
 };

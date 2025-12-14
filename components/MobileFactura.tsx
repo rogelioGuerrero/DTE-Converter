@@ -26,7 +26,7 @@ import {
   redondear,
   DTEJSON,
 } from '../utils/dteGenerator';
-import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectUbicacion } from './formularios';
+import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectActividad, SelectUbicacion } from './formularios';
 import {
   validateNIT,
   validateNRC,
@@ -58,6 +58,7 @@ interface NewClientForm {
   nrc: string;
   nombreComercial: string;
   actividadEconomica: string;
+  descActividad: string;
   departamento: string;
   municipio: string;
   direccion: string;
@@ -71,6 +72,7 @@ const emptyNewClientForm: NewClientForm = {
   nrc: '',
   nombreComercial: '',
   actividadEconomica: '',
+  descActividad: '',
   departamento: '',
   municipio: '',
   direccion: '',
@@ -169,9 +171,6 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
     if (field === 'nombreComercial') {
       processedValue = formatTextInput(value);
     }
-    if (field === 'actividadEconomica') {
-      processedValue = formatTextInput(value);
-    }
     if (field === 'direccion') {
       processedValue = formatMultilineTextInput(value);
     }
@@ -212,6 +211,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
         nrc: newClientForm.nrc,
         nombreComercial: newClientForm.nombreComercial,
         actividadEconomica: newClientForm.actividadEconomica,
+        descActividad: newClientForm.descActividad,
         departamento: newClientForm.departamento,
         municipio: newClientForm.municipio,
         direccion: newClientForm.direccion,
@@ -245,9 +245,10 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
           nrc: selectedClient.nrc || '',
           nombreComercial: selectedClient.nombreComercial || '',
           actividadEconomica: selectedClient.actividadEconomica || '',
-          departamento: selectedClient.departamento || '06',
-          municipio: selectedClient.municipio || '14',
-          direccion: selectedClient.direccion || 'San Salvador',
+          descActividad: selectedClient.descActividad || '',
+          departamento: selectedClient.departamento || '',
+          municipio: selectedClient.municipio || '',
+          direccion: selectedClient.direccion || '',
           telefono: selectedClient.telefono || '',
           email: selectedClient.email || 'sin@correo.com',
           timestamp: selectedClient.timestamp || Date.now(),
@@ -747,13 +748,15 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Actividad Económica</label>
-                <input
-                  type="text"
+                <SelectActividad
                   value={newClientForm.actividadEconomica}
-                  onChange={(e) => handleNewClientChange('actividadEconomica', e.target.value)}
-                  placeholder="Giro o actividad económica"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  onChange={(codigo, descripcion) => {
+                    handleNewClientChange('actividadEconomica', codigo);
+                    handleNewClientChange('descActividad', descripcion);
+                  }}
+                  label="Actividad Económica"
+                  placeholder="Escribe una actividad..."
+                  required={false}
                 />
               </div>
 
@@ -936,6 +939,14 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
               </div>
             </div>
             <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Tipo:</span>
+                <span className="font-medium">{generatedDTE.identificacion.tipoDte}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Control:</span>
+                <span className="font-medium font-mono text-xs">{generatedDTE.identificacion.numeroControl}</span>
+              </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Cliente:</span>
                 <span className="font-medium">{generatedDTE.receptor.nombre}</span>

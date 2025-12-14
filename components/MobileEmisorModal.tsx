@@ -235,20 +235,30 @@ const MobileEmisorModal: React.FC<MobileEmisorModalProps> = ({
                     setEmisorForm({ ...emisorForm, actividadEconomica: codigo, descActividad: descripcion })
                   }
                   required
-                  label="Código Actividad Económica"
-                  placeholder="Buscar actividad..."
+                  label="Actividad Económica"
+                  placeholder="Escribe una actividad..."
                 />
                 {!validations.actividadEconomica.valid && (
                   <p className="text-xs text-red-500 mt-1">{validations.actividadEconomica.message}</p>
                 )}
               </div>
-              {renderField(
-                'Descripción Actividad',
-                emisorForm.descActividad || '',
-                (val) => setEmisorForm({ ...emisorForm, descActividad: formatTextInput(val) }),
-                validations.descActividad,
-                'Ej: Servicios de programación'
-              )}
+              <div>
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                  Código Actividad <span className="text-red-500">*</span>
+                </label>
+                <div className="relative mt-1">
+                  <input
+                    type="text"
+                    value={emisorForm.actividadEconomica}
+                    readOnly
+                    className="w-full px-4 py-3 border rounded-xl bg-gray-50 text-gray-700 font-mono border-gray-300 focus:ring-2 focus:ring-opacity-20"
+                    placeholder="Se completa al seleccionar"
+                  />
+                </div>
+                {!validations.descActividad.valid && (
+                  <p className="text-xs text-red-500 mt-1">{validations.descActividad.message}</p>
+                )}
+              </div>
             </div>
           </div>
 

@@ -15,7 +15,12 @@ function extractArrayLiteral(source, anchor) {
     throw new Error(`Anchor not found: ${anchor}`);
   }
 
-  const startIndex = source.indexOf('[', anchorIndex);
+  const eqIndex = source.indexOf('=', anchorIndex);
+  if (eqIndex < 0) {
+    throw new Error(`Assignment '=' not found for anchor: ${anchor}`);
+  }
+
+  const startIndex = source.indexOf('[', eqIndex);
   if (startIndex < 0) {
     throw new Error(`Array start not found for anchor: ${anchor}`);
   }

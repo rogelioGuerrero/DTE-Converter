@@ -124,6 +124,21 @@ export interface DTEJSON {
   apendice: null;
 }
 
+const isCodActividad = (value: string | null | undefined): boolean => {
+  if (!value) return false;
+  return /^\d{5,6}$/.test(value.trim());
+};
+
+const isCodDepartamento = (value: string | null | undefined): boolean => {
+  if (!value) return false;
+  return /^(0[1-9]|1[0-4])$/.test(value.trim());
+};
+
+const isCodMunicipio = (value: string | null | undefined): boolean => {
+  if (!value) return false;
+  return /^(0[1-9]|[1-5]\d|6[0-8])$/.test(value.trim());
+};
+
 // Generar UUID v4
 export const generarUUID = (): string => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -236,6 +251,25 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
   const uuid = generarUUID();
   const numeroControl = generarNumeroControl(datos.tipoDocumento, correlativo);
   const totales = calcularTotales(datos.items);
+
+  const receptorCodActividad = isCodActividad(datos.receptor.actividadEconomica)
+    ? datos.receptor.actividadEconomica.trim()
+    : null;
+
+  const receptorDescActividad = datos.receptor.descActividad?.trim()
+    ? datos.receptor.descActividad.trim()
+    : (!isCodActividad(datos.receptor.actividadEconomica) && (datos.receptor.actividadEconomica || '').trim()
+        ? (datos.receptor.actividadEconomica || '').trim()
+        : null);
+
+  const receptorDireccion =
+    isCodDepartamento(datos.receptor.departamento) && isCodMunicipio(datos.receptor.municipio)
+      ? {
+          departamento: datos.receptor.departamento.trim(),
+          municipio: datos.receptor.municipio.trim(),
+          complemento: datos.receptor.direccion || '',
+        }
+      : null;
   
   const dteJSON: DTEJSON = {
     identificacion: {
@@ -276,13 +310,9 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       numDocumento: datos.receptor.nit,
       nrc: datos.receptor.nrc || null,
       nombre: datos.receptor.name,
-      codActividad: datos.receptor.actividadEconomica || null,
-      descActividad: null,
-      direccion: datos.receptor.departamento ? {
-        departamento: datos.receptor.departamento,
-        municipio: datos.receptor.municipio,
-        complemento: datos.receptor.direccion,
-      } : null,
+      codActividad: receptorCodActividad,
+      descActividad: receptorDescActividad,
+      direccion: receptorDireccion,
       telefono: datos.receptor.telefono || null,
       correo: datos.receptor.email,
     },

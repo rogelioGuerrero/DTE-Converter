@@ -1,7 +1,7 @@
 // Generador de PDF para DTE - Comprobante de Crédito Fiscal
 // Basado en el formato oficial del Ministerio de Hacienda de El Salvador
 
-import { DTEJSON } from './dteGenerator';
+import { DTEJSON, tiposDocumento } from './dteGenerator';
 import { TransmisionResult } from './dteSignature';
 
 export interface PDFGeneratorOptions {
@@ -40,19 +40,9 @@ const formatearFecha = (fechaISO: string): string => {
 
 // Obtener nombre del tipo de documento
 const getTipoDocumentoNombre = (codigo: string): string => {
-  const tipos: Record<string, string> = {
-    '01': 'FACTURA',
-    '03': 'COMPROBANTE DE CRÉDITO FISCAL',
-    '05': 'NOTA DE CRÉDITO',
-    '06': 'NOTA DE DÉBITO',
-    '07': 'NOTA DE REMISIÓN',
-    '08': 'LIQUIDACIÓN',
-    '09': 'DTE DE EXPORTACIÓN',
-    '11': 'FACTURA DE EXPORTACIÓN',
-    '14': 'FACTURA DE SUJETO EXCLUIDO',
-    '15': 'COMPROBANTE DE DONACIÓN',
-  };
-  return tipos[codigo] || 'DOCUMENTO TRIBUTARIO ELECTRÓNICO';
+  const tipo = tiposDocumento.find((t) => t.codigo === codigo);
+  if (!tipo) return 'DOCUMENTO TRIBUTARIO ELECTRÓNICO';
+  return tipo.descripcion.replace(/\s*\(.*?\)\s*/g, ' ').trim().toUpperCase();
 };
 
 // Generar HTML del PDF
@@ -267,7 +257,7 @@ export const generarHTMLFactura = async (options: PDFGeneratorOptions): Promise<
 <body>
   <div class="container">
     <div class="header">
-      <div class="version">Ver.3</div>
+      <div class="version">Ver.${dte.identificacion.version}</div>
       <h1>DOCUMENTO TRIBUTARIO ELECTRÓNICO</h1>
       <h2>${tipoDocNombre}</h2>
     </div>
@@ -323,19 +313,19 @@ export const generarHTMLFactura = async (options: PDFGeneratorOptions): Promise<
         </div>
         <div class="field">
           <span class="label">Actividad económica:</span>
-          <span class="value">${dte.emisor.descActividad || 'N/A'}</span>
+          <span class="value">${dte.emisor.descActividad || '—'}</span>
         </div>
         <div class="field">
           <span class="label">Dirección:</span>
-          <span class="value">${dte.emisor.direccion?.complemento || 'N/A'}</span>
+          <span class="value">${dte.emisor.direccion?.complemento || '—'}</span>
         </div>
         <div class="field">
           <span class="label">Número de teléfono:</span>
-          <span class="value">${dte.emisor.telefono || 'N/A'}</span>
+          <span class="value">${dte.emisor.telefono || '—'}</span>
         </div>
         <div class="field">
           <span class="label">Correo electrónico:</span>
-          <span class="value">${dte.emisor.correo || 'N/A'}</span>
+          <span class="value">${dte.emisor.correo || '—'}</span>
         </div>
         ${dte.emisor.nombreComercial ? `
         <div class="field">
@@ -357,7 +347,7 @@ export const generarHTMLFactura = async (options: PDFGeneratorOptions): Promise<
         </div>
         <div class="field">
           <span class="label">NIT:</span>
-          <span class="value">${dte.receptor.numDocumento || 'N/A'}</span>
+          <span class="value">${dte.receptor.numDocumento || '—'}</span>
         </div>
         ${dte.receptor.nrc ? `
         <div class="field">
@@ -367,19 +357,19 @@ export const generarHTMLFactura = async (options: PDFGeneratorOptions): Promise<
         ` : ''}
         <div class="field">
           <span class="label">Actividad económica:</span>
-          <span class="value">${dte.receptor.descActividad || 'N/A'}</span>
+          <span class="value">${dte.receptor.descActividad || '—'}</span>
         </div>
         <div class="field">
           <span class="label">Dirección:</span>
-          <span class="value">${dte.receptor.direccion?.complemento || 'N/A'}</span>
+          <span class="value">${dte.receptor.direccion?.complemento || '—'}</span>
         </div>
         <div class="field">
           <span class="label">Número de teléfono:</span>
-          <span class="value">${dte.receptor.telefono || 'N/A'}</span>
+          <span class="value">${dte.receptor.telefono || '—'}</span>
         </div>
         <div class="field">
           <span class="label">Correo electrónico:</span>
-          <span class="value">${dte.receptor.correo || 'N/A'}</span>
+          <span class="value">${dte.receptor.correo || '—'}</span>
         </div>
               </div>
     </div>
@@ -467,7 +457,7 @@ export const generarHTMLFactura = async (options: PDFGeneratorOptions): Promise<
       <h4>✓ Documento Validado por el Ministerio de Hacienda</h4>
       <p><strong>Sello de Recepción:</strong></p>
       <code>${resultado.selloRecepcion}</code>
-      <p style="margin-top: 5px;"><strong>Fecha de Procesamiento:</strong> ${resultado.fechaHoraProcesamiento ? formatearFecha(resultado.fechaHoraProcesamiento) : 'N/A'}</p>
+      <p style="margin-top: 5px;"><strong>Fecha de Procesamiento:</strong> ${resultado.fechaHoraProcesamiento ? formatearFecha(resultado.fechaHoraProcesamiento) : '—'}</p>
     </div>
     ` : ''}
 

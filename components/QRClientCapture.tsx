@@ -14,9 +14,13 @@ import {
 } from 'lucide-react';
 import { 
   generateClientFormUrl, 
+  getOrCreateVendorSession,
   getUnimportedClients, 
+  getUnimportedClientsApi,
   markClientImported,
+  markClientImportedApi,
   dismissPendingClient,
+  dismissPendingClientApi,
   PendingClient,
 } from '../utils/qrClientCapture';
 import { saveClient, ClientData } from '../utils/clientDb';
@@ -32,13 +36,16 @@ const QRClientCapture: React.FC<QRClientCaptureProps> = ({ onClientImported, onC
   const [copied, setCopied] = useState(false);
   const [pendingClients, setPendingClients] = useState<PendingClient[]>([]);
   const [activeTab, setActiveTab] = useState<'qr' | 'pending'>('qr');
+  const [vendorId, setVendorId] = useState<string>('');
 
   useEffect(() => {
+    const vid = getOrCreateVendorSession();
+    setVendorId(vid);
     generateQR();
-    loadPendingClients();
+    loadPendingClients(vid);
     
     // Polling para nuevos clientes cada 5 segundos
-    const interval = setInterval(loadPendingClients, 5000);
+    const interval = setInterval(() => loadPendingClients(vid), 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -61,7 +68,17 @@ const QRClientCapture: React.FC<QRClientCaptureProps> = ({ onClientImported, onC
     }
   };
 
-  const loadPendingClients = () => {
+  const loadPendingClients = async (vid?: string) => {
+    const v = vid || vendorId;
+    if (v) {
+      // Intentar cargar desde API
+      const apiClients = await getUnimportedClientsApi(v);
+      if (apiClients.length > 0) {
+        setPendingClients(apiClients);
+        return;
+      }
+    }
+    // Fallback a localStorage
     const clients = getUnimportedClients();
     setPendingClients(clients);
   };
@@ -100,17 +117,23 @@ const QRClientCapture: React.FC<QRClientCaptureProps> = ({ onClientImported, onC
       nit: pending.data.nit || '',
       nrc: pending.data.nrc || '',
       email: pending.data.email || '',
-      telefono: pending.data.telefono || '',
-      departamento: pending.data.departamento || '',
-      municipio: pending.data.municipio || '',
-      direccion: pending.data.direccion || '',
+      telefono: pending.data.telefono || (pending.data as any).phone || '',
+      departamento: pending.data.departamento || (pending.data as any).department || '',
+      municipio: pending.data.municipio || (pending.data as any).municipality || '',
+      direccion: pending.data.direccion || (pending.data as any).address || '',
       actividadEconomica: pending.data.actividadEconomica || '',
+      descActividad: pending.data.descActividad || (pending.data as any).activity || '',
       nombreComercial: pending.data.nombreComercial || '',
     };
 
     try {
       const savedClient = await saveClient(clientData);
-      markClientImported(pending.id);
+      // Marcar como importado via API o localStorage
+      if (vendorId) {
+        await markClientImportedApi(vendorId, pending.id);
+      } else {
+        markClientImported(pending.id);
+      }
       loadPendingClients();
       
       if (onClientImported && savedClient) {
@@ -121,8 +144,13 @@ const QRClientCapture: React.FC<QRClientCaptureProps> = ({ onClientImported, onC
     }
   };
 
-  const handleDismiss = (id: string) => {
-    dismissPendingClient(id);
+  const handleDismiss = async (id: string) => {
+    // Descartar via API o localStorage
+    if (vendorId) {
+      await dismissPendingClientApi(vendorId, id);
+    } else {
+      dismissPendingClient(id);
+    }
     loadPendingClients();
   };
 
