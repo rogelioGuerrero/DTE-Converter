@@ -92,7 +92,13 @@ exports.handler = async (event) => {
   const store = getStore('dte-pending-clients');
   const key = `vendors/${vendorId}/clients.json`;
 
-  const stored = await store.get(key, { type: 'json' });
+  let stored = null;
+  try {
+    stored = await store.get(key, { type: 'json' });
+  } catch (err) {
+    console.error('Error reading blob:', err);
+    // If blob is corrupted, treat as empty
+  }
   const clientsRaw = Array.isArray(stored) ? stored : [];
   const clients = cleanOld(clientsRaw);
 
