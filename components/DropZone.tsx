@@ -40,16 +40,74 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesSelected }) => {
       const filesArray = Array.from(e.dataTransfer.files).filter((file: File) => 
         file.name.toLowerCase().endsWith('.json')
       );
+      if (filesArray.length === 0) {
+        notify('No se detectaron archivos .json en lo que soltaste', 'error');
+        return;
+      }
       onFilesSelected(filesArray);
+      notify(`${filesArray.length} archivos detectados`, 'info');
     }
   }, [onFilesSelected, mode]);
 
-  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInput = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('[DropZone] handleFileInput triggered');
+    console.log('[DropZone] Total files from input:', e.target.files?.length ?? 0);
+    
     if (e.target.files && e.target.files.length > 0) {
-      const filesArray = Array.from(e.target.files).filter((file: File) => 
-        file.name.toLowerCase().endsWith('.json')
-      );
-      onFilesSelected(filesArray);
+      // Log all files received (for debugging folder selection)
+      console.log('[DropZone] All files received:', Array.from(e.target.files).map(f => f.name));
+      console.log('[DropZone] File types:', Array.from(e.target.files).map(f => f.type));
+      console.log('[DropZone] File sizes:', Array.from(e.target.files).map(f => f.size));
+      
+      // First pass: filter by extension
+      let filesArray = Array.from(e.target.files).filter((file: File) => {
+        // More flexible JSON detection - trim whitespace and check case-insensitive
+        const fileName = file.name.trim().toLowerCase();
+        const isJson = fileName.endsWith('.json') || fileName.endsWith('.jsonl');
+        console.log(`[DropZone] File: "${file.name}" -> "${fileName}", isJSON: ${isJson}, size: ${file.size}`);
+        return isJson;
+      });
+      
+      // If no JSON files found by extension, try content detection
+      if (filesArray.length === 0) {
+        console.log('[DropZone] No JSON files by extension, trying content detection...');
+        
+        for (const file of Array.from(e.target.files)) {
+          // Check if MIME type suggests JSON
+          if (file.type === 'application/json' || file.type === 'text/json') {
+            console.log(`[DropZone] Found JSON by MIME type: ${file.name}`);
+            filesArray.push(file);
+            continue;
+          }
+          
+          // For small files, try reading first few bytes to detect JSON
+          if (file.size < 1024 * 1024) { // Only for files < 1MB
+            try {
+              const text = await file.text();
+              const trimmed = text.trim();
+              if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+                  (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                console.log(`[DropZone] Found JSON by content: ${file.name}`);
+                filesArray.push(file);
+              }
+            } catch (err) {
+              console.log(`[DropZone] Could not read file ${file.name}:`, err);
+            }
+          }
+        }
+      }
+      
+      console.log('[DropZone] JSON files after filter:', filesArray.length);
+      console.log('[DropZone] JSON file names:', filesArray.map(f => f.name));
+      
+      if (filesArray.length === 0) {
+        notify('No se detectaron archivos .json en tu selección. Intenta con archivos que tengan extensión .json o contenido JSON válido.', 'error');
+      } else {
+        onFilesSelected(filesArray);
+        notify(`${filesArray.length} archivos seleccionados`, 'info');
+      }
+    } else {
+      console.log('[DropZone] No files in input event');
     }
     e.target.value = '';
   }, [onFilesSelected]);
@@ -94,7 +152,16 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesSelected }) => {
     }
   };
 
-  const triggerFolderSelect = () => folderInputRef.current?.click();
+  const triggerFolderSelect = () => {
+    // Check if browser supports directory selection
+    const input = folderInputRef.current;
+    if (input) {
+      console.log('[DropZone] Triggering folder select');
+      console.log('[DropZone] webkitdirectory support:', 'webkitdirectory' in input);
+      console.log('[DropZone] directory support:', 'directory' in input);
+      input.click();
+    }
+  };
 
   return (
     <div className="w-full max-w-3xl mx-auto mt-10">
@@ -227,7 +294,8 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesSelected }) => {
           ref={folderInputRef}
           type="file" 
           className="hidden" 
-          {...({ webkitdirectory: "", directory: "" } as any)}
+          multiple
+          {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
           onChange={handleFileInput}
         />
       </div>

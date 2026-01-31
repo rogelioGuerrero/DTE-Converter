@@ -168,6 +168,12 @@ const BatchDashboard: React.FC = () => {
     setErrors(newErrors);
     setIsProcessing(false);
 
+    if (newErrors.length > 0) {
+      notify(`Procesado: ${files.length - newErrors.length} exitosos, ${newErrors.length} errores`, 'error');
+    } else {
+      notify('Todos los archivos se procesaron correctamente', 'success');
+    }
+
     // Guardar en IndexedDB para persistencia
     Object.entries(newGroupedData).forEach(async ([month, files]) => {
       if (files.length > 0) {

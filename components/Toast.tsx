@@ -76,13 +76,17 @@ interface ToastContainerProps {
   toasts: ToastItem[];
   removeToast: (id: number) => void;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, removeToast, className }) => {
+export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, removeToast, className, style }) => {
   return (
-    <div className={className || "fixed bottom-6 right-6 z-50 flex flex-col gap-2"}>
-      {toasts.map((toast, index) => (
-        <div key={toast.id} style={{ transform: `translateY(-${index * 8}px)` }}>
+    <div 
+      className={className || "fixed bottom-6 right-6 z-50 flex flex-col gap-2"}
+      style={style}
+    >
+      {toasts.map((toast) => (
+        <div key={toast.id}>
           <Toast
             message={toast.message}
             type={toast.type}
@@ -99,7 +103,7 @@ export const useToast = () => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const addToast = (message: string, type: ToastType = 'info') => {
-    const id = Date.now();
+    const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, message, type }]);
   };
 
