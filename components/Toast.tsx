@@ -85,7 +85,7 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, removeTo
       className={className || "fixed bottom-6 right-6 z-50 flex flex-col gap-2"}
       style={style}
     >
-      {toasts.map((toast, index) => (
+      {toasts.map((toast) => (
         <div key={toast.id}>
           <Toast
             message={toast.message}
