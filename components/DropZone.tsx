@@ -41,6 +41,7 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesSelected }) => {
         file.name.toLowerCase().endsWith('.json')
       );
       onFilesSelected(filesArray);
+      notify(`${filesArray.length} archivos detectados`, 'info');
     }
   }, [onFilesSelected, mode]);
 
@@ -50,6 +51,7 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesSelected }) => {
         file.name.toLowerCase().endsWith('.json')
       );
       onFilesSelected(filesArray);
+      notify(`${filesArray.length} archivos seleccionados`, 'info');
     }
     e.target.value = '';
   }, [onFilesSelected]);
