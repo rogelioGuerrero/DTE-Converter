@@ -9,7 +9,7 @@ import { processJsonContent, downloadCSV } from '../utils/processor';
 import { VENTAS_CONFIG, COMPRAS_CONFIG } from '../utils/fieldMapping';
 import { addHistoryEntry, computeSHA256 } from '../utils/historyDb';
 import { consumeExportSlot, getUsageInfo } from '../utils/usageLimit';
-import { getAllLibrosData, saveLibroData } from '../utils/libroLegalDb';
+import { getAllLibrosData, saveLibroData, clearAllLibrosData } from '../utils/libroLegalDb';
 import { loadSettings } from '../utils/settings';
 import { GroupedData, ProcessedFile, FieldConfiguration, AppMode } from '../types';
 import LibroLegalViewer, { TipoLibro } from './libros/LibroLegalViewer';
@@ -205,10 +205,11 @@ const BatchDashboard: React.FC = () => {
       setGroupedData(newData);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     setGroupedData({});
     setErrors([]);
     setSearchTerm('');
+    await clearAllLibrosData();
   };
 
   const handleBatchDownload = async (selectedMonths: string[]) => {
