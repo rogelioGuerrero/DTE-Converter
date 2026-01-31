@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { Upload, FolderInput, FilePlus, Link as LinkIcon, Globe, ArrowRight } from 'lucide-react';
 
 interface DropZoneProps {
@@ -40,17 +40,31 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesSelected }) => {
       const filesArray = Array.from(e.dataTransfer.files).filter((file: File) => 
         file.name.toLowerCase().endsWith('.json')
       );
+      if (filesArray.length === 0) {
+        notify('No se detectaron archivos .json en lo que soltaste', 'error');
+        return;
+      }
       onFilesSelected(filesArray);
+      notify(`${filesArray.length} archivos detectados`, 'info');
     }
   }, [onFilesSelected, mode]);
 
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const filesArray = Array.from(e.target.files).filter((file: File) => 
-        file.name.toLowerCase().endsWith('.json')
-      );
+    const files = e.target.files;
+    if (!files || files.length === 0) {
+      e.target.value = '';
+      return;
+    }
+    
+    const allFiles = Array.from(files);
+    const filesArray = allFiles.filter(file => 
+      file.name.toLowerCase().endsWith('.json')
+    );
+    
+    if (filesArray.length > 0) {
       onFilesSelected(filesArray);
     }
+    
     e.target.value = '';
   }, [onFilesSelected]);
 
@@ -94,7 +108,18 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesSelected }) => {
     }
   };
 
-  const triggerFolderSelect = () => folderInputRef.current?.click();
+  // Configurar webkitdirectory manualmente porque React no lo maneja bien
+  useEffect(() => {
+    const input = folderInputRef.current;
+    if (input) {
+      input.setAttribute('webkitdirectory', '');
+      input.setAttribute('directory', '');
+    }
+  }, []);
+
+  const triggerFolderSelect = () => {
+    folderInputRef.current?.click();
+  };
 
   return (
     <div className="w-full max-w-3xl mx-auto mt-10">
@@ -227,7 +252,7 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesSelected }) => {
           ref={folderInputRef}
           type="file" 
           className="hidden" 
-          {...({ webkitdirectory: "", directory: "" } as any)}
+          multiple
           onChange={handleFileInput}
         />
       </div>

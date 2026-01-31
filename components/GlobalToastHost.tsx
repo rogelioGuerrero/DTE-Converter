@@ -20,7 +20,8 @@ const GlobalToastHost: React.FC = () => {
     <ToastContainer
       toasts={toasts}
       removeToast={removeToast}
-      className="fixed top-6 right-6 z-50 flex flex-col gap-2"
+      className="fixed top-6 right-6 flex flex-col gap-2"
+      style={{ zIndex: 9999 }}
     />
   );
 };
