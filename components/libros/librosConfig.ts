@@ -25,18 +25,20 @@ export interface ColumnaConfig {
   format?: 'moneda' | 'codigo';
 }
 
-export interface ResumenFila {
-  label: string;
-  valorNeto: number;
-  debitoFiscal: number;
-  ivaRetenido?: number;
+export interface ResumenColumn {
+  key: string;
+  header: string;
+  width?: string;
+  align?: 'left' | 'right' | 'center';
+  format?: 'moneda';
 }
 
 export interface LibroLegalConfig {
   titulo: string;
   columnas: ColumnaConfig[];
-  mostrarResumen?: boolean;
-  resumenFilas?: ResumenFila[];
+  resumenTitulo?: string; // Título opcional para la sección de resumen
+  resumenColumnas?: ResumenColumn[]; // Configuración de columnas para el resumen
+  getResumen?: (items: any[]) => any[];
   getValor: (item: any, key: string) => any;
   calcularTotales: (items: any[]) => Record<string, number>;
 }
@@ -169,7 +171,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
     
     case 'contribuyentes':
       return {
-        titulo: 'LIBRO DE VENTAS',
+        titulo: 'LIBRO DE VENTAS A CONTRIBUYENTES',
         columnas: [
           { key: 'correlativo', header: 'CORRELATIVO', width: 'w-16', align: 'center' },
           { key: 'fecha', header: 'FECHA', width: 'w-20', align: 'center' },
@@ -177,6 +179,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           { key: 'formUnico', header: 'FORM\nÚNICO', width: 'w-16', align: 'center' },
           { key: 'cliente', header: 'CLIENTE', width: 'w-48', align: 'left' },
           { key: 'nrc', header: 'NRC', width: 'w-20', align: 'center' },
+          { key: 'ventasExentas', header: 'VENTAS\nEXENTAS', width: 'w-24', align: 'right', format: 'moneda' },
           { key: 'exportaciones', header: 'EXPORTACIONES', width: 'w-24', align: 'right', format: 'moneda' },
           { key: 'ventasGravadas', header: 'VENTAS\nGRAVADAS', width: 'w-24', align: 'right', format: 'moneda' },
           { key: 'debitoFiscal', header: 'DÉBITO\nFISCAL', width: 'w-20', align: 'right', format: 'moneda' },
@@ -185,18 +188,73 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           { key: 'impuestoPercibido', header: 'IMPUESTO\nPERCIBIDO', width: 'w-24', align: 'right', format: 'moneda' },
           { key: 'ventasTotales', header: 'VENTAS\nTOTALES', width: 'w-20', align: 'right', format: 'moneda' }
         ],
-        mostrarResumen: true,
-        resumenFilas: [
-          { label: 'VENTAS GRAVADAS LOCALES', valorNeto: 0, debitoFiscal: 0, ivaRetenido: 0 },
-          { label: 'EXPORTACIONES', valorNeto: 0, debitoFiscal: 0, ivaRetenido: 0 },
-          { label: 'VENTAS A CUENTA DE TERCEROS', valorNeto: 0, debitoFiscal: 0, ivaRetenido: 0 },
-          { label: 'SUBTOTAL', valorNeto: 0, debitoFiscal: 0, ivaRetenido: 0 },
-          { label: 'IVA RETENIDO', valorNeto: 0, debitoFiscal: 0, ivaRetenido: 0 },
-          { label: 'TOTAL VENTAS', valorNeto: 0, debitoFiscal: 0, ivaRetenido: 0 }
+        resumenTitulo: 'RESUMEN DE OPERACIONES',
+        resumenColumnas: [
+          { key: 'label', header: 'Descripción', align: 'left' },
+          { key: 'valorNeto', header: 'VALOR NETO', width: 'w-28', align: 'right', format: 'moneda' },
+          { key: 'debitoFiscal', header: 'DEBITO FISCAL', width: 'w-28', align: 'right', format: 'moneda' },
+          { key: 'ivaRetenido', header: 'IVA RETENIDO', width: 'w-28', align: 'right', format: 'moneda' }
         ],
+        getResumen: (items) => {
+          // Totales calculados
+          const totalGravadasContribuyentes = items.reduce((sum, item) => sum + (item.ventasGravadas || 0), 0);
+          const totalExentasContribuyentes = items.reduce((sum, item) => sum + (item.ventasExentas || 0), 0);
+          const totalExportaciones = items.reduce((sum, item) => sum + (item.exportaciones || 0), 0);
+          const totalDebitoFiscal = items.reduce((sum, item) => sum + (item.debitoFiscal || 0), 0);
+          
+          // Asumimos 0 para consumidores si este libro es solo contribuyentes
+          const totalGravadasConsumidores = 0;
+          const totalExentasConsumidores = 0;
+
+          return [
+            { 
+              label: 'VENTAS NETAS INTERNAS GRAVADAS A CONTRIBUYENTES', 
+              valorNeto: totalGravadasContribuyentes, 
+              debitoFiscal: totalDebitoFiscal, 
+              ivaRetenido: 0 
+            },
+            { 
+              label: 'VENTAS NETAS INTERNAS GRAVADAS A CONSUMIDORES', 
+              valorNeto: totalGravadasConsumidores, 
+              debitoFiscal: 0, 
+              ivaRetenido: 0 
+            },
+            { 
+              label: 'TOTAL OPERACIONES INTERNADAS GRAVADAS', 
+              valorNeto: totalGravadasContribuyentes + totalGravadasConsumidores, 
+              debitoFiscal: totalDebitoFiscal, 
+              ivaRetenido: 0 
+            },
+            { 
+              label: 'VENTAS NETAS INTERNAS EXENTAS A CONTRIBUYENTES', 
+              valorNeto: totalExentasContribuyentes, 
+              debitoFiscal: 0, 
+              ivaRetenido: 0 
+            },
+            { 
+              label: 'VENTAS NETAS INTERNAS EXENTAS A CONSUMIDORES', 
+              valorNeto: totalExentasConsumidores, 
+              debitoFiscal: 0, 
+              ivaRetenido: 0 
+            },
+            { 
+              label: 'TOTAL OPERACIONES INTERNADAS EXENTAS', 
+              valorNeto: totalExentasContribuyentes + totalExentasConsumidores, 
+              debitoFiscal: 0, 
+              ivaRetenido: 0 
+            },
+            { 
+              label: 'EXPORTACIONES SEGÚN FATURAS DE EXPORTACION', 
+              valorNeto: totalExportaciones, 
+              debitoFiscal: 0, 
+              ivaRetenido: 0 
+            }
+          ];
+        },
         getValor: (item, key) => item[key] || '',
         calcularTotales: (items) => {
           const totales = {
+            ventasExentas: 0,
             exportaciones: 0,
             ventasGravadas: 0,
             debitoFiscal: 0,
@@ -207,6 +265,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           };
           
           items.forEach(item => {
+            totales.ventasExentas += item.ventasExentas || 0;
             totales.exportaciones += item.exportaciones || 0;
             totales.ventasGravadas += item.ventasGravadas || 0;
             totales.debitoFiscal += item.debitoFiscal || 0;
@@ -234,6 +293,26 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           { key: 'exportaciones', header: 'EXPORTACIONES', width: 'w-24', align: 'right', format: 'moneda' },
           { key: 'ventaTotal', header: 'VENTA\nTOTAL', width: 'w-20', align: 'right', format: 'moneda' }
         ],
+        resumenTitulo: 'CALCULO DEL DEBITO FISCAL POR OPERACIONES PROPIAS',
+        resumenColumnas: [
+           { key: 'label', header: '', align: 'left' },
+           { key: 'valor', header: '', width: 'w-32', align: 'right', format: 'moneda' }
+        ],
+        getResumen: (items) => {
+          const totalVentasGravadas = items.reduce((sum, item) => sum + (item.ventasGravadas || 0), 0);
+          
+          // Cálculo inverso: En consumidor final, el monto incluye IVA.
+          // Base = Total / 1.13
+          // IVA = Total - Base
+          const ventasNetas = totalVentasGravadas / 1.13;
+          const impuesto = totalVentasGravadas - ventasNetas;
+          
+          return [
+            { label: 'VENTAS INTERNAS GRAVADAS NETAS', valor: ventasNetas },
+            { label: '13% IMPUESTO', valor: impuesto },
+            { label: 'TOTAL VENTAS GRAVADAS', valor: totalVentasGravadas }
+          ];
+        },
         getValor: (item, key) => item[key] || '',
         calcularTotales: (items) => {
           const totales = {

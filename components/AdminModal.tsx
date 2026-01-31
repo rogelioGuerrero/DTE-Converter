@@ -193,15 +193,15 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                        />
                        <div className="flex-1">
                           <span className={`text-sm font-medium ${(!settings.myNit && !settings.myNrc) ? 'text-gray-400' : 'text-gray-700 group-hover:text-gray-900'}`}>
-                             Usar detección automática de ventas/compras
+                             Detección automática
                           </span>
                           <p className="text-[10px] text-gray-500 mt-0.5">
-                             La app detectará automáticamente si cada documento es venta o compra basándose en tu NIT/NRC como emisor o receptor
+                             Detecta ventas/compras según tu NIT/NRC
                           </p>
                           {(!settings.myNit && !settings.myNrc) && (
                              <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
                                 <HelpCircle className="w-3 h-3" />
-                                Ingresa tu NIT o NRC para habilitar esta opción
+                                Requiere NIT o NRC
                              </p>
                           )}
                        </div>

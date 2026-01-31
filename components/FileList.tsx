@@ -9,6 +9,8 @@ import { addHistoryEntry, computeSHA256 } from '../utils/historyDb';
 
 import InvoiceDetailModal from './InvoiceDetailModal';
 
+import { notify } from '../utils/notifications';
+
 interface FileListProps {
   groupedData: GroupedData;
   errors: ProcessedFile[];
@@ -94,7 +96,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
   const handleDownload = async (month: string) => {
     const slot = consumeExportSlot();
     if (!slot.allowed) {
-      alert('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com');
+      notify('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com', 'error');
       return;
     }
 
@@ -125,7 +127,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
   const handleBulkDownload = () => {
       const slot = consumeExportSlot();
       if (!slot.allowed) {
-        alert('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com');
+        notify('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com', 'error');
         return;
       }
 

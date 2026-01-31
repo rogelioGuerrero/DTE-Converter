@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Printer, Download, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
 import { GroupedData } from '../../types';
 import { getEmisor, EmisorData } from '../../utils/emisorDb';
+import { consumeExportSlot } from '../../utils/usageLimit';
+import { notify } from '../../utils/notifications';
 import { TipoLibro, getConfigLibro, formatMoneda } from './librosConfig';
 
 interface LibroLegalViewerProps {
@@ -53,6 +55,25 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
   // Mes seleccionado actual
   const selectedMonth = availableMonths[selectedMonthIndex] || null;
 
+  // Determinar datos del contribuyente (Dueño del Libro) basado en los archivos del mes
+  const currentTaxpayer = useMemo(() => {
+    if (!selectedMonth || !groupedData[selectedMonth] || groupedData[selectedMonth].length === 0) {
+      return emisor;
+    }
+    // Usar la info del primer archivo válido que tenga taxpayer info
+    const fileWithInfo = groupedData[selectedMonth].find(f => f.taxpayer?.nombre);
+    if (fileWithInfo?.taxpayer) {
+      return {
+        ...emisor, // Fallback a otros datos si faltan (direccion, etc)
+        nombre: fileWithInfo.taxpayer.nombre,
+        nit: fileWithInfo.taxpayer.nit,
+        nrc: fileWithInfo.taxpayer.nrc,
+        nombreComercial: emisor?.nombreComercial || '', // Mantener comercial si existe en global, o vacío
+      } as EmisorData;
+    }
+    return emisor;
+  }, [selectedMonth, groupedData, emisor]);
+
   // Generar items del libro según el tipo
   const items = useMemo(() => {
     if (!selectedMonth || !groupedData[selectedMonth]) return [];
@@ -95,6 +116,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
             formUnico: '',
             cliente: file.data.receiver,
             nrc: csvParts[7] || '', // receptor.nrc
+            ventasExentas: parseFloat(csvParts[9] || '0'), // totalExenta (index 9 in VENTAS_CONFIG)
             exportaciones: 0,
             ventasGravadas: parseFloat(csvParts[11] || '0'), // totalGravada
             debitoFiscal: parseFloat(csvParts[12] || '0'), // tributos
@@ -112,7 +134,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
             numeroControlDel: csvParts[3] || '',
             numeroControlAl: csvParts[3] || '',
             ventasExentas: parseFloat(csvParts[9] || '0'), // totalExenta
-            ventasGravadas: parseFloat(csvParts[11] || '0'), // totalGravada
+            ventasGravadas: parseFloat(csvParts[11] || '0') + parseFloat(csvParts[12] || '0'), // totalGravada (Neto) + IVA = Bruto (para consumidor final)
             exportaciones: 0,
             ventaTotal: parseFloat(file.data.total),
           };
@@ -126,6 +148,14 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
   // Calcular totales usando la config
   const totales = useMemo(() => {
     return config.calcularTotales(items);
+  }, [items, config]);
+
+  // Generar filas de resumen dinámico
+  const resumenFilas = useMemo<any[]>(() => {
+    if (config.getResumen) {
+      return config.getResumen(items);
+    }
+    return [];
   }, [items, config]);
 
   const getNombreMes = (monthKey: string): string => {
@@ -155,23 +185,60 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
     const printStyles = `
       <style>
         @page { size: landscape; margin: 10mm; }
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-        table { width: 100%; border-collapse: collapse; font-size: 9px; }
+        body { font-family: 'Arial', sans-serif; margin: 0; padding: 20px; color: #111; }
+        
+        /* Layout Utilities */
+        .flex { display: flex !important; }
+        .justify-between { justify-content: space-between !important; }
+        .items-start { align-items: flex-start !important; }
+        .items-center { align-items: center !important; }
+        .gap-2 { gap: 0.5rem !important; }
+        .gap-8 { gap: 2rem !important; }
+        .flex-1 { flex: 1 1 0% !important; }
+        .w-full { width: 100% !important; }
+        .h-16 { height: 4rem !important; }
+        .mb-2 { margin-bottom: 0.5rem !important; }
+        .mb-4 { margin-bottom: 1rem !important; }
+        .mb-6 { margin-bottom: 1.5rem !important; }
+        .mt-2 { margin-top: 0.5rem !important; }
+        .mt-8 { margin-top: 2rem !important; }
+        .space-y-1 > * + * { margin-top: 0.25rem !important; }
+        
+        /* Typography */
+        .text-center { text-align: center !important; }
+        .text-right { text-align: right !important; }
+        .text-left { text-align: left !important; }
+        .font-bold { font-weight: bold !important; }
+        .font-semibold { font-weight: 600 !important; }
+        .text-xl { font-size: 1.25rem !important; line-height: 1.75rem !important; }
+        .text-lg { font-size: 1.125rem !important; line-height: 1.75rem !important; }
+        .text-sm { font-size: 0.875rem !important; line-height: 1.25rem !important; }
+        .text-xs { font-size: 0.75rem !important; line-height: 1rem !important; }
+        .uppercase { text-transform: uppercase !important; }
+        .font-mono { font-family: monospace !important; font-size: 8px !important; }
+        
+        /* Borders & Colors */
+        .border-b { border-bottom: 1px solid #e5e7eb !important; }
+        .border-t { border-top: 1px solid #e5e7eb !important; }
+        .border-b-2 { border-bottom: 2px solid #1f2937 !important; }
+        .border-t-2 { border-top: 2px solid #1f2937 !important; }
+        .border-r { border-right: 1px solid #ccc !important; }
+        .border { border: 1px solid #ccc !important; }
+        .border-gray-800 { border-color: #1f2937 !important; }
+        .border-gray-300 { border-color: #d1d5db !important; }
+        .bg-gray-100 { background-color: #f3f4f6 !important; }
+        
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; font-size: 9px; margin-top: 1rem; }
         th, td { border: 1px solid #ccc; padding: 3px 5px; }
-        th { background-color: #f3f4f6; font-weight: bold; }
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-        .text-left { text-align: left; }
-        .font-bold { font-weight: bold; }
-        .bg-gray-100 { background-color: #f3f4f6; }
-        .border-t-2 { border-top: 2px solid #1f2937; }
-        .font-mono { font-family: monospace; font-size: 8px; }
+        th { background-color: #f3f4f6; font-weight: bold; page-break-inside: avoid; }
+        tr { page-break-inside: avoid; }
+        
+        /* Specific Print Adjustments */
         .print-signature { margin-top: 40px; }
-        .print-signature-line { border-bottom: 1px solid #000; height: 40px; margin-bottom: 8px; }
         .resumen-table { margin-top: 20px; font-size: 9px; }
-        .resumen-table th, .resumen-table td { border: 1px solid #ccc; padding: 4px 6px; }
-        h1 { font-size: 16px; margin-bottom: 8px; }
-        h2 { font-size: 14px; margin-bottom: 16px; }
+        h1 { margin: 0; }
+        h2 { margin: 0; }
       </style>
     `;
 
@@ -198,6 +265,13 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
 
   const handleExportCSV = () => {
     if (!selectedMonth) return;
+
+    // Verificar límite de exportaciones
+    const slot = consumeExportSlot();
+    if (!slot.allowed) {
+      notify('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com', 'error');
+      return;
+    }
     
     // Headers
     let csv = config.columnas.map(col => col.header.replace(/\n/g, ' ')).join(';') + '\n';
@@ -311,7 +385,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
         <div className="p-8 border-b-2 border-gray-800 print:p-4">
           <div className="text-center mb-6">
             <h1 className="text-xl font-bold text-gray-900 uppercase tracking-wide">
-              {emisor?.nombre || 'NOMBRE DEL CONTRIBUYENTE'}
+              {currentTaxpayer?.nombre || 'NOMBRE DEL CONTRIBUYENTE'}
             </h1>
             <h2 className="text-lg font-bold text-gray-900 mt-2">
               {config.titulo}
@@ -322,7 +396,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-gray-700">SUCURSAL:</span>
-                <span className="text-gray-900">{emisor?.nombreComercial || ''}</span>
+                <span className="text-gray-900">{currentTaxpayer?.nombreComercial || ''}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-gray-700">MES:</span>
@@ -340,11 +414,11 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
             <div className="space-y-1 text-right">
               <div className="flex items-center gap-2 justify-end">
                 <span className="font-semibold text-gray-700">NIT:</span>
-                <span className="text-gray-900">{emisor?.nit || ''}</span>
+                <span className="text-gray-900">{currentTaxpayer?.nit || ''}</span>
               </div>
               <div className="flex items-center gap-2 justify-end">
                 <span className="font-semibold text-gray-700">NRC:</span>
-                <span className="text-gray-900">{emisor?.nrc || ''}</span>
+                <span className="text-gray-900">{currentTaxpayer?.nrc || ''}</span>
               </div>
             </div>
           </div>
@@ -407,28 +481,58 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
           </table>
         </div>
 
-        {/* Resumen de operaciones (solo para contribuyentes) */}
-        {config.mostrarResumen && config.resumenFilas && (
+        {/* Resumen de operaciones (solo si hay filas) */}
+        {resumenFilas.length > 0 && (
           <div className="p-6 border-t border-gray-300">
             <div className="text-center mb-4">
-              <h3 className="font-bold text-sm">RESUMEN DE OPERACIONES</h3>
+              <h3 className="font-bold text-sm">{config.resumenTitulo || 'RESUMEN DE OPERACIONES'}</h3>
             </div>
             <table className="w-full text-xs resumen-table">
               <thead>
                 <tr className="bg-gray-100">
-                  <th className="text-left px-2 py-2 border border-gray-300">Descripción</th>
-                  <th className="text-right px-2 py-2 border border-gray-300 w-28">VALOR NETO</th>
-                  <th className="text-right px-2 py-2 border border-gray-300 w-28">DEBITO FISCAL</th>
-                  <th className="text-right px-2 py-2 border border-gray-300 w-28">IVA RETENIDO</th>
+                  {config.resumenColumnas ? (
+                    config.resumenColumnas.map((col, idx) => (
+                      <th 
+                        key={idx} 
+                        className={`px-2 py-2 border border-gray-300 ${col.width || ''} ${
+                          col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'
+                        }`}
+                      >
+                        {col.header}
+                      </th>
+                    ))
+                  ) : (
+                    <>
+                      <th className="text-left px-2 py-2 border border-gray-300">Descripción</th>
+                      <th className="text-right px-2 py-2 border border-gray-300 w-28">VALOR NETO</th>
+                      <th className="text-right px-2 py-2 border border-gray-300 w-28">DEBITO FISCAL</th>
+                      <th className="text-right px-2 py-2 border border-gray-300 w-28">IVA RETENIDO</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {config.resumenFilas.map((fila, idx) => (
+                {resumenFilas.map((fila: any, idx: number) => (
                   <tr key={idx} className="border-b border-gray-200">
-                    <td className="px-2 py-2 border border-gray-300 font-semibold">{fila.label}</td>
-                    <td className="px-2 py-2 text-right border border-gray-300">{fila.valorNeto.toFixed(2)}</td>
-                    <td className="px-2 py-2 text-right border border-gray-300">{fila.debitoFiscal.toFixed(2)}</td>
-                    <td className="px-2 py-2 text-right border border-gray-300">{fila.ivaRetenido?.toFixed(2) || ''}</td>
+                    {config.resumenColumnas ? (
+                      config.resumenColumnas.map((col, colIdx) => (
+                        <td 
+                          key={colIdx} 
+                          className={`px-2 py-2 border border-gray-300 ${
+                            col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'
+                          } ${colIdx === 0 ? 'font-semibold' : ''}`}
+                        >
+                          {renderCelda(fila[col.key], col.format)}
+                        </td>
+                      ))
+                    ) : (
+                      <>
+                        <td className="px-2 py-2 border border-gray-300 font-semibold">{fila.label}</td>
+                        <td className="px-2 py-2 text-right border border-gray-300">{typeof fila.valorNeto === 'number' ? fila.valorNeto.toFixed(2) : ''}</td>
+                        <td className="px-2 py-2 text-right border border-gray-300">{typeof fila.debitoFiscal === 'number' ? fila.debitoFiscal.toFixed(2) : ''}</td>
+                        <td className="px-2 py-2 text-right border border-gray-300">{typeof fila.ivaRetenido === 'number' ? (fila.ivaRetenido.toFixed(2)) : '0.00'}</td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>

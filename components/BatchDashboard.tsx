@@ -13,7 +13,14 @@ import { getAllLibrosData, saveLibroData } from '../utils/libroLegalDb';
 import { loadSettings } from '../utils/settings';
 import { GroupedData, ProcessedFile, FieldConfiguration, AppMode } from '../types';
 import LibroLegalViewer, { TipoLibro } from './libros/LibroLegalViewer';
-import { RefreshCw, Search, Download, Settings2, ShoppingCart, FileSpreadsheet, BookOpen, Table } from 'lucide-react';
+import { RefreshCw, Search, Download, Settings2, ShoppingCart, FileSpreadsheet, BookOpen, Table, AlertTriangle } from 'lucide-react';
+
+const MESES = [
+  'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+  'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
+];
+
+import { notify } from '../utils/notifications';
 
 const BatchDashboard: React.FC = () => {
   const [groupedData, setGroupedData] = useState<GroupedData>({});
@@ -24,8 +31,8 @@ const BatchDashboard: React.FC = () => {
   const [showFieldManager, setShowFieldManager] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   
-  // Vista actual: 'csv' para lista de archivos, 'libro' para libro legal
-  const [currentView, setCurrentView] = useState<'csv' | 'libro'>('csv');
+  // Vista actual: 'csv', 'libro_compras', 'libro_contribuyentes', 'libro_consumidor'
+  const [currentView, setCurrentView] = useState<string>('csv');
 
   // Application Mode: 'ventas' or 'compras'
   const [appMode, setAppMode] = useState<AppMode>('ventas');
@@ -201,7 +208,7 @@ const BatchDashboard: React.FC = () => {
   const handleBatchDownload = async (selectedMonths: string[]) => {
     const slot = consumeExportSlot();
     if (!slot.allowed) {
-      alert('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com');
+      notify('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com', 'error');
       setShowDownloadModal(false);
       return;
     }
@@ -260,6 +267,47 @@ const BatchDashboard: React.FC = () => {
       }, {} as GroupedData)
     : groupedData;
 
+  // Detección de Múltiples Contribuyentes (Seguridad)
+  const mixedTaxpayerWarnings = React.useMemo(() => {
+    const warnings: { month: string; count: number; nits: string[] }[] = [];
+    
+    Object.entries(filteredGroupedData).forEach(([month, files]) => {
+      // Filtrar NITS únicos del "Dueño" del libro (Emisor en Ventas, Receptor en Compras)
+      const uniqueNits = new Set<string>();
+      
+      files.forEach(file => {
+        if (file.isValid && file.taxpayer?.nit) {
+          // Normalizar NIT para comparación (quitar guiones)
+          const cleanNit = file.taxpayer.nit.replace(/[-\s]/g, '');
+          if (cleanNit) uniqueNits.add(cleanNit);
+        }
+      });
+
+      if (uniqueNits.size > 1) {
+        warnings.push({
+          month,
+          count: uniqueNits.size,
+          nits: Array.from(uniqueNits)
+        });
+      }
+    });
+    
+    return warnings;
+  }, [filteredGroupedData]);
+
+  const getNombreMes = (monthKey: string) => {
+    try {
+      const parts = monthKey.split('-');
+      if (parts.length >= 2) {
+        const monthIndex = parseInt(parts[1], 10) - 1;
+        return MESES[monthIndex] || monthKey;
+      }
+      return monthKey;
+    } catch {
+      return monthKey;
+    }
+  };
+
   // Calculate stats using filtered data
   const filesValues = Object.values(filteredGroupedData) as ProcessedFile[][];
   const validFilesCount = filesValues.reduce((acc, files) => acc + files.length, 0);
@@ -297,24 +345,46 @@ const BatchDashboard: React.FC = () => {
 
             <div className="flex items-center space-x-3">
              {/* Toggle Vista CSV / Libro Legal */}
-             {appMode === 'compras' && totalFiles > 0 && (
+             {totalFiles > 0 && (
                <div className="bg-gray-100 p-1 rounded-lg flex items-center mr-2">
                  <button 
                    onClick={() => setCurrentView('csv')}
                    className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${currentView === 'csv' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                   title="Vista de lista de archivos CSV"
+                   title="Vista de lista de archivos"
                  >
                    <Table className="w-4 h-4" />
                    <span className="hidden sm:inline">Lista</span>
                  </button>
-                 <button 
-                   onClick={() => setCurrentView('libro')}
-                   className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${currentView === 'libro' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                   title="Vista del Libro Legal de Compras"
-                 >
-                   <BookOpen className="w-4 h-4" />
-                   <span className="hidden sm:inline">Libro Legal</span>
-                 </button>
+                 
+                 {appMode === 'compras' ? (
+                   <button 
+                     onClick={() => setCurrentView('libro_compras')}
+                     className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${currentView === 'libro_compras' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                     title="Libro de Compras"
+                   >
+                     <BookOpen className="w-4 h-4" />
+                     <span className="hidden sm:inline">Libro Compras</span>
+                   </button>
+                 ) : (
+                   <>
+                    <button 
+                       onClick={() => setCurrentView('libro_contribuyentes')}
+                       className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${currentView === 'libro_contribuyentes' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                       title="Libro de Ventas a Contribuyentes"
+                     >
+                       <BookOpen className="w-4 h-4" />
+                       <span className="hidden sm:inline">Contribuyentes</span>
+                     </button>
+                     <button 
+                       onClick={() => setCurrentView('libro_consumidor')}
+                       className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${currentView === 'libro_consumidor' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                       title="Libro de Ventas a Consumidor Final"
+                     >
+                       <BookOpen className="w-4 h-4" />
+                       <span className="hidden sm:inline">Consumidor</span>
+                     </button>
+                   </>
+                 )}
                </div>
              )}
 
@@ -364,12 +434,71 @@ const BatchDashboard: React.FC = () => {
               </p>
               <DropZone onFilesSelected={handleFilesSelected} />
             </div>
-          ) : currentView === 'libro' && appMode === 'compras' ? (
-            /* Vista Libro Legal */
-            <LibroLegalViewer groupedData={filteredGroupedData} tipoLibro={appMode as TipoLibro} />
+          ) : currentView.startsWith('libro') ? (
+            /* Vista Libro Legal Dinámica */
+            (() => {
+              // Determinar tipo de libro y filtro
+              let tipoLibro: TipoLibro = 'compras';
+              let filteredDataForBook = filteredGroupedData;
+
+              if (currentView === 'libro_contribuyentes') {
+                tipoLibro = 'contribuyentes';
+                // Filtrar solo CCF (03)
+                filteredDataForBook = Object.entries(filteredGroupedData).reduce((acc, [month, files]) => {
+                  const filtered = files.filter(f => f.dteType === '03');
+                  if (filtered.length > 0) acc[month] = filtered;
+                  return acc;
+                }, {} as GroupedData);
+              } else if (currentView === 'libro_consumidor') {
+                tipoLibro = 'consumidor';
+                // Filtrar solo Facturas (01)
+                filteredDataForBook = Object.entries(filteredGroupedData).reduce((acc, [month, files]) => {
+                  const filtered = files.filter(f => f.dteType === '01');
+                  if (filtered.length > 0) acc[month] = filtered;
+                  return acc;
+                }, {} as GroupedData);
+              } else {
+                tipoLibro = 'compras';
+                // Para compras tomamos todo lo que esté en modo compras
+              }
+
+              return <LibroLegalViewer groupedData={filteredDataForBook} tipoLibro={tipoLibro} />;
+            })()
           ) : (
             <div className="animate-in fade-in duration-500 space-y-8">
               
+              {/* Alerta de Seguridad: Múltiples Contribuyentes */}
+              {mixedTaxpayerWarnings.length > 0 && (
+                <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl shadow-sm animate-in slide-in-from-top-2">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <AlertTriangle className="h-5 w-5 text-amber-500" />
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-amber-800">
+                        Advertencia de Seguridad: Múltiples Contribuyentes Detectados
+                      </h3>
+                      <div className="mt-2 text-sm text-amber-700">
+                        <p className="mb-2">
+                          Se han detectado documentos pertenecientes a diferentes contribuyentes (NITs) dentro del mismo mes. 
+                          Esto podría indicar que has mezclado archivos de diferentes clientes por error.
+                        </p>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {mixedTaxpayerWarnings.map((w, idx) => (
+                            <li key={idx}>
+                              <span className="font-semibold">
+                                {getNombreMes(w.month)} {w.month.split('-')[0]}:
+                              </span>{' '}
+                              Se encontraron <span className="font-bold">{w.count}</span> NITs distintos.
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                  <div>
                     <h2 className="text-2xl font-bold text-gray-900">Dashboard de {appMode === 'ventas' ? 'Ventas' : 'Compras'}</h2>

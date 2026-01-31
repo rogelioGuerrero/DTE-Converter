@@ -52,6 +52,12 @@ export interface ProcessedFile {
     iva: string; // IVA (tributos[0].valor)
     exentas: string; // Ventas/Compras exentas
   };
+  taxpayer?: {
+    nombre: string;
+    nit: string;
+    nrc: string;
+  };
+  dteType?: string; // '01', '03', etc. to distinguish between books
   isValid: boolean;
   errorMessage?: string;
   detectedMode?: AppMode; // Mode detected in auto-detection (ventas or compras)

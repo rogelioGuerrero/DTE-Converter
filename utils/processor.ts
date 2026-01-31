@@ -91,11 +91,28 @@ export const processJsonContent = (
     // Ventas (Sales) -> We want to see the Receptor (Client)
     // Compras (Purchases) -> We want to see the Emisor (Provider)
     let displayCounterparty = 'Sin Nombre';
+    let taxpayerInfo = { nombre: '', nit: '', nrc: '' };
     
     if (effectiveMode === 'compras') {
        displayCounterparty = data.emisor?.nombre || 'Sin Proveedor';
+       // En Compras, el contribuyente (dueño del libro) es el Receptor
+       if (data.receptor) {
+         taxpayerInfo = {
+           nombre: data.receptor.nombre,
+           nit: data.receptor.nit || '',
+           nrc: data.receptor.nrc
+         };
+       }
     } else {
        displayCounterparty = data.receptor?.nombre || 'Sin Cliente';
+       // En Ventas, el contribuyente (dueño del libro) es el Emisor
+       if (data.emisor) {
+         taxpayerInfo = {
+           nombre: data.emisor.nombre,
+           nit: data.emisor.nit,
+           nrc: data.emisor.nrc
+         };
+       }
     }
 
     const displayTotal = (data.resumen?.montoTotalOperacion || 0).toFixed(2);
@@ -127,6 +144,8 @@ export const processJsonContent = (
         iva: displayIva,
         exentas: displayExentas
       },
+      taxpayer: taxpayerInfo,
+      dteType: tipoDte,
       detectedMode: effectiveMode // Store the detected mode (ventas or compras)
     };
 
