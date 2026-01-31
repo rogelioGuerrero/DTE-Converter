@@ -48,9 +48,13 @@ export interface ProcessedFile {
     controlNumber: string;
     total: string;
     receiver: string; // Acts as "Counterparty" (Client in Sales, Provider in Purchases)
+    neto: string; // Base gravada (totalGravada)
+    iva: string; // IVA (tributos[0].valor)
+    exentas: string; // Ventas/Compras exentas
   };
   isValid: boolean;
   errorMessage?: string;
+  detectedMode?: AppMode; // Mode detected in auto-detection (ventas or compras)
 }
 
 export interface GroupedData {

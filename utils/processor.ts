@@ -57,10 +57,11 @@ export const processJsonContent = (
       return id.replace(/[-\s]/g, '');
     };
 
-    // Auto-detect mode if user has configured their NIT/NRC
+    // Auto-detect mode if enabled in settings and mode is 'auto'
     let effectiveMode: AppMode = mode === 'auto' ? 'ventas' : mode;
     
-    if (settings.myNit || settings.myNrc) {
+    // Solo auto-detectar si el modo es 'auto' Y el usuario tiene habilitada la detección automática
+    if (mode === 'auto' && settings.useAutoDetection && (settings.myNit || settings.myNrc)) {
       const emisorNit = normalizeId(data.emisor?.nit || '');
       const emisorNrc = normalizeId(data.emisor?.nrc || '');
       const receptorNit = normalizeId(data.receptor?.nit || '');
@@ -83,7 +84,7 @@ export const processJsonContent = (
       } else if (isMyCompanyReceiver) {
         effectiveMode = 'compras';
       }
-      // Si no coincide ninguno, mantiene el modo por defecto
+      // Si no coincide ninguno, mantiene 'ventas' como fallback
     }
 
     // Determine Counterparty Name based on Mode
@@ -98,6 +99,11 @@ export const processJsonContent = (
     }
 
     const displayTotal = (data.resumen?.montoTotalOperacion || 0).toFixed(2);
+    const displayNeto = (data.resumen?.totalGravada || 0).toFixed(2);
+    const displayIva = (data.resumen?.tributos && data.resumen.tributos.length > 0 
+      ? data.resumen.tributos[0].valor 
+      : 0).toFixed(2);
+    const displayExentas = (data.resumen?.totalExenta || 0).toFixed(2);
 
     // Dynamic CSV Line Generation
     const csvFields = config
@@ -116,8 +122,12 @@ export const processJsonContent = (
         date: displayDate,
         controlNumber: displayControl,
         total: displayTotal,
-        receiver: displayCounterparty // This property name remains 'receiver' but holds Counterparty name
-      }
+        receiver: displayCounterparty, // This property name remains 'receiver' but holds Counterparty name
+        neto: displayNeto,
+        iva: displayIva,
+        exentas: displayExentas
+      },
+      detectedMode: effectiveMode // Store the detected mode (ventas or compras)
     };
 
   } catch (error: unknown) {
@@ -129,7 +139,7 @@ export const processJsonContent = (
       csvLine: '',
       isValid: false,
       errorMessage: msg,
-      data: { date: '', controlNumber: '', total: '', receiver: '' }
+      data: { date: '', controlNumber: '', total: '', receiver: '', neto: '', iva: '', exentas: '' }
     };
   }
 };

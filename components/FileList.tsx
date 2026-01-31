@@ -233,6 +233,8 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
         if (filesToDisplay.length === 0) return null;
 
         const totalMonthAmount = filesToDisplay.reduce((sum, f) => sum + parseFloat(f.data.total), 0);
+        const totalMonthNeto = filesToDisplay.reduce((sum, f) => sum + parseFloat(f.data.neto || '0'), 0);
+        const totalMonthIva = filesToDisplay.reduce((sum, f) => sum + parseFloat(f.data.iva || '0'), 0);
         
         // Month Selection State
         const idsInMonth = filesToDisplay.map(f => f.id);
@@ -264,8 +266,11 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
 
               <div className="flex items-center space-x-6">
                  <div className="hidden md:block text-right">
-                    <p className="text-xs text-gray-400 uppercase font-medium">Total Mes</p>
-                    <p className="font-bold text-gray-800">${totalMonthAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-xs text-gray-400 uppercase font-medium mb-1">Total Mes</p>
+                    <p className="font-bold text-gray-800 text-lg">${totalMonthAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Neto: ${totalMonthNeto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • IVA: ${totalMonthIva.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
                  </div>
                  <button
                     onClick={() => handleDownload(month)}

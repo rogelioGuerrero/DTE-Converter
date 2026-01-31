@@ -1,33 +1,43 @@
 import React from 'react';
-import { FileCheck, FileWarning, DollarSign, ArrowUpRight } from 'lucide-react';
+import { FileCheck, FileWarning, DollarSign } from 'lucide-react';
 
 interface StatsProps {
   totalFiles: number;
   successCount: number;
   errorCount: number;
   totalAmount: number;
+  totalNeto: number;
+  totalIva: number;
+  totalExentas: number;
 }
 
-const Stats: React.FC<StatsProps> = ({ totalFiles, successCount, errorCount, totalAmount }) => {
+const Stats: React.FC<StatsProps> = ({ totalFiles, successCount, errorCount, totalAmount, totalNeto, totalIva }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl mx-auto mt-8">
       
       {/* Card: Total Amount */}
       <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200 transform transition-all hover:-translate-y-1">
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-indigo-100 font-medium text-sm mb-1">Monto Total Procesado</p>
-            <h3 className="text-3xl font-bold tracking-tight">
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex-1">
+            <p className="text-indigo-100 font-medium text-sm mb-2">Monto Total Procesado</p>
+            <h3 className="text-3xl font-bold tracking-tight mb-3">
               ${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-1.5">
+                <span className="text-indigo-200 font-medium">Neto:</span>
+                <span className="font-semibold">${totalNeto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="w-px h-4 bg-white/30"></div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-indigo-200 font-medium">IVA:</span>
+                <span className="font-semibold">${totalIva.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            </div>
           </div>
           <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
             <DollarSign className="w-6 h-6 text-white" />
           </div>
-        </div>
-        <div className="mt-4 flex items-center text-xs text-indigo-200 bg-white/10 w-fit px-2 py-1 rounded-md">
-          <ArrowUpRight className="w-3 h-3 mr-1" />
-          <span>Generado automáticamente</span>
         </div>
       </div>
 

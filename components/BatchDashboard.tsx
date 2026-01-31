@@ -9,8 +9,11 @@ import { processJsonContent, downloadCSV } from '../utils/processor';
 import { VENTAS_CONFIG, COMPRAS_CONFIG } from '../utils/fieldMapping';
 import { addHistoryEntry, computeSHA256 } from '../utils/historyDb';
 import { consumeExportSlot, getUsageInfo } from '../utils/usageLimit';
+import { getAllLibrosData, saveLibroData } from '../utils/libroLegalDb';
+import { loadSettings } from '../utils/settings';
 import { GroupedData, ProcessedFile, FieldConfiguration, AppMode } from '../types';
-import { RefreshCw, Search, Download, Settings2, ShoppingCart, FileSpreadsheet } from 'lucide-react';
+import LibroLegalViewer, { TipoLibro } from './libros/LibroLegalViewer';
+import { RefreshCw, Search, Download, Settings2, ShoppingCart, FileSpreadsheet, BookOpen, Table } from 'lucide-react';
 
 const BatchDashboard: React.FC = () => {
   const [groupedData, setGroupedData] = useState<GroupedData>({});
@@ -20,6 +23,9 @@ const BatchDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showFieldManager, setShowFieldManager] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  
+  // Vista actual: 'csv' para lista de archivos, 'libro' para libro legal
+  const [currentView, setCurrentView] = useState<'csv' | 'libro'>('csv');
 
   // Application Mode: 'ventas' or 'compras'
   const [appMode, setAppMode] = useState<AppMode>('ventas');
@@ -42,9 +48,19 @@ const BatchDashboard: React.FC = () => {
       setFieldConfig(appMode === 'ventas' ? VENTAS_CONFIG : COMPRAS_CONFIG);
     }
     
-    // Clear data when switching modes to avoid mixing fields
-    setGroupedData({});
-    setErrors([]);
+    // Reset view when switching modes
+    setCurrentView('csv');
+  }, [appMode]);
+
+  // Load saved data from IndexedDB when mode changes
+  useEffect(() => {
+    const loadSavedData = async () => {
+      const savedData = await getAllLibrosData(appMode);
+      if (Object.keys(savedData).length > 0) {
+        setGroupedData(savedData);
+      }
+    };
+    loadSavedData();
   }, [appMode]);
 
   // Track daily usage info for the free plan indicator
@@ -92,6 +108,10 @@ const BatchDashboard: React.FC = () => {
     const newGroupedData: GroupedData = { ...groupedData };
     const newErrors: ProcessedFile[] = [...errors];
 
+    // Check if auto-detection is enabled
+    const settings = loadSettings();
+    const processingMode = settings.useAutoDetection ? 'auto' : appMode;
+
     // Batch processing configuration
     const BATCH_SIZE = 50; // Process 50 files at a time
     
@@ -102,8 +122,8 @@ const BatchDashboard: React.FC = () => {
         const batchResults = await Promise.all(batch.map(async (file) => {
             try {
                 const content = await readFileAsText(file);
-                // Pass appMode to processor so it knows whether to grab Receptor or Emisor name
-                return processJsonContent(file.name, content, fieldConfig, appMode);
+                // Use 'auto' if detection is enabled, otherwise use manual appMode
+                return processJsonContent(file.name, content, fieldConfig, processingMode);
             } catch (error) {
                 const uniqueId = Date.now().toString(36) + Math.random().toString(36).substr(2);
                 return {
@@ -140,6 +160,14 @@ const BatchDashboard: React.FC = () => {
     setGroupedData(newGroupedData);
     setErrors(newErrors);
     setIsProcessing(false);
+
+    // Guardar en IndexedDB para persistencia
+    Object.entries(newGroupedData).forEach(async ([month, files]) => {
+      if (files.length > 0) {
+        const monthData: GroupedData = { [month]: files };
+        await saveLibroData(appMode, month, monthData);
+      }
+    });
   };
 
   const handleReorder = (month: string, newOrder: ProcessedFile[]) => {
@@ -218,13 +246,29 @@ const BatchDashboard: React.FC = () => {
     setShowDownloadModal(false);
   };
 
-  // Calculate stats
-  const filesValues = Object.values(groupedData) as ProcessedFile[][];
+  // Filter data based on mode in auto-detection (empresa mode)
+  const settings = loadSettings();
+  const isEmpresaMode = settings.useAutoDetection;
+  
+  const filteredGroupedData: GroupedData = isEmpresaMode 
+    ? Object.entries(groupedData).reduce((acc, [month, files]) => {
+        const filtered = files.filter(file => file.detectedMode === appMode);
+        if (filtered.length > 0) {
+          acc[month] = filtered;
+        }
+        return acc;
+      }, {} as GroupedData)
+    : groupedData;
+
+  // Calculate stats using filtered data
+  const filesValues = Object.values(filteredGroupedData) as ProcessedFile[][];
   const validFilesCount = filesValues.reduce((acc, files) => acc + files.length, 0);
   const totalFiles = validFilesCount + errors.length;
-  const totalAmount = filesValues
-    .flat()
-    .reduce((acc, file) => acc + parseFloat(file.data.total), 0);
+  const allFiles = filesValues.flat();
+  const totalAmount = allFiles.reduce((acc, file) => acc + parseFloat(file.data.total), 0);
+  const totalNeto = allFiles.reduce((acc, file) => acc + parseFloat(file.data.neto || '0'), 0);
+  const totalIva = allFiles.reduce((acc, file) => acc + parseFloat(file.data.iva || '0'), 0);
+  const totalExentas = allFiles.reduce((acc, file) => acc + parseFloat(file.data.exentas || '0'), 0);
 
   return (
     <>
@@ -252,6 +296,28 @@ const BatchDashboard: React.FC = () => {
             </div>
 
             <div className="flex items-center space-x-3">
+             {/* Toggle Vista CSV / Libro Legal */}
+             {appMode === 'compras' && totalFiles > 0 && (
+               <div className="bg-gray-100 p-1 rounded-lg flex items-center mr-2">
+                 <button 
+                   onClick={() => setCurrentView('csv')}
+                   className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${currentView === 'csv' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                   title="Vista de lista de archivos CSV"
+                 >
+                   <Table className="w-4 h-4" />
+                   <span className="hidden sm:inline">Lista</span>
+                 </button>
+                 <button 
+                   onClick={() => setCurrentView('libro')}
+                   className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${currentView === 'libro' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                   title="Vista del Libro Legal de Compras"
+                 >
+                   <BookOpen className="w-4 h-4" />
+                   <span className="hidden sm:inline">Libro Legal</span>
+                 </button>
+               </div>
+             )}
+
              <button 
                onClick={() => setShowFieldManager(true)}
                className={`text-gray-500 px-3 py-1.5 rounded-lg flex items-center space-x-1 text-sm font-medium transition-all border border-transparent ${appMode === 'ventas' ? 'hover:text-indigo-600 hover:bg-indigo-50' : 'hover:text-emerald-600 hover:bg-emerald-50'}`}
@@ -298,6 +364,9 @@ const BatchDashboard: React.FC = () => {
               </p>
               <DropZone onFilesSelected={handleFilesSelected} />
             </div>
+          ) : currentView === 'libro' && appMode === 'compras' ? (
+            /* Vista Libro Legal */
+            <LibroLegalViewer groupedData={filteredGroupedData} tipoLibro={appMode as TipoLibro} />
           ) : (
             <div className="animate-in fade-in duration-500 space-y-8">
               
@@ -331,10 +400,13 @@ const BatchDashboard: React.FC = () => {
                 successCount={validFilesCount}
                 errorCount={errors.length}
                 totalAmount={totalAmount}
+                totalNeto={totalNeto}
+                totalIva={totalIva}
+                totalExentas={totalExentas}
               />
               
               <FileList 
-                groupedData={groupedData} 
+                groupedData={filteredGroupedData} 
                 errors={errors} 
                 searchTerm={searchTerm} 
                 onReorder={handleReorder}
