@@ -7,6 +7,8 @@ interface DropZoneProps {
 
 type InputMode = 'file' | 'url';
 
+import { notify } from '../utils/notifications';
+
 const DropZone: React.FC<DropZoneProps> = ({ onFilesSelected }) => {
   const [mode, setMode] = useState<InputMode>('file');
   const [isDragging, setIsDragging] = useState(false);
@@ -82,8 +84,9 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesSelected }) => {
         if (files.length > 0) {
             onFilesSelected(files);
             setUrlInput('');
+            notify(`${files.length} archivos cargados correctamente`, 'success');
         } else {
-            alert('No se pudieron cargar los archivos desde las URLs proporcionadas. Verifica permisos CORS y validez.');
+            notify('No se pudieron cargar los archivos desde las URLs proporcionadas. Verifica permisos CORS y validez.', 'error');
         }
 
     } finally {
