@@ -8,6 +8,9 @@ export interface BackupPayloadV1 {
     clients?: any;
     history?: any;
     secure?: any;
+    libros?: any;
+    inventory?: any;
+    inventoryStock?: any;
   };
 }
 
@@ -143,6 +146,39 @@ export const exportBackup = async (): Promise<BackupPayloadV1> => {
     // ignore
   }
 
+  try {
+    payload.indexedDb.libros = {
+      dbName: 'dte-libros-db',
+      version: 1,
+      storeName: 'libros',
+      items: await idbGetAll('dte-libros-db', 'libros'),
+    };
+  } catch {
+    // ignore
+  }
+
+  try {
+    payload.indexedDb.inventory = {
+      dbName: 'dte-inventory-db',
+      version: 1,
+      storeName: 'inventory_movements',
+      items: await idbGetAll('dte-inventory-db', 'inventory_movements'),
+    };
+  } catch {
+    // ignore
+  }
+
+  try {
+    payload.indexedDb.inventoryStock = {
+      dbName: 'dte-inventory-db',
+      version: 1,
+      storeName: 'inventory_stock',
+      items: await idbGetAll('dte-inventory-db', 'inventory_stock'),
+    };
+  } catch {
+    // ignore
+  }
+
   return payload;
 };
 
@@ -204,5 +240,148 @@ export const restoreBackupFromText = async (jsonText: string): Promise<void> => 
       payload.indexedDb.secure.items || [],
       payload.indexedDb.secure.version || 2
     );
+  }
+
+  if (payload.indexedDb?.libros?.items) {
+    await idbClearAndBulkPut(
+      payload.indexedDb.libros.dbName || 'dte-libros-db',
+      payload.indexedDb.libros.storeName || 'libros',
+      payload.indexedDb.libros.items || [],
+      payload.indexedDb.libros.version || 1
+    );
+  }
+
+  if (payload.indexedDb?.inventory?.items) {
+    await idbClearAndBulkPut(
+      payload.indexedDb.inventory.dbName || 'dte-inventory-db',
+      payload.indexedDb.inventory.storeName || 'inventory_movements',
+      payload.indexedDb.inventory.items || [],
+      payload.indexedDb.inventory.version || 1
+    );
+  }
+
+  if (payload.indexedDb?.inventoryStock?.items) {
+    await idbClearAndBulkPut(
+      payload.indexedDb.inventoryStock.dbName || 'dte-inventory-db',
+      payload.indexedDb.inventoryStock.storeName || 'inventory_stock',
+      payload.indexedDb.inventoryStock.items || [],
+      payload.indexedDb.inventoryStock.version || 1
+    );
+  }
+};
+
+// ===== BACKUP AUTOMÁTICO MENSUAL =====
+
+const shouldCreateMonthlyBackup = (lastBackupStr: string | null, now: Date): boolean => {
+  if (!lastBackupStr) return true;
+  
+  const lastBackup = new Date(lastBackupStr);
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const lastMonth = lastBackup.getMonth();
+  const lastYear = lastBackup.getFullYear();
+  
+  // Crear backup si es un nuevo mes
+  return currentMonth !== lastMonth || currentYear !== lastYear;
+};
+
+const cleanupOldBackups = (keepCount: number = 3): void => {
+  const keys = Object.keys(localStorage)
+    .filter(key => key.startsWith('dte_backup_'))
+    .sort((a, b) => {
+      // Extraer fecha del nombre del archivo para ordenar
+      const dateA = a.split('_')[3]?.replace('.json', '') || '';
+      const dateB = b.split('_')[3]?.replace('.json', '') || '';
+      return dateB.localeCompare(dateA); // Más reciente primero
+    });
+  
+  // Eliminar backups más antiguos manteniendo solo los últimos 'keepCount'
+  keys.slice(keepCount).forEach(key => {
+    localStorage.removeItem(key);
+  });
+};
+
+export const createMonthlyAutoBackup = async (): Promise<void> => {
+  try {
+    const lastBackup = localStorage.getItem('dte_last_auto_backup');
+    const now = new Date();
+    
+    if (shouldCreateMonthlyBackup(lastBackup, now)) {
+      // Crear payload del backup
+      const payload = await exportBackup();
+      const content = JSON.stringify(payload, null, 2);
+      const filename = `BACKUP_MENSUAL_${now.toISOString().split('T')[0]}.json`;
+      
+      // Guardar en localStorage como base64 para ahorrar espacio
+      const compressed = btoa(unescape(encodeURIComponent(content)));
+      localStorage.setItem(`dte_backup_${filename}`, compressed);
+      localStorage.setItem('dte_last_auto_backup', now.toISOString());
+      
+      // Limpiar backups antiguos (mantener solo 3)
+      cleanupOldBackups(3);
+      
+      // Guardar metadatos del backup
+      const dbKeys = Object.keys(payload.indexedDb) as Array<keyof BackupPayloadV1['indexedDb']>;
+      const backupInfo = {
+        filename,
+        createdAt: now.toISOString(),
+        size: compressed.length,
+        dbs: dbKeys.filter((key) => payload.indexedDb[key]?.items?.length > 0)
+      };
+      localStorage.setItem('dte_last_backup_info', JSON.stringify(backupInfo));
+      
+      console.log('✅ Backup mensual creado automáticamente:', filename);
+      
+      // Notificar al usuario
+      if (typeof window !== 'undefined') {
+        const event = new CustomEvent('dte-auto-backup-created', {
+          detail: {
+            filename,
+            size: compressed.length,
+            dbs: backupInfo.dbs
+          }
+        });
+        window.dispatchEvent(event);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error creando backup mensual automático:', error);
+  }
+};
+
+export const getAutoBackupsList = (): Array<{filename: string, createdAt: string, size: number}> => {
+  const backups: Array<{filename: string, createdAt: string, size: number}> = [];
+  
+  Object.keys(localStorage)
+    .filter(key => key.startsWith('dte_backup_'))
+    .forEach(key => {
+      const filename = key.replace('dte_backup_', '');
+      const compressed = localStorage.getItem(key);
+      if (compressed) {
+        const match = filename.match(/BACKUP_MENSUAL_(\d{4}-\d{2}-\d{2})\.json/i);
+        const createdAt = match?.[1] ? new Date(`${match[1]}T00:00:00.000Z`).toISOString() : new Date(0).toISOString();
+        backups.push({
+          filename,
+          createdAt,
+          size: compressed.length
+        });
+      }
+    });
+  
+  return backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+};
+
+export const downloadAutoBackup = (filename: string): void => {
+  const compressed = localStorage.getItem(`dte_backup_${filename}`);
+  if (!compressed) {
+    throw new Error('Backup no encontrado');
+  }
+  
+  try {
+    // Descomprimir y descargar
+    const content = decodeURIComponent(escape(atob(compressed)));
+    downloadTextFile(filename, content, 'application/json;charset=utf-8;');
+  } catch (error) {
+    throw new Error('Error al descomprimir el backup');
   }
 };

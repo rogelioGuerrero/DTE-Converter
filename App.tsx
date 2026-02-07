@@ -15,7 +15,7 @@ import { shouldShowUserModeSelection } from './utils/remoteLicensing';
 import { licenseValidator } from './utils/licenseValidator';
 import { NavigationTabs } from './components/NavigationTabs';
 import { LayoutDashboard, CheckCircle, Download } from 'lucide-react';
-import { downloadBackup, restoreBackupFromText } from './utils/backup';
+import { downloadBackup, restoreBackupFromText, createMonthlyAutoBackup } from './utils/backup';
 import { notify } from './utils/notifications';
 
 type AppTab = 'batch' | 'clients' | 'products' | 'inventory' | 'factura' | 'historial';
@@ -69,6 +69,24 @@ const App: React.FC = () => {
   // Inicializar licencia al cargar la app
   useEffect(() => {
     licenseValidator.loadLicenseFromStorage();
+  }, []);
+
+  // Ejecutar backup automático mensual
+  useEffect(() => {
+    createMonthlyAutoBackup();
+  }, []);
+
+  // Escuchar notificaciones de backup automático
+  useEffect(() => {
+    const handleBackupCreated = (event: any) => {
+      const { filename, size, dbs } = event.detail;
+      const sizeMB = (size / (1024 * 1024)).toFixed(2);
+      const dbsText = Array.isArray(dbs) ? dbs.join(', ') : '';
+      notify(`✅ Backup mensual creado: ${filename} (${sizeMB}MB)${dbsText ? ` - ${dbsText}` : ''}`, 'success');
+    };
+
+    window.addEventListener('dte-auto-backup-created', handleBackupCreated);
+    return () => window.removeEventListener('dte-auto-backup-created', handleBackupCreated);
   }, []);
 
   // Compatibilidad: si alguien quedó en la pestaña antigua de Productos, redirigir a Inventario
