@@ -128,35 +128,42 @@ export const getUsageInfo = async (): Promise<{ count: number; remaining: number
   const hasLicense = await licenseValidator.hasValidLicense();
   
   if (!hasLicense) {
-    const maxPerDay = 5;
+    const maxPerDay = licensingConfig.dailyExportLimit || 5; // Usar límite desde servidor
     const today = getTodayString();
     const current = readUsage();
 
+    let usage: DailyUsage;
     if (!current || current.date !== today) {
-      return { count: 0, remaining: maxPerDay, max: maxPerDay, hasLicense: false };
+      usage = { date: today, count: 0 };
+    } else {
+      usage = current;
     }
 
-    const remaining = Math.max(0, maxPerDay - current.count);
-    return { count: current.count, remaining, max: maxPerDay, hasLicense: false };
+    return {
+      count: usage.count,
+      remaining: maxPerDay - usage.count,
+      max: maxPerDay,
+      hasLicense: false
+    };
   }
 
-  // Con licencia
-  const license = licenseValidator.getCurrentLicense();
-  if (!license) {
-    return { count: 0, remaining: 0, max: 0, hasLicense: true };
-  }
-
+  // Si tiene licencia, obtener sus límites
+  const remainingExports = await licenseValidator.getRemainingExports();
+  const maxExports = remainingExports === -1 ? -1 : (await licenseValidator.getCurrentLicense())?.maxExports || -1;
   const today = getTodayString();
   const current = readUsage();
-  const usedToday = (!current || current.date !== today) ? 0 : current.count;
-  
-  const max = license.maxExports === -1 ? 999 : license.maxExports;
-  const remaining = licenseValidator.getRemainingExports();
 
-  return { 
-    count: usedToday, 
-    remaining: remaining === -1 ? 999 : remaining, 
-    max, 
-    hasLicense: true 
+  let usage: DailyUsage;
+  if (!current || current.date !== today) {
+    usage = { date: today, count: 0 };
+  } else {
+    usage = current;
+  }
+
+  return {
+    count: usage.count,
+    remaining: remainingExports,
+    max: maxExports,
+    hasLicense: true
   };
 };

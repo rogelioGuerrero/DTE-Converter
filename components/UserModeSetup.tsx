@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Building2, ArrowRight, Users, Store } from 'lucide-react';
-import { USER_MODE_CONFIGS, UserMode, setUserMode } from '../utils/userMode';
+import { ArrowRight, Users, Store } from 'lucide-react';
+import { UserMode, setUserMode } from '../utils/userMode';
 import { fetchLicensingConfig } from '../utils/remoteLicensing';
 
 interface UserModeSetupProps {

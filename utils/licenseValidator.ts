@@ -1,4 +1,3 @@
-import { loadSettings } from './settings';
 import { deviceFingerprint } from './deviceFingerprint';
 import { fetchLicensingConfig } from './remoteLicensing';
 

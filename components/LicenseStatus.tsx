@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, CreditCard, CheckCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle } from 'lucide-react';
 import { licenseValidator } from '../utils/licenseValidator';
 import { fetchLicensingConfig } from '../utils/remoteLicensing';
 
@@ -34,7 +34,7 @@ export const LicenseStatus: React.FC<LicenseStatusProps> = ({ onManageLicense })
 
     const isValid = await licenseValidator.hasValidLicense();
     const license = licenseValidator.getCurrentLicense();
-    const remainingExports = licenseValidator.getRemainingExports();
+    const remainingExports = await licenseValidator.getRemainingExports();
     
     setLicenseStatus({
       isValid,
@@ -84,7 +84,7 @@ export const LicenseStatus: React.FC<LicenseStatusProps> = ({ onManageLicense })
     <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Crown className="w-4 h-4 text-green-600" />
+          <CheckCircle className="w-4 h-4 text-green-600" />
           <span className="text-sm text-green-800">
             Licencia activa
           </span>
