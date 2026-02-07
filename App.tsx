@@ -15,7 +15,7 @@ import { shouldShowUserModeSelection } from './utils/remoteLicensing';
 import { licenseValidator } from './utils/licenseValidator';
 import { NavigationTabs } from './components/NavigationTabs';
 import { LayoutDashboard, CheckCircle, Download } from 'lucide-react';
-import { downloadBackup, restoreBackupFromText, createMonthlyAutoBackup } from './utils/backup';
+import { downloadBackup, restoreBackupFromText } from './utils/backup';
 import { notify } from './utils/notifications';
 
 type AppTab = 'batch' | 'clients' | 'products' | 'inventory' | 'factura' | 'historial';
@@ -71,10 +71,10 @@ const App: React.FC = () => {
     licenseValidator.loadLicenseFromStorage();
   }, []);
 
-  // Ejecutar backup automático mensual
-  useEffect(() => {
-    createMonthlyAutoBackup();
-  }, []);
+  // Ejecutar backup automático mensual (deshabilitado)
+  // useEffect(() => {
+  //   createMonthlyAutoBackup();
+  // }, []);
 
   // Compatibilidad: si alguien quedó en la pestaña antigua de Productos, redirigir a Inventario
   useEffect(() => {
