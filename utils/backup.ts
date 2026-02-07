@@ -285,22 +285,6 @@ const shouldCreateMonthlyBackup = (lastBackupStr: string | null, now: Date): boo
   return currentMonth !== lastMonth || currentYear !== lastYear;
 };
 
-const cleanupOldBackups = (keepCount: number = 3): void => {
-  const keys = Object.keys(localStorage)
-    .filter(key => key.startsWith('dte_backup_'))
-    .sort((a, b) => {
-      // Extraer fecha del nombre del archivo para ordenar
-      const dateA = a.split('_')[3]?.replace('.json', '') || '';
-      const dateB = b.split('_')[3]?.replace('.json', '') || '';
-      return dateB.localeCompare(dateA); // Más reciente primero
-    });
-  
-  // Eliminar backups más antiguos manteniendo solo los últimos 'keepCount'
-  keys.slice(keepCount).forEach(key => {
-    localStorage.removeItem(key);
-  });
-};
-
 export const createMonthlyAutoBackup = async (): Promise<void> => {
   try {
     const lastBackup = localStorage.getItem('dte_last_auto_backup');
@@ -312,76 +296,15 @@ export const createMonthlyAutoBackup = async (): Promise<void> => {
       const content = JSON.stringify(payload, null, 2);
       const filename = `BACKUP_MENSUAL_${now.toISOString().split('T')[0]}.json`;
       
-      // Guardar en localStorage como base64 para ahorrar espacio
-      const compressed = btoa(unescape(encodeURIComponent(content)));
-      localStorage.setItem(`dte_backup_${filename}`, compressed);
+      // Descargar silenciosamente a Downloads sin notificación
+      downloadTextFile(filename, content, 'application/json;charset=utf-8;');
+      
+      // Actualizar timestamp para no repetir en el mismo mes
       localStorage.setItem('dte_last_auto_backup', now.toISOString());
       
-      // Limpiar backups antiguos (mantener solo 3)
-      cleanupOldBackups(3);
-      
-      // Guardar metadatos del backup
-      const dbKeys = Object.keys(payload.indexedDb) as Array<keyof BackupPayloadV1['indexedDb']>;
-      const backupInfo = {
-        filename,
-        createdAt: now.toISOString(),
-        size: compressed.length,
-        dbs: dbKeys.filter((key) => payload.indexedDb[key]?.items?.length > 0)
-      };
-      localStorage.setItem('dte_last_backup_info', JSON.stringify(backupInfo));
-      
-      console.log('✅ Backup mensual creado automáticamente:', filename);
-      
-      // Notificar al usuario
-      if (typeof window !== 'undefined') {
-        const event = new CustomEvent('dte-auto-backup-created', {
-          detail: {
-            filename,
-            size: compressed.length,
-            dbs: backupInfo.dbs
-          }
-        });
-        window.dispatchEvent(event);
-      }
+      console.log('✅ Backup mensual descargado silenciosamente:', filename);
     }
   } catch (error) {
     console.error('❌ Error creando backup mensual automático:', error);
-  }
-};
-
-export const getAutoBackupsList = (): Array<{filename: string, createdAt: string, size: number}> => {
-  const backups: Array<{filename: string, createdAt: string, size: number}> = [];
-  
-  Object.keys(localStorage)
-    .filter(key => key.startsWith('dte_backup_'))
-    .forEach(key => {
-      const filename = key.replace('dte_backup_', '');
-      const compressed = localStorage.getItem(key);
-      if (compressed) {
-        const match = filename.match(/BACKUP_MENSUAL_(\d{4}-\d{2}-\d{2})\.json/i);
-        const createdAt = match?.[1] ? new Date(`${match[1]}T00:00:00.000Z`).toISOString() : new Date(0).toISOString();
-        backups.push({
-          filename,
-          createdAt,
-          size: compressed.length
-        });
-      }
-    });
-  
-  return backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-};
-
-export const downloadAutoBackup = (filename: string): void => {
-  const compressed = localStorage.getItem(`dte_backup_${filename}`);
-  if (!compressed) {
-    throw new Error('Backup no encontrado');
-  }
-  
-  try {
-    // Descomprimir y descargar
-    const content = decodeURIComponent(escape(atob(compressed)));
-    downloadTextFile(filename, content, 'application/json;charset=utf-8;');
-  } catch (error) {
-    throw new Error('Error al descomprimir el backup');
   }
 };

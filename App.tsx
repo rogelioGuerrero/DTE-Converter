@@ -76,19 +76,6 @@ const App: React.FC = () => {
     createMonthlyAutoBackup();
   }, []);
 
-  // Escuchar notificaciones de backup automático
-  useEffect(() => {
-    const handleBackupCreated = (event: any) => {
-      const { filename, size, dbs } = event.detail;
-      const sizeMB = (size / (1024 * 1024)).toFixed(2);
-      const dbsText = Array.isArray(dbs) ? dbs.join(', ') : '';
-      notify(`✅ Backup mensual creado: ${filename} (${sizeMB}MB)${dbsText ? ` - ${dbsText}` : ''}`, 'success');
-    };
-
-    window.addEventListener('dte-auto-backup-created', handleBackupCreated);
-    return () => window.removeEventListener('dte-auto-backup-created', handleBackupCreated);
-  }, []);
-
   // Compatibilidad: si alguien quedó en la pestaña antigua de Productos, redirigir a Inventario
   useEffect(() => {
     if (activeTab === 'products') setActiveTab('inventory');
