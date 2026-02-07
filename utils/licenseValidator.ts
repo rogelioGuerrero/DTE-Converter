@@ -1,5 +1,6 @@
 import { loadSettings } from './settings';
 import { deviceFingerprint } from './deviceFingerprint';
+import { fetchLicensingConfig } from './remoteLicensing';
 
 // Llave pública en formato JWK (debe coincidir con la generada)
 const PUBLIC_KEY_JWK = {
@@ -149,9 +150,9 @@ export class LicenseValidator {
    * Verifica si el usuario tiene licencia válida
    */
   async hasValidLicense(): Promise<boolean> {
-    // Verificar si el licenciamiento está desactivado en configuración
-    const settings = loadSettings();
-    if (!settings.licensingEnabled) {
+    // Verificar si el licenciamiento está desactivado remotamente
+    const licensingConfig = await fetchLicensingConfig();
+    if (!licensingConfig.enabled) {
       return true; // Si está desactivado, comportarse como si siempre tuviera licencia
     }
 
@@ -177,10 +178,10 @@ export class LicenseValidator {
   /**
    * Verifica si puede exportar (si hay límite)
    */
-  canExport(): boolean {
-    // Verificar si el licenciamiento está desactivado
-    const settings = loadSettings();
-    if (!settings.licensingEnabled) {
+  async canExport(): Promise<boolean> {
+    // Verificar si el licenciamiento está desactivado remotamente
+    const licensingConfig = await fetchLicensingConfig();
+    if (!licensingConfig.enabled) {
       return true; // Si está desactivado, siempre puede exportar
     }
 
@@ -212,10 +213,10 @@ export class LicenseValidator {
   /**
    * Obtiene el número de exportaciones restantes hoy
    */
-  getRemainingExports(): number {
-    // Verificar si el licenciamiento está desactivado
-    const settings = loadSettings();
-    if (!settings.licensingEnabled) {
+  async getRemainingExports(): Promise<number> {
+    // Verificar si el licenciamiento está desactivado remotamente
+    const licensingConfig = await fetchLicensingConfig();
+    if (!licensingConfig.enabled) {
       return -1; // Ilimitado
     }
 

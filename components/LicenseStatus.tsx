@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Crown, AlertCircle } from 'lucide-react';
+import { AlertCircle, CreditCard, CheckCircle } from 'lucide-react';
 import { licenseValidator } from '../utils/licenseValidator';
-import { loadSettings } from '../utils/settings';
+import { fetchLicensingConfig } from '../utils/remoteLicensing';
 
 interface LicenseStatusProps {
   onManageLicense?: () => void;
@@ -26,9 +26,9 @@ export const LicenseStatus: React.FC<LicenseStatusProps> = ({ onManageLicense })
   }, []);
 
   const updateLicenseStatus = async () => {
-    // Verificar si el licenciamiento está desactivado
-    const settings = loadSettings();
-    if (!settings.licensingEnabled) {
+    // Verificar si el licenciamiento está desactivado remotamente
+    const licensingConfig = await fetchLicensingConfig();
+    if (!licensingConfig.enabled) {
       return; // No mostrar nada si está desactivado
     }
 
@@ -45,8 +45,17 @@ export const LicenseStatus: React.FC<LicenseStatusProps> = ({ onManageLicense })
   };
 
   // No mostrar nada si el licenciamiento está desactivado
-  const settings = loadSettings();
-  if (!settings.licensingEnabled) {
+  const [licensingEnabled, setLicensingEnabled] = useState<boolean | null>(null);
+  
+  useEffect(() => {
+    const checkLicensing = async () => {
+      const config = await fetchLicensingConfig();
+      setLicensingEnabled(config.enabled);
+    };
+    checkLicensing();
+  }, []);
+  
+  if (licensingEnabled === false) {
     return null;
   }
 

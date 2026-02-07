@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Users, Store, ArrowRight } from 'lucide-react';
-import { UserMode, setUserMode } from '../utils/userMode';
-import { loadSettings } from '../utils/settings';
+import React, { useState, useEffect } from 'react';
+import { Briefcase, Building2, ArrowRight, Users, Store } from 'lucide-react';
+import { USER_MODE_CONFIGS, UserMode, setUserMode } from '../utils/userMode';
+import { fetchLicensingConfig } from '../utils/remoteLicensing';
 
 interface UserModeSetupProps {
   onComplete: () => void;
@@ -10,13 +10,24 @@ interface UserModeSetupProps {
 export const UserModeSetup: React.FC<UserModeSetupProps> = ({ onComplete }) => {
   const [selectedMode, setSelectedMode] = useState<UserMode | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [licensingEnabled, setLicensingEnabled] = useState<boolean | null>(null);
 
   // Verificar si el licenciamiento está activado
-  const settings = loadSettings();
-  if (!settings.licensingEnabled) {
-    // Si no está activado, usar modo profesional por defecto y continuar
-    setUserMode('negocio');
-    onComplete();
+  useEffect(() => {
+    const checkLicensing = async () => {
+      const config = await fetchLicensingConfig();
+      setLicensingEnabled(config.enabled);
+      
+      if (!config.enabled) {
+        // Si no está activado, usar modo negocio por defecto y continuar
+        setUserMode('negocio');
+        onComplete();
+      }
+    };
+    checkLicensing();
+  }, [onComplete]);
+
+  if (licensingEnabled === false) {
     return null;
   }
 

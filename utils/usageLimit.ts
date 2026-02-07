@@ -92,9 +92,9 @@ export const consumeExportSlot = async (): Promise<{ allowed: boolean; remaining
   }
 
   // Si tiene licencia, verificar sus límites
-  const canExport = licenseValidator.canExport();
+  const canExport = await licenseValidator.canExport();
   if (!canExport) {
-    const remainingExports = licenseValidator.getRemainingExports();
+    const remainingExports = await licenseValidator.getRemainingExports();
     return {
       allowed: false,
       remaining: Math.max(0, remainingExports),
@@ -106,7 +106,7 @@ export const consumeExportSlot = async (): Promise<{ allowed: boolean; remaining
 
   // Registrar exportación para la licencia
   licenseValidator.registerExport();
-  const remainingExports = licenseValidator.getRemainingExports();
+  const remainingExports = await licenseValidator.getRemainingExports();
 
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
     window.dispatchEvent(new CustomEvent('dte-usage-updated'));
