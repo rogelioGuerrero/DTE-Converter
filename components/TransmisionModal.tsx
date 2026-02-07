@@ -15,11 +15,13 @@ import {
 import { DTEJSON } from '../utils/dteGenerator';
 import TemplateSelector from './TemplateSelector';
 import { guardarDTEEnHistorial } from '../utils/dteHistoryDb';
+import { generarLibroDesdeDTEs } from '../utils/librosAutoGenerator';
 import { getCertificate } from '../utils/secureStorage';
 import { leerP12, firmarDTEConP12 } from '../utils/p12Handler';
 import { processDTE } from '../utils/mh/process';
 import { getMHMode } from '../utils/mh/config';
 import { transmitirDTESandbox } from '../utils/mh/sandboxClient';
+import { loadSettings } from '../utils/settings';
 import { 
   transmitirDTEMock, 
   TransmisionResult,
@@ -113,6 +115,32 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
         // Guardar en historial local
         try {
           await guardarDTEEnHistorial(processed.dte, transmisionResult, ambiente);
+
+          try {
+            const settings = loadSettings();
+            const normalizeId = (id: string) => (id || '').toString().replace(/[\s-]/g, '').trim();
+            const myNit = normalizeId(settings.myNit || '');
+            const myNrc = normalizeId(settings.myNrc || '');
+            const emisorNit = normalizeId(processed.dte?.emisor?.nit || '');
+            const emisorNrc = normalizeId(processed.dte?.emisor?.nrc || '');
+            const receptorNit = normalizeId(processed.dte?.receptor?.numDocumento || '');
+            const receptorNrc = normalizeId(processed.dte?.receptor?.nrc || '');
+
+            const isMyCompanyEmitter = (myNit && emisorNit === myNit) || (myNrc && emisorNrc === myNrc);
+            const isMyCompanyReceiver = (myNit && receptorNit === myNit) || (myNrc && receptorNrc === myNrc);
+            const modoLibro = isMyCompanyReceiver && !isMyCompanyEmitter ? 'compras' : 'ventas';
+            const periodo = (processed.dte?.identificacion?.fecEmi || '').substring(0, 7);
+            if (periodo && /^\d{4}-\d{2}$/.test(periodo)) {
+              await generarLibroDesdeDTEs({
+                modo: modoLibro,
+                periodo,
+                incluirPendientes: false,
+                incluirRechazados: false,
+              });
+            }
+          } catch (autoLibroError) {
+            console.error('Error generando libro automático:', autoLibroError);
+          }
         } catch (historyError) {
           console.error('Error guardando en historial:', historyError);
         }
@@ -206,8 +234,8 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
         <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
           <CheckCircle2 className="w-8 h-8 text-green-500" />
         </div>
-        <h3 className="text-lg font-bold text-gray-900">¡DTE Transmitido!</h3>
-        <p className="text-sm text-gray-500">{resultado?.mensaje || 'Documento procesado correctamente'}</p>
+        <h3 className="text-lg font-bold text-gray-900">¡DTE Autorizado!</h3>
+        <p className="text-sm text-gray-500">{resultado?.mensaje || 'DTE autorizado (fase de prueba)'}</p>
       </div>
       
       {/* Datos de la respuesta */}

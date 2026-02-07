@@ -41,6 +41,8 @@ export interface LibroLegalConfig {
   getResumen?: (items: any[]) => any[];
   getValor: (item: any, key: string) => any;
   calcularTotales: (items: any[]) => Record<string, number>;
+  generarCSV: (items: any[], totales: Record<string, number>, resumenFilas?: any[]) => string;
+  nombreArchivo: string;
 }
 
 export const LIBROS_CONFIG: LibroConfig[] = [
@@ -166,7 +168,19 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           });
           
           return totales;
-        }
+        },
+        generarCSV: (items, totales) => {
+          let csv = 'No Corr;Fecha;Codigo de Generacion;NRC;Nit Sujeto Excluido;Nombre del Proveedor;Compras exentas;Compras Gravadas Locales;Credito Fiscal;Total Compras;Retencion a Terceros;Compras a Sujeto Excluido\n';
+          
+          items.forEach(item => {
+            csv += `${item.correlativo};${item.fecha};${item.codigoGeneracion};${item.nrc};${item.nitSujetoExcluido};${item.nombreProveedor};${item.comprasExentas.toFixed(2)};${item.comprasGravadasLocales.toFixed(2)};${item.creditoFiscal.toFixed(2)};${item.totalCompras.toFixed(2)};${item.retencionTerceros.toFixed(2)};${item.comprasSujetoExcluido.toFixed(2)}\n`;
+          });
+
+          csv += `;;;;;TOTALES;${totales.comprasExentas.toFixed(2)};${totales.comprasGravadasLocales.toFixed(2)};${totales.creditoFiscal.toFixed(2)};${totales.totalCompras.toFixed(2)};;\n`;
+          
+          return csv;
+        },
+        nombreArchivo: 'LIBRO_COMPRAS'
       };
     
     case 'contribuyentes':
@@ -276,7 +290,19 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           });
           
           return totales;
-        }
+        },
+        generarCSV: (items, totales) => {
+          let csv = 'No Corr;Fecha;Codigo de Generacion;Form Unico;Cliente;NRC;Ventas exentas;Exportaciones;Ventas Gravadas;Debito Fiscal;Venta cuenta de terceros;Debito fiscal de terceros;Impuesto percibido;Ventas totales\n';
+          
+          items.forEach(item => {
+            csv += `${item.correlativo};${item.fecha};${item.codigoGeneracion};${item.formUnico};${item.cliente};${item.nrc};${item.ventasExentas.toFixed(2)};${item.exportaciones.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.debitoFiscal.toFixed(2)};${item.ventaCuentaTerceros.toFixed(2)};${item.debitoFiscalTerceros.toFixed(2)};${item.impuestoPercibido.toFixed(2)};${item.ventasTotales.toFixed(2)}\n`;
+          });
+
+          csv += `;;;;;;;;;${totales.ventasGravadas.toFixed(2)};${totales.debitoFiscal.toFixed(2)};;${totales.debitoFiscalTerceros.toFixed(2)};${totales.impuestoPercibido.toFixed(2)};${totales.ventasTotales.toFixed(2)}\n`;
+          
+          return csv;
+        },
+        nombreArchivo: 'LIBRO_VENTAS_CONTRIBUYENTES'
       };
     
     case 'consumidor':
@@ -330,7 +356,19 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           });
           
           return totales;
-        }
+        },
+        generarCSV: (items, totales) => {
+          let csv = 'Fecha;Codigo Generacion Inicial;Codigo Generacion Final;Numero Control Del;Numero Control Al;Ventas Exentas;Ventas Gravadas;Exportaciones;Venta Total\n';
+          
+          items.forEach(item => {
+            csv += `${item.fecha};${item.codigoGeneracionInicial};${item.codigoGeneracionFinal};${item.numeroControlDel};${item.numeroControlAl};${item.ventasExentas.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.exportaciones.toFixed(2)};${item.ventaTotal.toFixed(2)}\n`;
+          });
+
+          csv += `;;;;;${totales.ventasExentas.toFixed(2)};${totales.ventasGravadas.toFixed(2)};${totales.exportaciones.toFixed(2)};${totales.ventaTotal.toFixed(2)}\n`;
+          
+          return csv;
+        },
+        nombreArchivo: 'LIBRO_CONSUMIDOR_FINAL'
       };
     
     default:

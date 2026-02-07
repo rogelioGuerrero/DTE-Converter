@@ -1,3 +1,7 @@
+import { licenseValidator } from './licenseValidator';
+import { loadSettings } from './settings';
+import { getUserModeConfig } from './userMode';
+
 const STORAGE_KEY = 'dte_daily_export_limit';
 
 interface DailyUsage {
@@ -33,39 +37,117 @@ const writeUsage = (usage: DailyUsage) => {
   }
 };
 
-export const consumeExportSlot = (maxPerDay = 5): { allowed: boolean; remaining: number } => {
-  const today = getTodayString();
-  const current = readUsage();
-
-  let usage: DailyUsage;
-  if (!current || current.date !== today) {
-    usage = { date: today, count: 0 };
-  } else {
-    usage = current;
+export const consumeExportSlot = async (): Promise<{ allowed: boolean; remaining: number; message?: string }> => {
+  // Verificar si el licenciamiento está desactivado en configuración
+  const settings = loadSettings();
+  if (!settings.licensingEnabled) {
+    return { allowed: true, remaining: -1 }; // Siempre permitido, ilimitado
   }
 
-  if (usage.count >= maxPerDay) {
-    return { allowed: false, remaining: 0 };
+  // Obtener modo de usuario
+  const userMode = getUserModeConfig();
+  
+  // Verificar si tiene licencia válida
+  const hasLicense = await licenseValidator.hasValidLicense();
+  
+  // Si no tiene licencia, usar límite gratuito según modo
+  if (!hasLicense) {
+    const maxPerDay = 5;
+    const today = getTodayString();
+    const current = readUsage();
+
+    let usage: DailyUsage;
+    if (!current || current.date !== today) {
+      usage = { date: today, count: 0 };
+    } else {
+      usage = current;
+    }
+
+    if (usage.count >= maxPerDay) {
+      const actionType = userMode.mode === 'negocio' ? 'facturar' : 'exportar';
+      return {
+        allowed: false,
+        remaining: 0,
+        message: `Has alcanzado el límite gratuito de ${maxPerDay} ${actionType === 'facturar' ? 'facturas' : 'exportaciones'} por día.`
+      };
+    }
+
+    usage.count += 1;
+    writeUsage(usage);
+
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('dte-usage-updated'));
+    }
+
+    return { allowed: true, remaining: maxPerDay - usage.count };
   }
 
-  const newCount = usage.count + 1;
-  writeUsage({ date: today, count: newCount });
+  // Si tiene licencia, verificar sus límites
+  const canExport = licenseValidator.canExport();
+  if (!canExport) {
+    const remainingExports = licenseValidator.getRemainingExports();
+    return {
+      allowed: false,
+      remaining: Math.max(0, remainingExports),
+      message: remainingExports > 0 
+        ? `Has alcanzado el límite de exportaciones de tu licencia por hoy. Restantes: ${remainingExports}`
+        : 'Has alcanzado el límite de exportaciones de tu licencia por hoy.'
+    };
+  }
+
+  // Registrar exportación para la licencia
+  licenseValidator.registerExport();
+  const remainingExports = licenseValidator.getRemainingExports();
 
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
     window.dispatchEvent(new CustomEvent('dte-usage-updated'));
   }
 
-  return { allowed: true, remaining: Math.max(0, maxPerDay - newCount) };
+  return { 
+    allowed: true, 
+    remaining: remainingExports === -1 ? 999 : remainingExports // -1 = ilimitado
+  };
 };
 
-export const getUsageInfo = (maxPerDay = 5): { count: number; remaining: number; max: number } => {
-  const today = getTodayString();
-  const current = readUsage();
-
-  if (!current || current.date !== today) {
-    return { count: 0, remaining: maxPerDay, max: maxPerDay };
+export const getUsageInfo = async (): Promise<{ count: number; remaining: number; max: number; hasLicense: boolean }> => {
+  // Verificar si el licenciamiento está desactivado en configuración
+  const settings = loadSettings();
+  if (!settings.licensingEnabled) {
+    return { count: 0, remaining: -1, max: -1, hasLicense: true }; // Ilimitado
   }
 
-  const remaining = Math.max(0, maxPerDay - current.count);
-  return { count: current.count, remaining, max: maxPerDay };
+  const hasLicense = await licenseValidator.hasValidLicense();
+  
+  if (!hasLicense) {
+    const maxPerDay = 5;
+    const today = getTodayString();
+    const current = readUsage();
+
+    if (!current || current.date !== today) {
+      return { count: 0, remaining: maxPerDay, max: maxPerDay, hasLicense: false };
+    }
+
+    const remaining = Math.max(0, maxPerDay - current.count);
+    return { count: current.count, remaining, max: maxPerDay, hasLicense: false };
+  }
+
+  // Con licencia
+  const license = licenseValidator.getCurrentLicense();
+  if (!license) {
+    return { count: 0, remaining: 0, max: 0, hasLicense: true };
+  }
+
+  const today = getTodayString();
+  const current = readUsage();
+  const usedToday = (!current || current.date !== today) ? 0 : current.count;
+  
+  const max = license.maxExports === -1 ? 999 : license.maxExports;
+  const remaining = licenseValidator.getRemainingExports();
+
+  return { 
+    count: usedToday, 
+    remaining: remaining === -1 ? 999 : remaining, 
+    max, 
+    hasLicense: true 
+  };
 };

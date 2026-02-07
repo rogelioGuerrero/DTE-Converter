@@ -115,19 +115,47 @@ export const processJsonContent = (
        }
     }
 
-    const displayTotal = (data.resumen?.montoTotalOperacion || 0).toFixed(2);
-    const displayNeto = (data.resumen?.totalGravada || 0).toFixed(2);
-    const displayIva = (data.resumen?.tributos && data.resumen.tributos.length > 0 
+    const displayTotal = (tipoDte === '05' ? -Math.abs(data.resumen?.montoTotalOperacion || 0) : (data.resumen?.montoTotalOperacion || 0)).toFixed(2);
+    const displayNeto = (tipoDte === '05' ? -Math.abs(data.resumen?.totalGravada || 0) : (data.resumen?.totalGravada || 0)).toFixed(2);
+    const displayIva = (tipoDte === '05' ? -Math.abs(data.resumen?.tributos && data.resumen.tributos.length > 0 
       ? data.resumen.tributos[0].valor 
-      : 0).toFixed(2);
-    const displayExentas = (data.resumen?.totalExenta || 0).toFixed(2);
+      : 0) : (data.resumen?.tributos && data.resumen.tributos.length > 0 
+      ? data.resumen.tributos[0].valor 
+      : 0)).toFixed(2);
+    const displayExentas = (tipoDte === '05' ? -Math.abs(data.resumen?.totalExenta || 0) : (data.resumen?.totalExenta || 0)).toFixed(2);
 
     // Dynamic CSV Line Generation
     const csvFields = config
       .filter(field => field.enabled)
-      .map(field => extractValue(data, field));
+      .map(field => extractValue(data, field, tipoDte));
     
     const linea = csvFields.join(';') + '\n';
+
+    // Validar si está fuera del plazo (solo para compras)
+    let isOutOfTime = false;
+    if (effectiveMode === 'compras') {
+      const fechaEmision = new Date(rawDate);
+      const fechaActual = new Date();
+      
+      // Obtener año y mes de la emisión
+      const añoEmision = fechaEmision.getFullYear();
+      const mesEmision = fechaEmision.getMonth(); // 0-11
+      
+      // Obtener año y mes actual
+      const añoActual = fechaActual.getFullYear();
+      const mesActual = fechaActual.getMonth(); // 0-11
+      
+      // Calcular diferencia en meses
+      let diferenciaMeses = (añoActual - añoEmision) * 12 + (mesActual - mesEmision);
+      
+      // Regla compras:
+      // - Mes actual NO cuenta (diferenciaMeses === 0 => fuera de tiempo)
+      // - Válidos: 1, 2 y 3 meses antes (inclusive)
+      // - Fuera de tiempo: < 1 o > 3
+      if (diferenciaMeses < 1 || diferenciaMeses > 3) {
+        isOutOfTime = true;
+      }
+    }
 
     return {
       id: uniqueId,
@@ -146,7 +174,8 @@ export const processJsonContent = (
       },
       taxpayer: taxpayerInfo,
       dteType: tipoDte,
-      detectedMode: effectiveMode // Store the detected mode (ventas or compras)
+      detectedMode: effectiveMode, // Store the detected mode (ventas or compras)
+      isOutOfTime // true si está fuera del plazo de 3 meses para compras
     };
 
   } catch (error: unknown) {

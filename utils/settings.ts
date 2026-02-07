@@ -6,18 +6,32 @@ export interface AppSettings {
   useAutoDetection: boolean; // Modo empresa: auto-detecta ventas/compras basado en NIT/NRC
   aiProvider?: string;
   aiModel?: string;
+
+  // --- Gestión de Licencias ---
+  licensingEnabled: boolean; // Control para activar/desactivar sistema de licencias
+
+  // --- Inventario simplificado (avanzado) ---
+  inventoryCostingMethod?: 'UEPS' | 'PEPS' | 'PROMEDIO';
+  inventoryShowLotProvider?: boolean; // por defecto OFF
+  inventoryFallbackByDescription?: boolean; // por defecto ON
+  inventoryAutoMatchThreshold?: number; // 0..1
+  inventoryAskMatchThreshold?: number; // 0..1
 }
 
 const SETTINGS_KEY = 'dte_app_settings';
 
 const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
-  pin: '1321', // Default PIN as requested
+  pin: '@1321rg', // PIN mejorado para seguridad
   myNit: '',
   myNrc: '',
-  useAutoDetection: false, // Por defecto: modo contador (manual)
-  aiProvider: 'gemini',
-  aiModel: 'gemini-2.5-flash',
+  useAutoDetection: false,
+  inventoryCostingMethod: 'UEPS',
+  inventoryShowLotProvider: false,
+  inventoryFallbackByDescription: true,
+  inventoryAutoMatchThreshold: 0.9,
+  inventoryAskMatchThreshold: 0.75,
+  licensingEnabled: false // Por defecto desactivado
 };
 
 export const loadSettings = (): AppSettings => {

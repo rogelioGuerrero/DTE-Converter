@@ -16,7 +16,8 @@ import {
   Loader2,
   BarChart3,
   DollarSign,
-  Hash
+  Hash,
+  Ban
 } from 'lucide-react';
 import {
   DTEHistoryRecord,
@@ -29,6 +30,9 @@ import {
 } from '../utils/dteHistoryDb';
 import { tiposDocumento } from '../utils/dteGenerator';
 import { descargarPDFConPlantilla, TemplateName } from '../utils/pdfTemplates';
+import { marcarAnulacionLocal } from '../utils/dteHistoryDb';
+import { generarLibroDesdeDTEs } from '../utils/librosAutoGenerator';
+import { notify } from '../utils/notifications';
 
 interface DTEDashboardProps {
   onClose?: () => void;
@@ -328,10 +332,17 @@ const DTEDashboard: React.FC<DTEDashboardProps> = ({ logoUrl }) => {
                         <p className="font-mono font-medium text-gray-900">{formatMonto(registro.montoTotal)}</p>
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getEstadoColor(registro.estado)}`}>
-                          {getEstadoIcon(registro.estado)}
-                          {registro.estado}
-                        </span>
+                        {(registro as any)?.anulacionLocal ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                            <Ban className="w-4 h-4" />
+                            ANULADO
+                          </span>
+                        ) : (
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getEstadoColor(registro.estado)}`}>
+                            {getEstadoIcon(registro.estado)}
+                            {registro.estado}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-center gap-1">
@@ -364,6 +375,57 @@ const DTEDashboard: React.FC<DTEDashboardProps> = ({ logoUrl }) => {
                             title="Descargar JSON"
                           >
                             <FileJson className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={async () => {
+                              const already = Boolean((registro as any)?.anulacionLocal);
+                              if (already) return;
+                              const ok = window.confirm(
+                                '¿Anular este DTE (solo local)? Se ocultará de libros IVA automáticos. (Luego, cuando esté integrado MH, esto deberá gestionarse en MH.)'
+                              );
+                              if (!ok) return;
+
+                              const motivo = window.prompt('Motivo (opcional):', '') || '';
+                              const r = await marcarAnulacionLocal({
+                                codigoGeneracion: registro.codigoGeneracion,
+                                motivo,
+                                anulada: true,
+                              });
+                              if (!r.ok) {
+                                notify(r.message, 'error');
+                                return;
+                              }
+
+                              // Regenerar libros del periodo para reflejar anulación
+                              const periodo = (registro.fechaEmision || '').substring(0, 7);
+                              if (periodo && /^\d{4}-\d{2}$/.test(periodo)) {
+                                try {
+                                  await generarLibroDesdeDTEs({
+                                    modo: 'ventas',
+                                    periodo,
+                                    incluirPendientes: false,
+                                    incluirRechazados: false,
+                                  });
+                                  await generarLibroDesdeDTEs({
+                                    modo: 'compras',
+                                    periodo,
+                                    incluirPendientes: false,
+                                    incluirRechazados: false,
+                                  });
+                                } catch {
+                                  // no bloquear
+                                }
+                              }
+
+                              notify('DTE anulado (local).', 'success');
+                              await cargarDatos();
+                            }}
+                            disabled={Boolean((registro as any)?.anulacionLocal)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-30 disabled:hover:text-gray-400 disabled:hover:bg-transparent"
+                            title={(registro as any)?.anulacionLocal ? 'Ya está anulado' : 'Anular (local)'}
+                          >
+                            <Ban className="w-4 h-4" />
                           </button>
                         </div>
                       </td>

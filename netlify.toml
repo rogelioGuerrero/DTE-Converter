@@ -29,3 +29,8 @@
   from = "/api/pending-clients"
   to = "/.netlify/functions/pending-clients"
   status = 200
+
+[[redirects]]
+  from = "/api/stripe/payment"
+  to = "/.netlify/functions/stripe-payment"
+  status = 200

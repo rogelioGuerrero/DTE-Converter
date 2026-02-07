@@ -40,15 +40,14 @@ export {
   monedas,
   getFormaPagoPorCodigo,
   getPlazoPorCodigo,
+  formasPagoStripe,
+  requiereStripe,
 } from './pagos';
 
 // Unidades de Medida
 export type { UnidadMedida } from './unidadesMedida';
 export {
   unidadesMedida,
-  unidadesMedidaComunes,
-  getUnidadPorCodigo,
-  getUnidadesOrdenadas,
 } from './unidadesMedida';
 
 // Ubicación (Departamentos y Municipios)

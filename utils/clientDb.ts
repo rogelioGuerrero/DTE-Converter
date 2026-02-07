@@ -16,6 +16,11 @@ export interface ClientData {
   timestamp: number;
 }
 
+const normalizeId = (value: string): string => {
+  if (!value) return '';
+  return value.replace(/[-\s]/g, '').trim();
+};
+
 const DB_NAME = 'dte-clients-db';
 const DB_VERSION = 1;
 const STORE_NAME = 'clients';
@@ -59,6 +64,11 @@ export const deleteClient = async (id: number): Promise<void> => {
   await db.delete(STORE_NAME, id);
 };
 
+export const clearClients = async (): Promise<void> => {
+  const db = await openClientsDb();
+  await db.clear(STORE_NAME);
+};
+
 export const updateClient = async (client: ClientData): Promise<void> => {
   const db = await openClientsDb();
   await db.put(STORE_NAME, client);
@@ -68,6 +78,23 @@ export const getClientByNit = async (nit: string): Promise<ClientData | undefine
   const db = await openClientsDb();
   const all = await db.getAll(STORE_NAME);
   return all.find((c) => c.nit === nit);
+};
+
+export const getClientByNitOrNrc = async (nit: string, nrc: string): Promise<ClientData | undefined> => {
+  const db = await openClientsDb();
+  const all = await db.getAll(STORE_NAME);
+
+  const nitKey = normalizeId(nit);
+  const nrcKey = normalizeId(nrc);
+
+  return all.find((c) => {
+    const existingNitKey = normalizeId(c.nit);
+    const existingNrcKey = normalizeId(c.nrc);
+
+    if (nitKey && existingNitKey && nitKey === existingNitKey) return true;
+    if (nrcKey && existingNrcKey && nrcKey === existingNrcKey) return true;
+    return false;
+  });
 };
 
 // Exportar todos los clientes a JSON
@@ -93,8 +120,8 @@ export const importClients = async (jsonString: string): Promise<{ imported: num
   let skipped = 0;
 
   for (const client of data.clients) {
-    // Verificar si ya existe por NIT
-    const existing = await getClientByNit(client.nit);
+    // Verificar si ya existe por NIT o NRC
+    const existing = await getClientByNitOrNrc(client.nit, client.nrc);
     if (existing) {
       skipped++;
       continue;
@@ -112,6 +139,54 @@ export const importClients = async (jsonString: string): Promise<{ imported: num
       direccion: client.direccion || '',
       email: client.email || '',
       telefono: client.telefono || '',
+      timestamp: Date.now(),
+    });
+    imported++;
+  }
+
+  return { imported, skipped };
+};
+
+type ImportMode = 'ventas' | 'compras';
+
+export const importClientsFromDTE = async (
+  jsonString: string,
+  mode: ImportMode
+): Promise<{ imported: number; skipped: number }> => {
+  const parsed = JSON.parse(jsonString);
+
+  const dtes = Array.isArray(parsed) ? parsed : [parsed];
+  let imported = 0;
+  let skipped = 0;
+
+  for (const dte of dtes) {
+    const party = mode === 'ventas' ? dte?.receptor : dte?.emisor;
+    if (!party) continue;
+
+    const nit = party?.nit || '';
+    const nrc = party?.nrc || '';
+    const name = party?.nombre || '';
+
+    if (!name && !nit && !nrc) continue;
+
+    const existing = await getClientByNitOrNrc(nit, nrc);
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    await addClient({
+      nit,
+      name,
+      nrc,
+      nombreComercial: '',
+      actividadEconomica: '',
+      descActividad: '',
+      departamento: '',
+      municipio: '',
+      direccion: '',
+      email: '',
+      telefono: '',
       timestamp: Date.now(),
     });
     imported++;

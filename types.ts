@@ -9,12 +9,13 @@ export interface DTEEmisor {
   nit: string;
   nrc: string;
   nombre: string;
-}
+} 
 
 export interface DTEReceptor {
   nit?: string;
   nrc: string;
   nombre: string;
+  numDocumento?: string; // DUI u otro documento de identificación
 }
 
 export interface DTETributo {
@@ -61,6 +62,7 @@ export interface ProcessedFile {
   isValid: boolean;
   errorMessage?: string;
   detectedMode?: AppMode; // Mode detected in auto-detection (ventas or compras)
+  isOutOfTime?: boolean; // true si está fuera del plazo de 3 meses para compras
 }
 
 export interface GroupedData {
@@ -75,8 +77,8 @@ export interface FieldDefinition {
   id: string;
   columnLetter: string; // A, B, C...
   label: string; // Human readable name (e.g., "Fecha de Emisión")
-  sourceType: 'json' | 'static';
-  value: string; // If json: object path (e.g. 'identificacion.fecEmi'). If static: the constant value.
+  sourceType: 'json' | 'static' | 'conditional';
+  value: string; // If json: object path (e.g. 'identificacion.fecEmi'). If static: the constant value. If conditional: field name.
   transformation: TransformationType;
   enabled: boolean;
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   Plus,
   Minus,
@@ -7,7 +7,6 @@ import {
   ChevronRight,
   X,
   Search,
-  QrCode,
   Settings,
   ShoppingCart,
   Receipt,
@@ -26,6 +25,8 @@ import {
   redondear,
   DTEJSON,
 } from '../utils/dteGenerator';
+import { ToastContainer, useToast } from './Toast';
+import { applySalesFromDTE, validateStockForSale } from '../utils/inventoryDb';
 import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectActividad, SelectUbicacion } from './formularios';
 import {
   validateNIT,
@@ -36,9 +37,9 @@ import {
   formatTextInput,
   formatMultilineTextInput,
 } from '../utils/validators';
+import { getProducts, ProductData } from '../utils/productDb';
 
 interface MobileFacturaProps {
-  onShowQR: () => void;
   onShowEmisorConfig: () => void;
   onShowTransmision: (dte: DTEJSON) => void;
   emisor: EmisorData | null;
@@ -46,9 +47,11 @@ interface MobileFacturaProps {
 
 interface ItemForm {
   id: string;
+  codigo: string;
   descripcion: string;
   cantidad: number;
   precioUni: number;
+  tipoItem: number;
   esExento: boolean;
 }
 
@@ -64,6 +67,7 @@ interface NewClientForm {
   direccion: string;
   telefono: string;
   email: string;
+  esConsumidorFinal: boolean;
 }
 
 const emptyNewClientForm: NewClientForm = {
@@ -78,21 +82,22 @@ const emptyNewClientForm: NewClientForm = {
   direccion: '',
   telefono: '',
   email: '',
+  esConsumidorFinal: false,
 };
 
 const MobileFactura: React.FC<MobileFacturaProps> = ({
-  onShowQR,
   onShowEmisorConfig,
   onShowTransmision,
   emisor,
 }) => {
   const [clients, setClients] = useState<ClientData[]>([]);
+  const [products, setProducts] = useState<ProductData[]>([]);
   const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
   const [showClientDrawer, setShowClientDrawer] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
   const [items, setItems] = useState<ItemForm[]>([]);
   const [showAddItem, setShowAddItem] = useState(false);
-  const [newItem, setNewItem] = useState({ descripcion: '', precioUni: 0, cantidad: 1 });
+  const [newItem, setNewItem] = useState({ codigo: '', descripcion: '', precioUni: 0, cantidad: 1, tipoItem: 1 });
   const [tipoDoc, setTipoDoc] = useState('01');
   const [formaPago, setFormaPago] = useState('01');
   const [condicionOperacion, setCondicionOperacion] = useState(1);
@@ -105,8 +110,46 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
   const [newClientForm, setNewClientForm] = useState<NewClientForm>(emptyNewClientForm);
   const [newClientErrors, setNewClientErrors] = useState<Record<string, string>>({});
 
+  const { toasts, addToast, removeToast } = useToast();
+
+  // Determinar si el cliente seleccionado es consumidor final
+  const clienteEsConsumidorFinal = selectedClient ? !selectedClient.nit.trim() : false;
+
+  // Filtrar tipos de documento según el tipo de cliente
+  const tiposDocumentoFiltrados = tiposDocumento.filter(t => {
+    if (clienteEsConsumidorFinal) {
+      // Para consumidor final solo permitir: 01, 02, 10, 11
+      return ['01', '02', '10', '11'].includes(t.codigo);
+    } else {
+      // Para clientes con NIT/NRC permitir todos excepto los de consumidor final
+      return !['02', '10'].includes(t.codigo);
+    }
+  });
+
   useEffect(() => {
     loadClients();
+  }, []);
+
+  // Resetear tipo de documento cuando cambia el cliente
+  useEffect(() => {
+    if (selectedClient) {
+      // Si es consumidor final y el tipo actual no es permitido, cambiar a 01
+      if (clienteEsConsumidorFinal && !['01', '02', '10', '11'].includes(tipoDoc)) {
+        setTipoDoc('01');
+      }
+      // Si es cliente con NIT y el tipo actual es 02 o 10, cambiar a 01
+      else if (!clienteEsConsumidorFinal && ['02', '10'].includes(tipoDoc)) {
+        setTipoDoc('01');
+      }
+    }
+  }, [selectedClient, clienteEsConsumidorFinal, tipoDoc]);
+
+  useEffect(() => {
+    const load = async () => {
+      const data = await getProducts();
+      setProducts(data);
+    };
+    load();
   }, []);
 
   const loadClients = async () => {
@@ -120,17 +163,79 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
       c.nit.includes(clientSearch)
   );
 
-  const addItem = () => {
+  const normalizeProductText = (value: string): string => {
+    return (value || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  };
+
+  const resolveProductForDescription = (raw: string): ProductData | undefined => {
+    const value = (raw || '').trim();
+    if (!value) return undefined;
+
+    const byCode = products.find((p) => p.codigo && p.codigo.trim() === value);
+    if (byCode) return byCode;
+
+    const needle = normalizeProductText(value);
+    return products.find((p) => normalizeProductText(p.descripcion) === needle);
+  };
+
+  const handleNewItemDescriptionBlur = () => {
+    const found = resolveProductForDescription(newItem.descripcion);
+    if (!found) return;
+
+    setNewItem({
+      ...newItem,
+      codigo: found.codigo,
+      descripcion: found.descripcion,
+      precioUni: found.precioUni,
+      tipoItem: typeof found.tipoItem === 'number' ? found.tipoItem : 1,
+    });
+  };
+
+  const productSuggestions = useMemo<ProductData[]>(() => {
+    const term = (newItem.descripcion || '').trim().toLowerCase();
+    if (term.length < 2) return [];
+
+    const matches = products.filter((p) => {
+      const cod = (p.codigo || '').toLowerCase();
+      const desc = (p.descripcion || '').toLowerCase();
+      return cod.includes(term) || desc.includes(term);
+    });
+
+    return matches.slice(0, 6);
+  }, [newItem.descripcion, products]);
+
+  const addItem = async () => {
     if (!newItem.descripcion || newItem.precioUni <= 0) return;
+
+    const found = resolveProductForDescription(newItem.descripcion);
+    const resolvedTipoItem = typeof newItem.tipoItem === 'number' ? newItem.tipoItem : (typeof found?.tipoItem === 'number' ? found!.tipoItem : 1);
+    const codigo = (newItem.codigo || found?.codigo || '').trim();
+    if (resolvedTipoItem === 1) {
+      if (!codigo) {
+        addToast('Hay items sin código. Asigna un código en el catálogo.', 'error');
+        return;
+      }
+
+      const stockCheck = await validateStockForSale([
+        { codigo, cantidad: newItem.cantidad, descripcion: newItem.descripcion },
+      ]);
+      if (!stockCheck.ok) {
+        addToast(stockCheck.message, 'error');
+        return;
+      }
+    }
+
     const item: ItemForm = {
       id: `item_${Date.now()}`,
+      codigo,
       descripcion: newItem.descripcion,
       cantidad: newItem.cantidad,
       precioUni: newItem.precioUni,
+      tipoItem: resolvedTipoItem,
       esExento: false,
     };
     setItems([...items, item]);
-    setNewItem({ descripcion: '', precioUni: 0, cantidad: 1 });
+    setNewItem({ codigo: '', descripcion: '', precioUni: 0, cantidad: 1, tipoItem: 1 });
     setShowAddItem(false);
   };
 
@@ -148,9 +253,9 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
 
   const itemsParaCalculo: ItemFactura[] = items.map((item, idx) => ({
     numItem: idx + 1,
-    tipoItem: 1,
+    tipoItem: item.tipoItem,
     cantidad: item.cantidad,
-    codigo: null,
+    codigo: item.codigo?.trim() ? item.codigo.trim() : null,
     uniMedida: 99,
     descripcion: item.descripcion,
     precioUni: item.precioUni,
@@ -183,18 +288,24 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
   const handleSaveNewClient = async () => {
     const errors: Record<string, string> = {};
 
-    const nitResult = validateNIT(newClientForm.nit);
-    if (!nitResult.valid) errors.nit = nitResult.message;
+    if (!newClientForm.esConsumidorFinal) {
+      const nitResult = validateNIT(newClientForm.nit);
+      if (!nitResult.valid) errors.nit = nitResult.message;
+    }
 
     if (!newClientForm.name.trim()) {
       errors.name = 'Requerido';
     }
 
-    const phoneResult = validatePhone(newClientForm.telefono);
-    if (!phoneResult.valid) errors.telefono = phoneResult.message;
+    if (!newClientForm.esConsumidorFinal) {
+      const phoneResult = validatePhone(newClientForm.telefono);
+      if (!phoneResult.valid) errors.telefono = phoneResult.message;
+    }
 
-    const emailResult = validateEmail(newClientForm.email);
-    if (!emailResult.valid) errors.email = emailResult.message;
+    if (!newClientForm.esConsumidorFinal) {
+      const emailResult = validateEmail(newClientForm.email);
+      if (!emailResult.valid) errors.email = emailResult.message;
+    }
 
     if (newClientForm.nrc) {
       const nrcResult = validateNRC(newClientForm.nrc);
@@ -206,17 +317,17 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
 
     try {
       const saved = await saveClient({
-        nit: newClientForm.nit,
-        name: newClientForm.name,
-        nrc: newClientForm.nrc,
+        nit: newClientForm.esConsumidorFinal ? '' : newClientForm.nit,
+        name: newClientForm.esConsumidorFinal ? 'Consumidor Final' : newClientForm.name,
+        nrc: newClientForm.esConsumidorFinal ? '' : newClientForm.nrc,
         nombreComercial: newClientForm.nombreComercial,
         actividadEconomica: newClientForm.actividadEconomica,
         descActividad: newClientForm.descActividad,
         departamento: newClientForm.departamento,
         municipio: newClientForm.municipio,
         direccion: newClientForm.direccion,
-        email: newClientForm.email,
-        telefono: newClientForm.telefono,
+        email: newClientForm.esConsumidorFinal ? '' : newClientForm.email,
+        telefono: newClientForm.esConsumidorFinal ? '' : newClientForm.telefono,
       });
       setClients(prev => [saved, ...prev]);
       setSelectedClient(saved);
@@ -228,9 +339,31 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
 
   const handleGenerate = async () => {
     if (!emisor || !selectedClient || items.length === 0) return;
+
+    const goodsOnly = items
+      .filter((i) => i.tipoItem === 1)
+      .map((i) => ({ codigo: i.codigo, cantidad: i.cantidad, descripcion: i.descripcion }));
+
+    const stockCheck = goodsOnly.length
+      ? await validateStockForSale(goodsOnly)
+      : ({ ok: true } as const);
+    if (!stockCheck.ok) {
+      addToast(stockCheck.message, 'error');
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const correlativo = Date.now() % 100000;
+
+      if (totales.montoTotal >= 25000) {
+        const receptorId = (selectedClient.nit || '').replace(/[-\s]/g, '').trim();
+        if (!receptorId) {
+          addToast('Monto >= $25,000: debes completar los datos del receptor (documento de identificación).', 'error');
+          return;
+        }
+      }
+
       const dte = generarDTE({
         tipoDocumento: tipoDoc,
         tipoTransmision: 1,
@@ -240,8 +373,8 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
         },
         receptor: {
           id: selectedClient.id,
-          nit: selectedClient.nit || '00000000-0',
-          name: selectedClient.name,
+          nit: selectedClient.nit || '',
+          name: selectedClient.name || '',
           nrc: selectedClient.nrc || '',
           nombreComercial: selectedClient.nombreComercial || '',
           actividadEconomica: selectedClient.actividadEconomica || '',
@@ -250,7 +383,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
           municipio: selectedClient.municipio || '',
           direccion: selectedClient.direccion || '',
           telefono: selectedClient.telefono || '',
-          email: selectedClient.email || 'sin@correo.com',
+          email: selectedClient.email || '',
           timestamp: selectedClient.timestamp || Date.now(),
         },
         items: itemsParaCalculo,
@@ -259,9 +392,11 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
         observaciones,
       }, correlativo, '00');
       setGeneratedDTE(dte);
+      await applySalesFromDTE(dte);
       setShowPreview(true);
     } catch (err) {
       console.error('Error generando DTE:', err);
+      addToast('Error al generar DTE', 'error');
     } finally {
       setIsGenerating(false);
     }
@@ -271,6 +406,11 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
+      <ToastContainer
+        toasts={toasts}
+        removeToast={removeToast}
+        className="fixed bottom-24 right-4 z-50 flex flex-col gap-2"
+      />
       {/* Header compacto */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -280,12 +420,6 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
           <span className="font-semibold text-gray-900">Nueva Factura</span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={onShowQR}
-            className="p-2 bg-blue-50 text-blue-600 rounded-lg"
-          >
-            <QrCode className="w-5 h-5" />
-          </button>
           <button
             onClick={onShowEmisorConfig}
             className={`p-2 rounded-lg ${emisor ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}
@@ -305,7 +439,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
             onChange={(e) => setTipoDoc(e.target.value)}
             className="w-full mt-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
           >
-            {tiposDocumento.map((t) => (
+            {tiposDocumentoFiltrados.map((t) => (
               <option key={t.codigo} value={t.codigo}>
                 {t.codigo} - {t.descripcion}
               </option>
@@ -574,6 +708,28 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-4 pb-4">
+            <button
+              onClick={() => {
+                setSelectedClient({
+                  nit: '',
+                  name: 'Consumidor Final',
+                  nrc: '',
+                  nombreComercial: '',
+                  actividadEconomica: '',
+                  descActividad: '',
+                  departamento: '',
+                  municipio: '',
+                  direccion: '',
+                  email: '',
+                  telefono: '',
+                  timestamp: Date.now(),
+                });
+                setShowClientDrawer(false);
+              }}
+              className="w-full mb-3 py-3 rounded-xl border border-blue-200 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100"
+            >
+              Consumidor Final
+            </button>
             {filteredClients.length === 0 ? (
               <div className="text-center py-12 text-gray-400 flex flex-col items-center gap-3">
                 <User className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -661,12 +817,39 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
             </div>
 
             <div className="space-y-4">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newClientForm.esConsumidorFinal}
+                    onChange={(e) => {
+                      const esConsumidorFinal = e.target.checked;
+                      setNewClientForm((prev) => ({
+                        ...prev,
+                        esConsumidorFinal,
+                        nit: esConsumidorFinal ? '' : prev.nit,
+                        name: esConsumidorFinal ? 'Consumidor Final' : prev.name,
+                        nrc: esConsumidorFinal ? '' : prev.nrc,
+                        telefono: esConsumidorFinal ? '' : prev.telefono,
+                        email: esConsumidorFinal ? '' : prev.email,
+                      }));
+                      setNewClientErrors({});
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">Consumidor Final</div>
+                    <div className="text-xs text-gray-600">Permite omitir documento, teléfono y correo en FE &lt; $25,000</div>
+                  </div>
+                </label>
+              </div>
+
               <div className="flex gap-3">
                 <div className="flex-1">
                   <NitOrDuiField
                     label={
                       <>
-                        NIT / DUI <span className="text-red-500">*</span>
+                        NIT / DUI {!newClientForm.esConsumidorFinal && <span className="text-red-500">*</span>}
                         {newClientForm.nit && getNitOrDuiDigitsRemaining(newClientForm.nit) > 0 && (
                           <span className="ml-2 text-blue-500 font-normal">
                             {getNitOrDuiDigitsRemaining(newClientForm.nit)}
@@ -681,6 +864,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                     value={newClientForm.nit}
                     onChange={(nit) => handleNewClientChange('nit', nit)}
                     placeholder="0000-000000-000-0"
+                    disabled={newClientForm.esConsumidorFinal}
                     validation={
                       newClientErrors.nit
                         ? { valid: false, message: newClientErrors.nit }
@@ -706,6 +890,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                     value={newClientForm.nrc}
                     onChange={(nrc) => handleNewClientChange('nrc', nrc)}
                     placeholder="000000-0"
+                    disabled={newClientForm.esConsumidorFinal}
                     validation={
                       newClientErrors.nrc
                         ? { valid: false, message: newClientErrors.nrc }
@@ -727,6 +912,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                   value={newClientForm.name}
                   onChange={(e) => handleNewClientChange('name', e.target.value)}
                   placeholder="Nombre completo del cliente"
+                  disabled={newClientForm.esConsumidorFinal}
                   className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none ${
                     newClientErrors.name ? 'border-red-300 bg-red-50' : 'border-gray-300'
                   }`}
@@ -789,7 +975,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                 <PhoneField
                   label={
                     <>
-                      Teléfono <span className="text-red-500">*</span>
+                      Teléfono {!newClientForm.esConsumidorFinal && <span className="text-red-500">*</span>}
                     </>
                   }
                   labelClassName="block text-xs font-medium text-gray-500 uppercase mb-1"
@@ -797,6 +983,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                   onChange={(telefono) => handleNewClientChange('telefono', telefono)}
                   placeholder="70001234"
                   type="tel"
+                  disabled={newClientForm.esConsumidorFinal}
                   validation={
                     newClientErrors.telefono
                       ? { valid: false, message: newClientErrors.telefono }
@@ -815,13 +1002,14 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                 <EmailField
                   label={
                     <>
-                      Correo Electrónico <span className="text-red-500">*</span>
+                      Correo Electrónico {!newClientForm.esConsumidorFinal && <span className="text-red-500">*</span>}
                     </>
                   }
                   labelClassName="block text-xs font-medium text-gray-500 uppercase mb-1"
                   value={newClientForm.email}
                   onChange={(email) => handleNewClientChange('email', email)}
                   placeholder="correo@ejemplo.com"
+                  disabled={newClientForm.esConsumidorFinal}
                   validation={
                     newClientErrors.email
                       ? { valid: false, message: newClientErrors.email }
@@ -871,9 +1059,42 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                   type="text"
                   value={newItem.descripcion}
                   onChange={(e) => setNewItem({ ...newItem, descripcion: e.target.value })}
+                  onBlur={handleNewItemDescriptionBlur}
                   placeholder="Ej: Servicio de consultoria"
                   className="w-full mt-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
                 />
+                {productSuggestions.length > 0 && (
+                  <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden">
+                    {productSuggestions.map((p: ProductData) => (
+                      <button
+                        key={p.id ?? p.key}
+                        type="button"
+                        onClick={() => {
+                          setNewItem({
+                            ...newItem,
+                            codigo: p.codigo,
+                            descripcion: p.descripcion,
+                            precioUni: p.precioUni,
+                            tipoItem: typeof p.tipoItem === 'number' ? p.tipoItem : 1,
+                          });
+                        }}
+                        className="w-full px-4 py-3 text-left hover:bg-blue-50 active:bg-blue-100 border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">{p.descripcion}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">
+                              {p.codigo ? `Código: ${p.codigo}` : 'Sin código'}
+                            </p>
+                          </div>
+                          <div className="text-right whitespace-nowrap">
+                            <p className="text-sm font-mono text-gray-900">${p.precioUni.toFixed(2)}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

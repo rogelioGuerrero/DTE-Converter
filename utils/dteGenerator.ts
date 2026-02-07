@@ -252,6 +252,9 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
   const numeroControl = generarNumeroControl(datos.tipoDocumento, correlativo);
   const totales = calcularTotales(datos.items);
 
+  const receptorIdDigits = (datos.receptor.nit || '').replace(/[\s-]/g, '').trim();
+  const receptorSinDocumento = receptorIdDigits.length === 0;
+
   const receptorCodActividad = isCodActividad(datos.receptor.actividadEconomica)
     ? datos.receptor.actividadEconomica.trim()
     : null;
@@ -306,10 +309,10 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       codPuntoVentaMH: datos.emisor.codPuntoVentaMH || null,
     },
     receptor: {
-      tipoDocumento: datos.receptor.nit.length === 9 ? '13' : '36',
-      numDocumento: datos.receptor.nit,
+      tipoDocumento: receptorSinDocumento ? null : (receptorIdDigits.length === 9 ? '13' : '36'),
+      numDocumento: receptorSinDocumento ? null : datos.receptor.nit,
       nrc: datos.receptor.nrc || null,
-      nombre: datos.receptor.name,
+      nombre: (datos.receptor.name || '').trim() ? datos.receptor.name : 'Consumidor Final',
       codActividad: receptorCodActividad,
       descActividad: receptorDescActividad,
       direccion: receptorDireccion,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Printer, Download, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
-import { GroupedData } from '../types';
+import { Printer, Download, BookOpen } from 'lucide-react';
+import { GroupedData, ProcessedFile } from '../types';
 import { getEmisor, EmisorData } from '../utils/emisorDb';
 
 interface LibroCompraItem {
@@ -26,11 +26,12 @@ const MESES = [
 interface LibroLegalViewerProps {
   groupedData: GroupedData;
   appMode: 'ventas' | 'compras';
+  tipoLibro: 'compras' | 'contribuyentes' | 'consumidor';
 }
 
-const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, appMode }) => {
+const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, appMode, tipoLibro }) => {
   const [emisor, setEmisor] = useState<EmisorData | null>(null);
-  const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(0);
+  const selectedMonthIndex = 0;
   const libroRef = useRef<HTMLDivElement>(null);
 
   // Cargar datos del emisor
@@ -38,28 +39,55 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, appMod
     getEmisor().then(setEmisor);
   }, []);
 
-  // Meses disponibles ordenados
-  const availableMonths = useMemo(() => {
-    return Object.keys(groupedData).sort();
-  }, [groupedData]);
+  // Obtener el mes anterior al actual para el título
+  const getPreviousMonth = () => {
+    const now = new Date();
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const year = prevMonth.getFullYear();
+    const month = String(prevMonth.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  };
 
-  // Mes seleccionado actual
-  const selectedMonth = availableMonths[selectedMonthIndex] || null;
+  // Filtrar y consolidar todos los archivos válidos de los últimos 3 meses (solo para compras)
+  const consolidatedItems = useMemo(() => {
+    if (appMode !== 'compras' || tipoLibro !== 'compras') {
+      // Para otros modos, mantener el comportamiento original
+      const availableMonths = Object.keys(groupedData).sort();
+      const selectedMonth = availableMonths[selectedMonthIndex] || null;
+      
+      if (!selectedMonth || !groupedData[selectedMonth]) return [];
+      const monthFiles = [...groupedData[selectedMonth]];
+      monthFiles.sort((a, b) => {
+        const dateA = new Date(a.data.date.split('/').reverse().join('-'));
+        const dateB = new Date(b.data.date.split('/').reverse().join('-'));
+        return dateA.getTime() - dateB.getTime();
+      });
+      return monthFiles;
+    }
 
-  // Generar items del libro para el mes seleccionado
-  const items: LibroCompraItem[] = useMemo(() => {
-    if (!selectedMonth || !groupedData[selectedMonth]) return [];
+    // Para compras: consolidar todos los archivos no fuera de tiempo
+    const allValidFiles: ProcessedFile[] = [];
+    
+    Object.entries(groupedData).forEach(([, files]) => {
+      const validFiles = files.filter(file => !file.isOutOfTime);
+      allValidFiles.push(...validFiles);
+    });
 
-    const monthFiles = [...groupedData[selectedMonth]];
-
-    // Ordenar por fecha
-    monthFiles.sort((a, b) => {
+    // Ordenar todos por fecha
+    allValidFiles.sort((a, b) => {
       const dateA = new Date(a.data.date.split('/').reverse().join('-'));
       const dateB = new Date(b.data.date.split('/').reverse().join('-'));
       return dateA.getTime() - dateB.getTime();
     });
 
-    return monthFiles.map((file, index) => {
+    return allValidFiles;
+  }, [groupedData, appMode, tipoLibro, selectedMonthIndex]);
+
+  // Generar items del libro
+  const items: LibroCompraItem[] = useMemo(() => {
+    if (consolidatedItems.length === 0) return [];
+
+    return consolidatedItems.map((file, index) => {
       const csvParts = file.csvLine.split(';');
       return {
         correlativo: index + 1,
@@ -76,7 +104,21 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, appMod
         comprasSujetoExcluido: 0,
       };
     });
-  }, [selectedMonth, groupedData]);
+  }, [consolidatedItems]);
+
+  // Para compras consolidadas, mostrar mensaje especial
+  const isConsolidatedView = appMode === 'compras' && tipoLibro === 'compras';
+  
+  // Meses disponibles (solo para modo no consolidado)
+  const availableMonths = useMemo(() => {
+    if (isConsolidatedView) return [getPreviousMonth()];
+    return Object.keys(groupedData).sort();
+  }, [groupedData, isConsolidatedView]);
+  
+  const selectedMonth = availableMonths[selectedMonthIndex] || null;
+  
+  // Obtener el mes a mostrar en el título
+  const displayMonth = appMode === 'compras' && tipoLibro === 'compras' ? getPreviousMonth() : selectedMonth;
 
   // Calcular totales
   const totales = useMemo(() => {
@@ -98,14 +140,6 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, appMod
 
   const getAnio = (monthKey: string): number => {
     return parseInt(monthKey.split('-')[0], 10);
-  };
-
-  const handlePrevMonth = () => {
-    setSelectedMonthIndex(prev => Math.max(0, prev - 1));
-  };
-
-  const handleNextMonth = () => {
-    setSelectedMonthIndex(prev => Math.min(availableMonths.length - 1, prev + 1));
   };
 
   const handlePrint = () => {
@@ -137,7 +171,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, appMod
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Libro de Compras - ${selectedMonth || ''}</title>
+          <title>Libro de Compras - ${displayMonth || ''}</title>
           ${printStyles}
         </head>
         <body>
@@ -156,7 +190,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, appMod
   };
 
   const handleExportCSV = () => {
-    if (!selectedMonth) return;
+    if (!displayMonth) return;
     
     let csv = 'No Corr;Fecha;Codigo de Generacion;NRC;Nit Sujeto Excluido;Nombre del Proveedor;Compras exentas;Compras Gravadas Locales;Credito Fiscal;Total Compras;Retencion a Terceros;Compras a Sujeto Excluido\n';
     
@@ -169,11 +203,12 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, appMod
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `LIBRO_COMPRAS_${selectedMonth}.csv`;
+    const fileName = isConsolidatedView ? `LIBRO_COMPRAS_CONSOLIDADO.csv` : `LIBRO_COMPRAS_${displayMonth}.csv`;
+    link.download = fileName;
     link.click();
   };
-
-  if (availableMonths.length === 0) {
+  
+  if (consolidatedItems.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
         <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -202,30 +237,17 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, appMod
       {/* Controles de navegación y acciones */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <div className="flex items-center gap-2">
-          <button
-            onClick={handlePrevMonth}
-            disabled={selectedMonthIndex === 0}
-            className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
           <div className="text-center min-w-[180px]">
             <div className="text-sm text-gray-500">Período</div>
             <div className="font-semibold text-gray-900">
-              {selectedMonth ? `${getNombreMes(selectedMonth)} ${getAnio(selectedMonth)}` : '---'}
+              {displayMonth ? `${getNombreMes(displayMonth)} ${getAnio(displayMonth)}` : '---'}
             </div>
+            {isConsolidatedView && (
+              <div className="text-xs text-blue-600 font-medium mt-1">
+                Consolidado 3 meses válidos
+              </div>
+            )}
           </div>
-          <button
-            onClick={handleNextMonth}
-            disabled={selectedMonthIndex === availableMonths.length - 1}
-            className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="text-sm text-gray-500">
-          {selectedMonthIndex + 1} de {availableMonths.length} meses
         </div>
 
         <div className="flex items-center gap-2">
@@ -268,13 +290,13 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, appMod
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-gray-700">MES:</span>
                 <span className="text-gray-900 uppercase">
-                  {selectedMonth ? getNombreMes(selectedMonth) : ''}
+                  {displayMonth ? getNombreMes(displayMonth) : ''}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-gray-700">AÑO:</span>
                 <span className="text-gray-900">
-                  {selectedMonth ? getAnio(selectedMonth) : ''}
+                  {displayMonth ? getAnio(displayMonth) : ''}
                 </span>
               </div>
             </div>

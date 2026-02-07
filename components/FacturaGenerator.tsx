@@ -2,25 +2,34 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   FileText, Plus, Trash2, Search, User, Building2, 
   ChevronDown, Calculator, Settings, Save,
-  CheckCircle, Loader2, QrCode, FileSignature, Eye
+  CheckCircle, Loader2, FileSignature, Eye, X, Zap
 } from 'lucide-react';
 import { getClients, ClientData } from '../utils/clientDb';
+import { ProductData } from '../utils/productDb';
 import { getEmisor, saveEmisor, EmisorData } from '../utils/emisorDb';
 import { 
   generarDTE, ItemFactura, tiposDocumento, formasPago,
   calcularTotales, redondear, DTEJSON
 } from '../utils/dteGenerator';
+import { requiereStripe } from '../catalogos';
 import { ToastContainer, useToast } from './Toast';
 import Tooltip from './Tooltip';
 import TransmisionModal from './TransmisionModal';
+import SimuladorTransmision from './SimuladorTransmision';
 import DTEPreviewModal from './DTEPreviewModal';
 import QRClientCapture from './QRClientCapture';
 import MobileFactura from './MobileFactura';
 import MobileEmisorModal from './MobileEmisorModal';
+import { StripeConnectModal } from './StripeConnectModal';
+import QRPaymentModal from './QRPaymentModal';
+import { applySalesFromDTE, getAllStock, InventoryStock, validateStockForSale } from '../utils/inventoryDb';
+import { revertSalesFromDTE } from '../utils/inventoryDb';
+import { inventarioService } from '../utils/inventario/inventarioService';
 import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectActividad, SelectUbicacion } from './formularios';
 import { hasCertificate, saveCertificate } from '../utils/secureStorage';
 import LogoUploader from './LogoUploader';
 import { leerP12, CertificadoInfo, formatearFechaCertificado, validarCertificadoDTE } from '../utils/p12Handler';
+import { getUserModeConfig, hasFeature } from '../utils/userMode';
 import {
   validateNIT,
   validateNRC,
@@ -31,17 +40,34 @@ import {
 } from '../utils/validators';
 
 interface ItemForm {
+  codigo: string;
   descripcion: string;
   cantidad: number;
+  unidadVenta: string;
+  factorConversion: number;
   precioUni: number;
+  precioUniRaw?: string;
   tipoItem: number;
   uniMedida: number;
   esExento: boolean;
 }
 
+type ResolverItem = {
+  index: number;
+  descripcion: string;
+  cantidad: number;
+  selectedProductoId: string;
+  recordar: boolean;
+  candidates: Array<{ productoId: string; label: string; score: number }>;
+  search: string;
+};
+
 const emptyItem: ItemForm = {
+  codigo: '',
   descripcion: '',
   cantidad: 1,
+  unidadVenta: 'UNIDAD',
+  factorConversion: 1,
   precioUni: 0,
   tipoItem: 1,
   uniMedida: 99,
@@ -49,9 +75,16 @@ const emptyItem: ItemForm = {
 };
 
 const FacturaGenerator: React.FC = () => {
+  const isModoProfesional = getUserModeConfig().mode === 'profesional';
+  const defaultItem: ItemForm = isModoProfesional ? { ...emptyItem, tipoItem: 2 } : { ...emptyItem };
+  const canUseCatalogoProductos = hasFeature('productos');
+
   const [showTransmision, setShowTransmision] = useState(false);
   const [showQRCapture, setShowQRCapture] = useState(false);
   const [showDTEPreview, setShowDTEPreview] = useState(false);
+  const [showStripeConnect, setShowStripeConnect] = useState(false);
+  const [showQRPayment, setShowQRPayment] = useState(false);
+  const [showSimulador, setShowSimulador] = useState(false);
   
   const [emisor, setEmisor] = useState<EmisorData | null>(null);
   const [showEmisorConfig, setShowEmisorConfig] = useState(false);
@@ -77,7 +110,15 @@ const FacturaGenerator: React.FC = () => {
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
 
-  const [items, setItems] = useState<ItemForm[]>([{ ...emptyItem }]);
+  const [products, setProducts] = useState<ProductData[]>([]);
+  const [showProductPicker, setShowProductPicker] = useState(false);
+  const [productPickerIndex, setProductPickerIndex] = useState<number | null>(null);
+  const [productSearch, setProductSearch] = useState('');
+
+  const [stockByCode, setStockByCode] = useState<Record<string, InventoryStock>>({});
+  const [stockError, setStockError] = useState<string>('');
+
+  const [items, setItems] = useState<ItemForm[]>([{ ...defaultItem }]);
   const [tipoDocumento, setTipoDocumento] = useState('03');
   const [formaPago, setFormaPago] = useState('01');
   const [condicionOperacion, setCondicionOperacion] = useState(1);
@@ -97,13 +138,92 @@ const FacturaGenerator: React.FC = () => {
   const [isSavingCert, setIsSavingCert] = useState(false);
   const [p12Data, setP12Data] = useState<ArrayBuffer | null>(null);
 
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [resolverItems, setResolverItems] = useState<ResolverItem[]>([]);
+  const [isRetryAfterResolve, setIsRetryAfterResolve] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { toasts, addToast, removeToast } = useToast();
 
+  const getStockDisplayForCodigo = (codigo: string): number | null => {
+    const c = (codigo || '').trim();
+    if (!c) return null;
+    const producto = inventarioService.findProductoByCodigo?.(c) as any;
+    if (producto) {
+      const stock = Number(producto.existenciasTotales);
+      return Number.isFinite(stock) ? stock : 0;
+    }
+    const fromDb = stockByCode[c];
+    if (fromDb) {
+      const onHand = Number(fromDb.onHand);
+      return Number.isFinite(onHand) ? onHand : 0;
+    }
+    return null;
+  };
+
+  const mapInventarioToFacturaProducts = (): ProductData[] => {
+    const inv = inventarioService.getProductos();
+    return inv
+      .map((p) => {
+        const codigo = (p.codigoPrincipal || p.codigo || '').toString().trim();
+        if (!codigo) return null;
+        const item: ProductData = {
+          key: `INV:${p.id}`,
+          codigo,
+          descripcion: p.descripcion,
+          uniMedida: 99,
+          tipoItem: 1,
+          precioUni: Number(p.precioSugerido) || 0,
+          favorite: Boolean(p.esFavorito),
+          timestamp: Date.now(),
+        };
+        return item;
+      })
+      .filter(Boolean) as ProductData[];
+  };
+
+  const validateStockForInventario = async (
+    goods: Array<{ codigo: string; cantidad: number; descripcion?: string }>
+  ): Promise<{ ok: true } | { ok: false; message: string }> => {
+    for (const g of goods) {
+      const codigo = (g.codigo || '').trim();
+      if (!codigo) continue;
+      const producto = inventarioService.findProductoByCodigo?.(codigo) as any;
+      if (!producto) continue;
+      const qty = Number(g.cantidad) || 0;
+      if (qty <= 0) continue;
+      const stock = Number(producto.existenciasTotales) || 0;
+      if (stock < qty) {
+        return {
+          ok: false,
+          message: `Stock insuficiente para "${producto.descripcion}". Disponible: ${stock}, solicitado: ${qty}`,
+        };
+      }
+    }
+    return { ok: true };
+  };
+
   useEffect(() => {
     loadData();
     refreshCertificateStatus();
+  }, []);
+
+  useEffect(() => {
+    const loadStock = async () => {
+      try {
+        const all = await getAllStock();
+        const map: Record<string, InventoryStock> = {};
+        for (const s of all) {
+          const code = (s.productCode || '').trim();
+          if (code) map[code] = s;
+        }
+        setStockByCode(map);
+      } catch {
+        // ignore
+      }
+    };
+    loadStock();
   }, []);
 
   const refreshCertificateStatus = async () => {
@@ -112,15 +232,17 @@ const FacturaGenerator: React.FC = () => {
   };
 
   const loadData = async () => {
-    const [emisorData, clientsData] = await Promise.all([
+    const [emisorData, clientsData, productsData] = await Promise.all([
       getEmisor(),
       getClients(),
+      Promise.resolve(mapInventarioToFacturaProducts()),
     ]);
     if (emisorData) {
       setEmisor(emisorData);
       setEmisorForm(emisorData);
     }
     setClients(clientsData);
+    setProducts(productsData);
   };
 
   const filteredClients = clients.filter(c =>
@@ -143,7 +265,7 @@ const FacturaGenerator: React.FC = () => {
       numItem: idx + 1,
       tipoItem: item.tipoItem,
       cantidad: item.cantidad,
-      codigo: null,
+      codigo: item.codigo?.trim() ? item.codigo.trim() : null,
       uniMedida: item.uniMedida,
       descripcion: item.descripcion,
       precioUni: item.precioUni,
@@ -263,7 +385,7 @@ const FacturaGenerator: React.FC = () => {
   };
 
   const handleAddItem = () => {
-    setItems([...items, { ...emptyItem }]);
+    setItems([...items, { ...defaultItem }]);
   };
 
   const handleRemoveItem = (index: number) => {
@@ -278,13 +400,201 @@ const FacturaGenerator: React.FC = () => {
     setItems(newItems);
   };
 
+  const handlePrecioUniChange = (index: number, raw: string) => {
+    setItems((prev) => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      const parsed = Number(raw);
+      next[index] = {
+        ...next[index],
+        precioUniRaw: raw,
+        precioUni: Number.isFinite(parsed) ? parsed : 0,
+      };
+      return next;
+    });
+  };
+
+  const handlePrecioUniBlur = (index: number) => {
+    setItems((prev) => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      const rounded = redondear(Number(next[index].precioUni) || 0, 2);
+      next[index] = { ...next[index], precioUni: rounded, precioUniRaw: undefined };
+      return next;
+    });
+  };
+
+  const filteredProductsForPicker = products.filter((p) => {
+    const term = productSearch.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      (p.codigo || '').toLowerCase().includes(term) ||
+      (p.descripcion || '').toLowerCase().includes(term)
+    );
+  });
+
+  const openProductPicker = (index: number) => {
+    // Refrescar catálogo desde inventario (para reflejar importaciones recientes)
+    setProducts(mapInventarioToFacturaProducts());
+    setProductPickerIndex(index);
+    setProductSearch('');
+    setShowProductPicker(true);
+  };
+
+  const applyProductToItem = (index: number, p: ProductData) => {
+    const newItems = [...items];
+    if (!newItems[index]) return;
+    newItems[index] = {
+      ...newItems[index],
+      codigo: p.codigo,
+      descripcion: p.descripcion,
+      unidadVenta: 'UNIDAD',
+      factorConversion: 1,
+      precioUni: p.precioUni,
+      uniMedida: p.uniMedida,
+      tipoItem: p.tipoItem,
+    };
+    setItems(newItems);
+    setStockError('');
+  };
+
+  const getPresentacionesForCodigo = (codigo: string): Array<{ nombre: string; factor: number }> => {
+    const producto = inventarioService.findProductoByCodigo?.(codigo);
+    if (!producto) return [{ nombre: 'UNIDAD', factor: 1 }];
+    const base = (producto.unidadBase || 'UNIDAD').toUpperCase();
+    const pres = Array.isArray(producto.presentaciones) && producto.presentaciones.length
+      ? producto.presentaciones.map((p) => ({ nombre: (p.nombre || '').toUpperCase(), factor: Number(p.factor) || 1 }))
+      : [{ nombre: base, factor: 1 }];
+    if (!pres.some((x) => x.nombre === base)) pres.unshift({ nombre: base, factor: 1 });
+    if (!pres.some((x) => x.nombre === 'UNIDAD')) pres.unshift({ nombre: 'UNIDAD', factor: 1 });
+    const unique: Array<{ nombre: string; factor: number }> = [];
+    for (const x of pres) {
+      if (!x.nombre) continue;
+      if (unique.some((u) => u.nombre === x.nombre)) continue;
+      unique.push(x);
+    }
+    return unique;
+  };
+
+  const buildInventarioDTEFromGenerated = (dte: DTEJSON): any => {
+    const body = Array.isArray((dte as any)?.cuerpoDocumento) ? (dte as any).cuerpoDocumento : [];
+    const used = new Array(items.length).fill(false);
+    const converted = body.map((it: any) => {
+      const codigo = ((it?.codigo || '') as string).toString().trim();
+      const desc = ((it?.descripcion || '') as string).toString().trim();
+
+      const matchIdx = items.findIndex((x, i) => {
+        if (used[i]) return false;
+        const c = (x.codigo || '').toString().trim();
+        const d = (x.descripcion || '').toString().trim();
+        if (codigo && c) return c === codigo;
+        return d === desc;
+      });
+
+      const form = matchIdx >= 0 ? items[matchIdx] : undefined;
+      if (matchIdx >= 0) used[matchIdx] = true;
+
+      const factor = form ? Number(form.factorConversion) || 1 : 1;
+      const cantidad = Number(it?.cantidad) || 0;
+      return { ...it, cantidad: cantidad * factor };
+    });
+    return { ...dte, cuerpoDocumento: converted };
+  };
+
+  const normalizeProductText = (value: string): string => {
+    return (value || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  };
+
+  const resolveProductForDescription = (raw: string): ProductData | undefined => {
+    const value = (raw || '').trim();
+    if (!value) return undefined;
+
+    const byCode = products.find((p) => p.codigo && p.codigo.trim() === value);
+    if (byCode) return byCode;
+
+    const needle = normalizeProductText(value);
+    return products.find((p) => normalizeProductText(p.descripcion) === needle);
+  };
+
+  const handleItemDescriptionBlur = (index: number) => {
+    const current = items[index];
+    if (!current) return;
+
+    const found = resolveProductForDescription(current.descripcion);
+    if (!found) return;
+
+    const newItems = [...items];
+    newItems[index] = {
+      ...newItems[index],
+      codigo: found.codigo,
+      descripcion: found.descripcion,
+      precioUni: found.precioUni,
+      uniMedida: found.uniMedida,
+      tipoItem: found.tipoItem,
+    };
+    setItems(newItems);
+    setStockError('');
+  };
+
+  const validateStockNow = async () => {
+    if (items.length === 0) {
+      setStockError('');
+      return;
+    }
+
+    const goodsOnly = items
+      .filter((i) => i.tipoItem === 1)
+      .filter((i) => i.descripcion && i.precioUni > 0)
+      .map((i) => ({
+        codigo: (i.codigo || ''),
+        cantidad: (Number(i.cantidad) || 0) * (Number(i.factorConversion) || 1),
+        descripcion: i.descripcion,
+      }));
+
+    if (goodsOnly.length === 0) {
+      setStockError('');
+      return;
+    }
+
+    const invGoods = goodsOnly.filter((g) => {
+      const code = (g.codigo || '').trim();
+      if (!code) return false;
+      return Boolean(inventarioService.findProductoByCodigo?.(code));
+    });
+    const goodsSinInventarioNuevo = goodsOnly.filter((g) => {
+      const code = (g.codigo || '').trim();
+      if (!code) return true;
+      return !Boolean(inventarioService.findProductoByCodigo?.(code));
+    });
+
+    const invCheck = await validateStockForInventario(invGoods);
+    if (!invCheck.ok) {
+      setStockError(invCheck.message);
+      return;
+    }
+
+    // Validación para productos que no están en el inventario nuevo
+    const r = goodsSinInventarioNuevo.length ? await validateStockForSale(goodsSinInventarioNuevo) : ({ ok: true } as const);
+    setStockError(r.ok ? '' : r.message);
+  };
+
+  useEffect(() => {
+    validateStockNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsParaCalculo.length, itemsParaCalculo.map(i => `${i.codigo ?? ''}|${i.cantidad}`).join('||')]);
+
   const handleSelectReceptor = (client: ClientData) => {
     setSelectedReceptor(client);
     setShowClientSearch(false);
     setClientSearch('');
+
+    const receptorId = (client?.nit || '').replace(/[\s-]/g, '').trim();
+    if (!receptorId && tipoDocumento === '03') {
+      setTipoDocumento('01');
+    }
   };
 
-  const handleGenerateDTE = () => {
+  const handleGenerateDTE = async () => {
     if (!emisor) {
       addToast('Configura los datos del emisor primero', 'error');
       return;
@@ -293,9 +603,144 @@ const FacturaGenerator: React.FC = () => {
       addToast('Selecciona un receptor', 'error');
       return;
     }
+
+    const receptorId = (selectedReceptor.nit || '').replace(/[\s-]/g, '').trim();
+    if (!receptorId && tipoDocumento === '03') {
+      addToast('Consumidor Final no puede emitirse como Crédito Fiscal (03). Cambia el tipo de documento a Factura (01).', 'error');
+      return;
+    }
     if (itemsParaCalculo.length === 0) {
       addToast('Agrega al menos un item', 'error');
       return;
+    }
+
+    if (totales.montoTotal >= 25000) {
+      const receptorId = (selectedReceptor.nit || '').replace(/[\s-]/g, '').trim();
+      if (!receptorId) {
+        addToast('Monto >= $25,000: debes completar los datos del receptor (documento de identificación).', 'error');
+        return;
+      }
+    }
+
+    const goodsOnly = items
+      .filter((i) => i.tipoItem === 1)
+      .filter((i) => i.descripcion && i.precioUni > 0)
+      .map((i) => ({
+        codigo: (i.codigo || ''),
+        cantidad: (Number(i.cantidad) || 0) * (Number(i.factorConversion) || 1),
+        descripcion: i.descripcion,
+      }));
+
+    const invGoods = goodsOnly.filter((g) => {
+      const code = (g.codigo || '').trim();
+      if (!code) return false;
+      return Boolean(inventarioService.findProductoByCodigo?.(code));
+    });
+    const goodsSinInventarioNuevo = goodsOnly.filter((g) => {
+      const code = (g.codigo || '').trim();
+      if (!code) return true;
+      return !Boolean(inventarioService.findProductoByCodigo?.(code));
+    });
+
+    const stockCheck = invGoods.length
+      ? await validateStockForInventario(invGoods)
+      : ({ ok: true } as const);
+    if (!stockCheck.ok) {
+      addToast(stockCheck.message, 'error');
+      setStockError(stockCheck.message);
+      return;
+    }
+
+    // Validación para productos que no están en el inventario nuevo
+    try {
+      const extraCheck = goodsSinInventarioNuevo.length ? await validateStockForSale(goodsSinInventarioNuevo) : ({ ok: true } as const);
+      if (!extraCheck.ok) {
+        addToast(extraCheck.message, 'error');
+        setStockError(extraCheck.message);
+        return;
+      }
+    } catch {
+      addToast('Error validando inventario', 'error');
+      return;
+    }
+
+    // 1) Resolver items sin código (modal inmediato)
+    if (!isRetryAfterResolve) {
+      const goodsWithoutCode = items
+        .map((it, idx) => ({ it, idx }))
+        .filter(({ it }) => it.tipoItem === 1)
+        .filter(({ it }) => !(it.codigo || '').trim())
+        .filter(({ it }) => (it.descripcion || '').trim());
+
+      if (goodsWithoutCode.length > 0) {
+        // Si está habilitado fallback, intentamos autoselección. Si ambiguo, abrimos modal.
+        const settings = ((): { ask: number; auto: number; enabled: boolean } => {
+          try {
+            // settings se cargan dentro del service; pero aquí solo usamos los defaults del modal
+            return { ask: 0.75, auto: 0.9, enabled: true };
+          } catch {
+            return { ask: 0.75, auto: 0.9, enabled: true };
+          }
+        })();
+
+        const toResolve: ResolverItem[] = [];
+
+        for (const { it, idx } of goodsWithoutCode) {
+          const sugerencias = inventarioService.sugerirProductosPorDescripcion(it.descripcion, settings.ask, 5);
+          if (sugerencias.length === 0) {
+            toResolve.push({
+              index: idx,
+              descripcion: it.descripcion,
+              cantidad: it.cantidad,
+              selectedProductoId: '',
+              recordar: true,
+              candidates: [],
+              search: '',
+            });
+            continue;
+          }
+
+          const top = sugerencias[0];
+          // Autoselección solo si score >= autoThreshold y existe código utilizable
+          const codigoTop = inventarioService.getCodigoPreferidoProducto(top.producto);
+          if (top.score >= settings.auto && codigoTop) {
+            // aplicamos automáticamente al formulario para no molestar
+            setItems((prev) => {
+              const next = [...prev];
+              if (next[idx]) {
+                next[idx] = {
+                  ...next[idx],
+                  codigo: codigoTop,
+                  descripcion: top.producto.descripcion,
+                };
+              }
+              return next;
+            });
+            inventarioService.guardarMapeoDescripcionProducto(it.descripcion, top.producto.id);
+            continue;
+          }
+
+          toResolve.push({
+            index: idx,
+            descripcion: it.descripcion,
+            cantidad: it.cantidad,
+            selectedProductoId: '',
+            recordar: true,
+            candidates: sugerencias.map((s) => ({
+              productoId: s.producto.id,
+              label: `${inventarioService.getCodigoPreferidoProducto(s.producto) ? `[${inventarioService.getCodigoPreferidoProducto(s.producto)}] ` : ''}${s.producto.descripcion}`,
+              score: s.score,
+            })),
+            search: '',
+          });
+        }
+
+        if (toResolve.length > 0) {
+          setResolverItems(toResolve);
+          setShowResolveModal(true);
+          return;
+        }
+      }
     }
 
     setIsGenerating(true);
@@ -313,12 +758,93 @@ const FacturaGenerator: React.FC = () => {
       }, correlativo, '00');
 
       setGeneratedDTE(dte);
+      await applySalesFromDTE(dte);
+      const dteInventario = buildInventarioDTEFromGenerated(dte);
+      await inventarioService.aplicarVentaDesdeDTE(dteInventario as any);
       addToast('DTE generado correctamente', 'success');
     } catch (error) {
       addToast('Error al generar DTE', 'error');
     } finally {
       setIsGenerating(false);
+      setIsRetryAfterResolve(false);
     }
+  };
+
+  const confirmarResolucion = () => {
+    // Validar que todos estén resueltos
+    const faltantes = resolverItems.filter((r) => !r.selectedProductoId);
+    if (faltantes.length > 0) {
+      addToast('Selecciona un producto para cada ítem sin código', 'error');
+      return;
+    }
+
+    // Aplicar mapeos + actualizar items
+    setItems((prev) => {
+      const next = [...prev];
+      for (const r of resolverItems) {
+        const producto = inventarioService.getProductoById(r.selectedProductoId);
+        if (!producto) continue;
+        const cod = inventarioService.getCodigoPreferidoProducto(producto);
+        if (!next[r.index]) continue;
+        next[r.index] = {
+          ...next[r.index],
+          codigo: cod,
+          descripcion: producto.descripcion,
+        };
+        if (r.recordar) {
+          inventarioService.guardarMapeoDescripcionProducto(r.descripcion, producto.id);
+        }
+      }
+      return next;
+    });
+
+    setShowResolveModal(false);
+    setResolverItems([]);
+
+    // Reintentar generación automáticamente
+    setIsRetryAfterResolve(true);
+    setTimeout(() => {
+      handleGenerateDTE();
+    }, 0);
+  };
+
+  const handleStripeConnectSuccess = () => {
+    // Después de conectar Stripe y procesar pago
+    setShowStripeConnect(false);
+    setShowTransmision(true);
+  };
+
+  const handleNuevaFactura = () => {
+    // Resetear todo el formulario
+    setItems([{ ...defaultItem }]);
+    setSelectedReceptor(null);
+    setClientSearch('');
+    setGeneratedDTE(null);
+    setShowTransmision(false);
+    setShowStripeConnect(false);
+    setStockError('');
+    setObservaciones('');
+    setFormaPago('01');
+    setCondicionOperacion(1);
+    addToast('Formulario limpiado. Lista para nueva factura', 'info');
+  };
+
+  const handleTransmitir = () => {
+    console.log('Forma de pago seleccionada:', formaPago);
+    console.log('¿Requiere Stripe?', requiereStripe(formaPago));
+    
+    if (requiereStripe(formaPago)) {
+      // Si es pago con tarjeta, mostrar modal de QR para pago
+      setShowQRPayment(true);
+    } else {
+      // Si es efectivo, transmitir directamente
+      console.log('Transmitiendo directamente (efectivo)...');
+      setShowTransmision(true);
+    }
+  };
+
+  const handleSimular = () => {
+    setShowSimulador(true);
   };
 
   const handleCopyJSON = () => {
@@ -340,7 +866,35 @@ const FacturaGenerator: React.FC = () => {
     }
   };
 
+  const receptorIdClean = (selectedReceptor?.nit || '').replace(/[\s-]/g, '').trim();
+  const receptorEsConsumidorFinal = Boolean(selectedReceptor) && !receptorIdClean;
+
+  // Filtrar tipos de documento según el tipo de receptor
+  const tiposDocumentoFiltrados = tiposDocumento.filter(t => {
+    if (receptorEsConsumidorFinal) {
+      // Para consumidor final solo permitir: 01, 02, 10, 11
+      return ['01', '02', '10', '11'].includes(t.codigo);
+    } else {
+      // Para clientes con NIT/NRC permitir todos excepto los de consumidor final
+      return !['02', '10'].includes(t.codigo);
+    }
+  });
+
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  // Resetear tipo de documento cuando cambia el receptor
+  useEffect(() => {
+    if (selectedReceptor) {
+      // Si es consumidor final y el tipo actual no es permitido, cambiar a 01
+      if (receptorEsConsumidorFinal && !['01', '02', '10', '11'].includes(tipoDocumento)) {
+        setTipoDocumento('01');
+      }
+      // Si es cliente con NIT y el tipo actual es 02 o 10, cambiar a 01
+      else if (!receptorEsConsumidorFinal && ['02', '10'].includes(tipoDocumento)) {
+        setTipoDocumento('01');
+      }
+    }
+  }, [selectedReceptor, receptorEsConsumidorFinal, tipoDocumento]);
 
   if (isMobile) {
     return (
@@ -359,6 +913,21 @@ const FacturaGenerator: React.FC = () => {
           />
         )}
 
+        {showSimulador && generatedDTE && (
+          <SimuladorTransmision
+            dte={generatedDTE}
+            onClose={() => setShowSimulador(false)}
+            onSuccess={(res) => {
+              setShowSimulador(false);
+              if (res.success && res.selloRecepcion) {
+                addToast(`Simulación OK. Sello: ${res.selloRecepcion.substring(0, 8)}...`, 'success');
+              } else {
+                addToast('Simulación finalizada con errores.', 'error');
+              }
+            }}
+          />
+        )}
+
         {showQRCapture && (
           <QRClientCapture
             onClose={() => setShowQRCapture(false)}
@@ -373,7 +942,6 @@ const FacturaGenerator: React.FC = () => {
 
         <MobileFactura
           emisor={emisor}
-          onShowQR={() => setShowQRCapture(true)}
           onShowEmisorConfig={() => setShowEmisorConfig(true)}
           onShowTransmision={(dte) => {
             setGeneratedDTE(dte);
@@ -398,6 +966,121 @@ const FacturaGenerator: React.FC = () => {
   return (
     <div className="h-[calc(100vh-180px)] flex flex-col md:h-auto">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+      {/* Resolver items sin código */}
+      {showResolveModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Resolver productos sin código</p>
+                <p className="text-xs text-gray-500">Selecciona el producto correcto para evitar errores de inventario y cumplimiento.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResolveModal(false);
+                  setResolverItems([]);
+                }}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+                title="Cerrar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              {resolverItems.map((r, idx) => (
+                <div key={`${r.index}-${idx}`} className="border border-gray-200 rounded-xl p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{r.descripcion}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Cantidad: <span className="font-mono">{r.cantidad}</span></p>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-gray-600 select-none">
+                      <input
+                        type="checkbox"
+                        checked={r.recordar}
+                        onChange={(e) => {
+                          const v = e.target.checked;
+                          setResolverItems((prev) => prev.map((x) => x.index === r.index ? { ...x, recordar: v } : x));
+                        }}
+                      />
+                      Recordar
+                    </label>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Producto</label>
+                      <select
+                        value={r.selectedProductoId}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setResolverItems((prev) => prev.map((x) => x.index === r.index ? { ...x, selectedProductoId: v } : x));
+                        }}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      >
+                        <option value="">Seleccionar…</option>
+                        {r.candidates.map((c) => (
+                          <option key={c.productoId} value={c.productoId}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                      {r.candidates.length === 0 && (
+                        <p className="text-[10px] text-amber-600 mt-1">No hay candidatos. Crea el producto en Productos o ajusta la descripción.</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Buscar en inventario</label>
+                      <input
+                        type="text"
+                        value={r.search}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const candidatos = inventarioService.buscarProductosFacturacion(v)
+                            .slice(0, 8)
+                            .map((p) => ({
+                              productoId: p.id,
+                              label: `${inventarioService.getCodigoPreferidoProducto(p) ? `[${inventarioService.getCodigoPreferidoProducto(p)}] ` : ''}${p.descripcion}`,
+                              score: 0,
+                            }));
+                          setResolverItems((prev) => prev.map((x) => x.index === r.index ? { ...x, search: v, candidates: v.trim() ? candidatos : x.candidates } : x));
+                        }}
+                        placeholder="Escribe para buscar…"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">Opcional: si no aparece, búscalo manualmente.</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResolveModal(false);
+                  setResolverItems([]);
+                }}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarResolucion}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Transmision Modal */}
       {showTransmision && generatedDTE && (
@@ -409,6 +1092,21 @@ const FacturaGenerator: React.FC = () => {
           }}
           ambiente="00"
           logoUrl={emisor?.logo}
+        />
+      )}
+
+      {showSimulador && generatedDTE && (
+        <SimuladorTransmision
+          dte={generatedDTE}
+          onClose={() => setShowSimulador(false)}
+          onSuccess={(res) => {
+            setShowSimulador(false);
+            if (res.success && res.selloRecepcion) {
+              addToast(`Simulación OK. Sello: ${res.selloRecepcion.substring(0, 8)}...`, 'success');
+            } else {
+              addToast('Simulación finalizada con errores.', 'error');
+            }
+          }}
         />
       )}
 
@@ -446,14 +1144,6 @@ const FacturaGenerator: React.FC = () => {
           <p className="text-sm text-gray-500">Crea documentos tributarios electrónicos</p>
         </div>
         <div className="flex items-center gap-2">
-          <Tooltip content="Capturar cliente via QR" position="bottom">
-            <button
-              onClick={() => setShowQRCapture(true)}
-              className="p-2 rounded-lg transition-colors text-blue-600 bg-blue-50 hover:bg-blue-100"
-            >
-              <QrCode className="w-4 h-4" />
-            </button>
-          </Tooltip>
           <Tooltip
             content={emisor ? 'Datos del emisor configurados' : 'Configura los datos del emisor'}
             position="bottom"
@@ -479,24 +1169,8 @@ const FacturaGenerator: React.FC = () => {
         <div className="col-span-8 bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             
-            {/* Tipo de Documento y Receptor */}
+            {/* Receptor y Tipo de Documento */}
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Tipo de Documento</label>
-                <div className="relative">
-                  <select
-                    value={tipoDocumento}
-                    onChange={(e) => setTipoDocumento(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
-                  >
-                    {tiposDocumento.map(t => (
-                      <option key={t.codigo} value={t.codigo}>{t.codigo} - {t.descripcion}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-
               <div>
                 <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
                   Receptor (Cliente) <span className="text-red-500">*</span>
@@ -532,6 +1206,28 @@ const FacturaGenerator: React.FC = () => {
                         </div>
                       </div>
                       <div className="max-h-48 overflow-y-auto">
+                        <button
+                          onClick={() =>
+                            handleSelectReceptor({
+                              nit: '',
+                              name: 'Consumidor Final',
+                              nrc: '',
+                              nombreComercial: '',
+                              actividadEconomica: '',
+                              descActividad: '',
+                              departamento: '',
+                              municipio: '',
+                              direccion: '',
+                              email: '',
+                              telefono: '',
+                              timestamp: Date.now(),
+                            })
+                          }
+                          className="w-full px-3 py-2 text-left hover:bg-blue-50 transition-colors border-b border-gray-100"
+                        >
+                          <p className="text-sm font-medium text-gray-800 truncate">Consumidor Final</p>
+                          <p className="text-xs text-gray-400">Sin documento</p>
+                        </button>
                         {filteredClients.length === 0 ? (
                           <p className="p-3 text-sm text-gray-400 text-center">Sin resultados</p>
                         ) : (
@@ -550,6 +1246,43 @@ const FacturaGenerator: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
+                  Tipo de Documento
+                  {receptorEsConsumidorFinal && (
+                    <Tooltip content="Para Consumidor Final solo se permiten: Factura (01), Factura Simplificada (02), Tiquetes (10) y Factura de Exportación (11)" position="bottom">
+                      <span className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold cursor-help">
+                        i
+                      </span>
+                    </Tooltip>
+                  )}
+                </label>
+                <div className="relative">
+                  <select
+                    value={tipoDocumento}
+                    onChange={(e) => setTipoDocumento(e.target.value)}
+                    disabled={!selectedReceptor}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                  >
+                    {tiposDocumentoFiltrados.map(t => (
+                      <option
+                        key={t.codigo}
+                        value={t.codigo}
+                      >
+                        {t.codigo} - {t.descripcion}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+
+                {!selectedReceptor && (
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Selecciona receptor para ver documentos disponibles.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -582,34 +1315,75 @@ const FacturaGenerator: React.FC = () => {
                     {items.map((item, idx) => (
                       <tr key={idx} className="hover:bg-gray-50">
                         <td className="px-2 py-2 text-gray-400">{idx + 1}</td>
+                        <td className="px-2 py-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={item.descripcion}
+                              onChange={(e) => handleItemChange(idx, 'descripcion', e.target.value)}
+                              onBlur={() => handleItemDescriptionBlur(idx)}
+                              className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            />
+                            {canUseCatalogoProductos && (
+                              <button
+                                type="button"
+                                onClick={() => openProductPicker(idx)}
+                                className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors whitespace-nowrap"
+                                title="Buscar en catálogo"
+                              >
+                                Catálogo
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              value={item.cantidad}
+                              onChange={(e) => handleItemChange(idx, 'cantidad', parseFloat(e.target.value) || 0)}
+                              className="w-16 px-2 py-1 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                              min="0"
+                              step="0.01"
+                            />
+                            <select
+                              value={(item.unidadVenta || 'UNIDAD').toUpperCase()}
+                              onChange={(e) => {
+                                const unidad = (e.target.value || 'UNIDAD').toUpperCase();
+                                const pres = getPresentacionesForCodigo(item.codigo || '');
+                                const found = pres.find((p) => p.nombre === unidad);
+                                handleItemChange(idx, 'unidadVenta', unidad);
+                                handleItemChange(idx, 'factorConversion', found ? found.factor : 1);
+                              }}
+                              disabled={!(item.codigo || '').trim()}
+                              className="px-2 py-1 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                            >
+                              {getPresentacionesForCodigo(item.codigo || '').map((p) => (
+                                <option key={p.nombre} value={p.nombre}>{p.nombre}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </td>
                         <td className="px-2 py-1">
                           <input
                             type="text"
-                            value={item.descripcion}
-                            onChange={(e) => handleItemChange(idx, 'descripcion', e.target.value)}
-                            placeholder="Descripción del producto/servicio"
-                            className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none"
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <input
-                            type="number"
-                            value={item.cantidad}
-                            onChange={(e) => handleItemChange(idx, 'cantidad', parseFloat(e.target.value) || 0)}
-                            min="0"
-                            step="0.01"
-                            className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-center focus:ring-1 focus:ring-blue-500 outline-none"
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <input
-                            type="number"
-                            value={item.precioUni}
-                            onChange={(e) => handleItemChange(idx, 'precioUni', parseFloat(e.target.value) || 0)}
-                            min="0"
-                            step="0.01"
+                            inputMode="decimal"
+                            value={item.precioUniRaw ?? Number(item.precioUni || 0).toFixed(2)}
+                            onChange={(e) => handlePrecioUniChange(idx, e.target.value)}
+                            onBlur={() => handlePrecioUniBlur(idx)}
                             className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right focus:ring-1 focus:ring-blue-500 outline-none"
                           />
+                          {(() => {
+                            const code = (item.codigo || '').trim();
+                            if (!code) return null;
+                            const stock = getStockDisplayForCodigo(code);
+                            if (stock === null) return null;
+                            return (
+                              <p className="mt-1 text-[10px] text-gray-400 text-center">
+                                Stock: {Number(stock).toFixed(2)}
+                              </p>
+                            );
+                          })()}
                         </td>
                         <td className="px-2 py-2 text-right font-mono text-gray-700">
                           ${redondear(item.cantidad * item.precioUni, 2).toFixed(2)}
@@ -692,9 +1466,14 @@ const FacturaGenerator: React.FC = () => {
 
           {/* Actions */}
           <div className="p-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-2">
+            {stockError && (
+              <div className="mr-auto text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">
+                {stockError}
+              </div>
+            )}
             <button
               onClick={handleGenerateDTE}
-              disabled={isGenerating || !emisor || !selectedReceptor}
+              disabled={isGenerating || !emisor || !selectedReceptor || !!stockError}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? (
@@ -702,7 +1481,14 @@ const FacturaGenerator: React.FC = () => {
               ) : (
                 <FileText className="w-4 h-4" />
               )}
-              Generar DTE
+              {generatedDTE ? 'Actualizar DTE' : 'Generar DTE'}
+            </button>
+            <button
+              onClick={handleNuevaFactura}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Nueva Factura
             </button>
           </div>
         </div>
@@ -786,13 +1572,61 @@ const FacturaGenerator: React.FC = () => {
                   <Eye className="w-4 h-4" />
                   Ver Detalles
                 </button>
+                
                 <button
-                  onClick={() => setShowTransmision(true)}
+                  onClick={handleTransmitir}
                   className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors"
                 >
                   <FileText className="w-4 h-4" />
-                  Transmitir a Hacienda
+                  {requiereStripe(formaPago) ? 'Cobrar con Tarjeta' : 'Transmitir a Hacienda'}
                 </button>
+                
+                <button
+                  onClick={handleSimular}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium transition-colors"
+                >
+                  <Zap className="w-4 h-4" />
+                  Simular Transmisión
+                </button>
+                
+                {generatedDTE && (
+                  <button
+                    onClick={() => {
+                      if (confirm('¿Eliminar DTE generado? Esto restaurará el inventario.')) {
+                        (async () => {
+                          try {
+                            // Inventario (IndexedDB)
+                            const invDb = await revertSalesFromDTE(generatedDTE);
+                            if (!invDb.ok) {
+                              console.warn('No se pudo revertir inventario (IndexedDB):', invDb.message);
+                            }
+
+                            // Inventario simplificado
+                            const docRef = (generatedDTE?.identificacion?.numeroControl || '').toString().trim();
+                            if (docRef) {
+                              const simp = await inventarioService.revertirVentaPorDocumentoReferencia(docRef);
+                              if (!simp.ok) {
+                                console.warn('No se pudo revertir inventario simplificado:', simp.message);
+                              }
+                            }
+                          } catch (e) {
+                            console.error('Error revirtiendo inventario:', e);
+                          } finally {
+                            setGeneratedDTE(null);
+                            setShowTransmision(false);
+                            setShowStripeConnect(false);
+                            setShowQRPayment(false);
+                            addToast('DTE eliminado. Inventario restaurado.', 'info');
+                          }
+                        })();
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Eliminar DTE
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -993,7 +1827,7 @@ const FacturaGenerator: React.FC = () => {
                         <button
                           onClick={handleValidateCertificate}
                           disabled={isValidatingCert}
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                         >
                           {isValidatingCert ? 'Validando…' : 'Validar certificado'}
                         </button>
@@ -1047,6 +1881,107 @@ const FacturaGenerator: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {canUseCatalogoProductos && showProductPicker && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">Seleccionar producto</p>
+                <p className="text-xs text-gray-500">Busca por código o descripción</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowProductPicker(false)}
+                className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="p-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="Ej: 14848 o TOMA ADAPTADOR..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div className="mt-3 max-h-80 overflow-y-auto border border-gray-100 rounded-xl">
+                {filteredProductsForPicker.length === 0 ? (
+                  <div className="p-6 text-sm text-gray-400 text-center">Sin resultados</div>
+                ) : (
+                  filteredProductsForPicker.slice(0, 200).map((p) => (
+                    <button
+                      key={p.id ?? p.key}
+                      type="button"
+                      onClick={() => {
+                        const idx = productPickerIndex;
+                        if (typeof idx === 'number') {
+                          applyProductToItem(idx, p);
+                        }
+                        setShowProductPicker(false);
+                      }}
+                      className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">{p.descripcion}</p>
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">
+                            {p.codigo ? `Código: ${p.codigo}` : 'Sin código'}
+                          </p>
+                        </div>
+                        <div className="text-right whitespace-nowrap">
+                          <p className="text-sm font-mono text-gray-900">${p.precioUni.toFixed(2)}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              {filteredProductsForPicker.length > 200 && (
+                <p className="mt-2 text-xs text-gray-400">Mostrando 200 resultados. Refina tu búsqueda.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal: QR Payment */}
+      {showQRPayment && generatedDTE && (
+        <QRPaymentModal
+          isOpen={showQRPayment}
+          onClose={() => setShowQRPayment(false)}
+          totalAmount={Number(generatedDTE.resumen?.totalPagar || 0)}
+          dteJson={generatedDTE}
+          sellerInfo={{
+            businessName: (emisor as any)?.nombreComercial || (emisor as any)?.nombre || '',
+            name: (emisor as any)?.nombre || ''
+          }}
+          onPaymentGenerated={(checkoutUrl, sessionId) => {
+            console.log('Pago generado:', { checkoutUrl, sessionId });
+            // Aquí puedes manejar el seguimiento del pago
+          }}
+        />
+      )}
+      
+      {/* Modal: Stripe Connect */}
+      {showStripeConnect && generatedDTE && (
+        <StripeConnectModal
+          isOpen={showStripeConnect}
+          onClose={() => setShowStripeConnect(false)}
+          onSuccess={handleStripeConnectSuccess}
+          clienteId={String((emisor as any)?.nit || '')}
+          clienteNombre={String((emisor as any)?.nombreComercial || (emisor as any)?.nombre || '')}
+          totalVenta={Number(totales.subTotalVentas || 0)}
+        />
       )}
     </div>
   );

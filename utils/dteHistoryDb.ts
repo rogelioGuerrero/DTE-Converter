@@ -37,10 +37,43 @@ export interface DTEHistoryRecord {
   // Metadatos
   fechaTransmision: string;
   ambiente: '00' | '01';
+
+  // Anulación local (cuando aún no existe integración real con MH)
+  anulacionLocal?: {
+    at: string; // ISO
+    motivo?: string;
+  };
   
   // Para búsqueda
   searchText: string; // Concatenación de campos para búsqueda rápida
 }
+
+export const marcarAnulacionLocal = async (params: {
+  codigoGeneracion: string;
+  motivo?: string;
+  anulada: boolean;
+}): Promise<{ ok: true } | { ok: false; message: string }> => {
+  try {
+    const db = await openHistoryDb();
+    const registro = await db.getFromIndex(STORE_NAME, 'codigoGeneracion', params.codigoGeneracion);
+    if (!registro?.id) return { ok: false, message: 'DTE no encontrado en historial' };
+
+    const updated: DTEHistoryRecord = {
+      ...registro,
+      anulacionLocal: params.anulada
+        ? {
+            at: new Date().toISOString(),
+            motivo: (params.motivo || '').trim() || undefined,
+          }
+        : undefined,
+    };
+
+    await db.put(STORE_NAME, updated);
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, message: e?.message || 'No se pudo actualizar el historial' };
+  }
+};
 
 export interface DTEHistoryFilter {
   fechaDesde?: string;

@@ -94,9 +94,9 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
   };
 
   const handleDownload = async (month: string) => {
-    const slot = consumeExportSlot();
+    const slot = await consumeExportSlot();
     if (!slot.allowed) {
-      notify('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com', 'error');
+      notify(slot.message || 'No se puede exportar. Límite alcanzado.', 'error');
       return;
     }
 
@@ -124,10 +124,10 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
     downloadCSV(content, fileName);
   };
 
-  const handleBulkDownload = () => {
-      const slot = consumeExportSlot();
+  const handleBulkDownload = async () => {
+      const slot = await consumeExportSlot();
       if (!slot.allowed) {
-        notify('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com', 'error');
+        notify(slot.message || 'No se puede exportar. Límite alcanzado.', 'error');
         return;
       }
 
@@ -305,6 +305,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
                 <tbody className="divide-y divide-gray-50">
                   {filesToDisplay.map((file, idx) => {
                     const isSelected = selectedIds.has(file.id);
+                    const isOutOfTime = appMode === 'compras' && file.isOutOfTime;
                     return (
                         <tr 
                         key={`${month}-${file.id}`}
@@ -317,6 +318,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
                             ${isSelected ? 'bg-indigo-50/60' : 'bg-white hover:bg-gray-50'}
                             ${draggedItemIndex === idx && activeDragMonth === month ? 'opacity-50 bg-indigo-100' : ''}
                             ${dragOverItemIndex === idx && activeDragMonth === month ? 'border-t-2 border-indigo-500' : ''}
+                            ${isOutOfTime ? 'border-l-4 border-red-500 bg-red-50/30' : ''}
                         `}
                         >
                         <td className="px-4 py-4 text-center">
@@ -338,6 +340,12 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
                         <td className="px-6 py-4 text-right font-bold text-gray-700">${file.data.total}</td>
                         <td className="px-6 py-4 text-xs text-gray-400 truncate max-w-[150px]" title={file.fileName}>{file.fileName}</td>
                         <td className="px-6 py-4 text-center">
+                            {isOutOfTime && (
+                                <div className="flex items-center justify-center" title="Fuera del plazo de declaración (más de 3 meses)">
+                                    <AlertTriangle className="w-4 h-4 text-red-500 mr-2" />
+                                    <span className="text-xs text-red-600 font-medium">Fuera de tiempo</span>
+                                </div>
+                            )}
                             <button 
                                 onClick={() => setSelectedFile(file)}
                                 className="text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-md transition-all"

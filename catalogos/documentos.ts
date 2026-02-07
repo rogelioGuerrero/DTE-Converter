@@ -14,13 +14,15 @@ export interface CatalogoItemNum {
 // CAT-002: Tipo de Documento
 export const tiposDocumento: CatalogoItem[] = [
   { codigo: '01', descripcion: 'Factura Electrónica (FE)' },
+  { codigo: '02', descripcion: 'Factura de Venta Simplificada (FVS)' },
   { codigo: '03', descripcion: 'Comprobante de Crédito Fiscal Electrónico (CCFE)' },
   { codigo: '04', descripcion: 'Nota de Remisión Electrónica (NRE)' },
   { codigo: '05', descripcion: 'Nota de Crédito Electrónica (NCE)' },
   { codigo: '06', descripcion: 'Nota de Débito Electrónica (NDE)' },
   { codigo: '07', descripcion: 'Comprobante de Retención Electrónico (CRE)' },
   { codigo: '08', descripcion: 'Comprobante de Liquidación Electrónico (CLE)' },
-  { codigo: '09', descripcion: 'Documento Contable de Liquidación Electrónico (DCLE)' },
+  { codigo: '09', descripcion: 'Documento Contable de Liquidación Electrónica (DCLE)' },
+  { codigo: '10', descripcion: 'Tiquetes de Máquina Registradora' },
   { codigo: '11', descripcion: 'Factura de Exportación Electrónica (FEXE)' },
   { codigo: '14', descripcion: 'Factura de Sujeto Excluido Electrónica (FSEE)' },
   { codigo: '15', descripcion: 'Comprobante de Donación Electrónico (CDE)' },

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Lock, Key, Eye, EyeOff, Save, HelpCircle } from 'lucide-react';
-import Tooltip from './Tooltip';
+import { Lock, Save, Settings, Shield, RefreshCw, HelpCircle, X, Key } from 'lucide-react';
 import { loadSettings, saveSettings, AppSettings } from '../utils/settings';
-import { NitOrDuiField, NrcField } from './formularios';
+import { setUserMode, UserMode, getUserModeConfig } from '../utils/userMode';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -13,7 +12,8 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
   const [settings, setSettings] = useState<AppSettings>(loadSettings());
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState('');
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [currentUserMode, setCurrentUserMode] = useState<UserMode>(getUserModeConfig().mode);
+  const [activeTab, setActiveTab] = useState('general');
   const [error, setError] = useState('');
   
   // Reset state when modal opens
@@ -23,16 +23,12 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
       setIsAuthenticated(false);
       setPinInput('');
       setError('');
+      setActiveTab('general');
     }
   }, [isOpen]);
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Default PIN check (1321) or stored PIN if we allowed changing it
-    // The user requested checking against "1321" or allowing the user to set it?
-    // "pedir un código de 4 dígitos para validar, que sería 1321" implies the validation code is 1321.
-    // However, storing the PIN in settings allows changing it later if we implement that.
-    // For now, let's validate against the stored PIN (which defaults to 1321).
     if (pinInput === settings.pin) {
       setIsAuthenticated(true);
       setError('');
@@ -45,6 +41,11 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
     saveSettings(settings);
     onClose();
   };
+
+  const tabs = [
+    { id: 'general', label: 'General', icon: Settings },
+    { id: 'licencias', label: 'Licencias', icon: Shield }
+  ];
 
   if (!isOpen) return null;
 
@@ -85,8 +86,8 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                     setError('');
                   }}
                   className="w-full text-center text-2xl tracking-widest font-mono py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                  placeholder="••••"
-                  maxLength={4}
+                  placeholder="••••••"
+                  maxLength={10}
                   autoFocus
                 />
                 {error && <p className="text-xs text-red-500 text-center mt-2">{error}</p>}
@@ -100,123 +101,123 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
               </button>
             </form>
           ) : (
-            <div className="space-y-6">
-               
-               {/* API Configuration */}
-               <div className="space-y-3">
-                 <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Integración IA</h4>
-                 <div>
-                    <div className="flex items-center gap-1 mb-1">
-                      <label className="block text-sm font-medium text-gray-700">Google Gemini API Key</label>
-                      <Tooltip content="Obtén tu API Key gratis en ai.google.dev" position="right">
-                        <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help" />
-                      </Tooltip>
-                    </div>
-                    <div className="relative">
-                        <input
-                            type={showApiKey ? "text" : "password"}
-                            value={settings.apiKey}
-                            onChange={(e) => setSettings({...settings, apiKey: e.target.value})}
-                            placeholder="AIzaSy..."
-                            className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setShowApiKey(!showApiKey)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                            {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                    </div>
-                    <p className="text-[10px] text-gray-400 mt-1">
-                        Necesaria para el funcionamiento del OCR. Se guarda localmente.
-                    </p>
-                 </div>
-               </div>
+            <div className="space-y-4">
+              {/* Tabs Navigation */}
+              <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                        activeTab === tab.id
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span className="hidden sm:inline">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
-               <hr className="border-gray-100" />
-
-               {/* My Company Configuration */}
-               <div className="space-y-3">
-                 <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Datos de mi Empresa</h4>
-                 
-                 <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <div className="flex items-center gap-1 mb-1">
-                          <label className="block text-sm font-medium text-gray-700">Mi NIT / DUI</label>
-                          <Tooltip content="Se usa para detectar si un DTE es compra o venta" position="top">
-                            <HelpCircle className="w-3 h-3 text-gray-400 cursor-help" />
-                          </Tooltip>
-                        </div>
-                        <NitOrDuiField
-                            label={null}
-                            value={settings.myNit}
-                            onChange={(myNit) => setSettings({ ...settings, myNit })}
-                            placeholder="02453099-6"
-                            messageVariant="none"
-                            colorMode="blue"
-                            tone="neutral"
-                            inputClassName="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
-                        />
-                        <p className="text-[10px] text-gray-400 mt-1">9 dígitos (DUI) ó 14 dígitos (NIT)</p>
+              {/* Tab Content */}
+              <div className="min-h-[300px]">
+                {activeTab === 'general' && (
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-semibold text-gray-700">PIN de Acceso</h4>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-600">
+                        PIN actual: <span className="font-mono font-bold">@1321rg</span>
+                      </p>
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        El PIN es fijo por seguridad. Para cambiarlo, modifica el código fuente.
+                      </p>
                     </div>
-                    <div>
-                        <div className="flex items-center gap-1 mb-1">
-                          <label className="block text-sm font-medium text-gray-700">Mi NRC</label>
-                          <Tooltip content="Alternativa al NIT para identificar tu empresa" position="top">
-                            <HelpCircle className="w-3 h-3 text-gray-400 cursor-help" />
-                          </Tooltip>
-                        </div>
-                        <NrcField
-                            label={null}
-                            value={settings.myNrc}
-                            onChange={(myNrc) => setSettings({ ...settings, myNrc })}
-                            placeholder="1571266"
-                            messageVariant="none"
-                            colorMode="blue"
-                            tone="neutral"
-                            inputClassName="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
-                        />
-                        <p className="text-[10px] text-gray-400 mt-1">6-8 dígitos</p>
-                    </div>
-                 </div>
+                  </div>
+                )}
 
-                 {/* Auto-Detection Checkbox */}
-                 <div className="mt-4">
-                    <label className="flex items-start gap-3 cursor-pointer group">
-                       <input
-                          type="checkbox"
-                          checked={settings.useAutoDetection}
-                          disabled={!settings.myNit && !settings.myNrc}
-                          onChange={(e) => setSettings({ ...settings, useAutoDetection: e.target.checked })}
-                          className="mt-0.5 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                       />
-                       <div className="flex-1">
-                          <span className={`text-sm font-medium ${(!settings.myNit && !settings.myNrc) ? 'text-gray-400' : 'text-gray-700 group-hover:text-gray-900'}`}>
-                             Detección automática
-                          </span>
-                          <p className="text-[10px] text-gray-500 mt-0.5">
-                             Detecta ventas/compras según tu NIT/NRC
+                {activeTab === 'licencias' && (
+                  <div className="space-y-4">
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-semibold text-gray-700">Gestión de Licencias</h4>
+                      <div>
+                        <label className="flex items-start gap-3 cursor-pointer group">
+                          <input
+                            type="checkbox"
+                            checked={settings.licensingEnabled}
+                            onChange={(e) => setSettings({ ...settings, licensingEnabled: e.target.checked })}
+                            className="mt-0.5 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+                              Activar Licenciamiento
+                            </span>
+                            <p className="text-[10px] text-gray-500 mt-0.5">
+                              Controla el acceso a funcionalidades premium mediante licencias
+                            </p>
+                            <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                              <HelpCircle className="w-3 h-3" />
+                              Desactivar esto permite uso ilimitado (solo para desarrollo/pruebas)
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                    
+                    {settings.licensingEnabled && (
+                      <div className="space-y-3 pt-4 border-t border-gray-100">
+                        <h4 className="text-sm font-semibold text-gray-700">Modo de Usuario</h4>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Usuario</label>
+                          <select
+                            value={currentUserMode}
+                            onChange={(e) => {
+                              const newMode = e.target.value as UserMode;
+                              setCurrentUserMode(newMode);
+                              setUserMode(newMode);
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                          >
+                            <option value="profesional">Profesional (acceso completo)</option>
+                            <option value="negocio">Negocio / Tienda (solo facturación)</option>
+                          </select>
+                          <p className="text-[10px] text-gray-500 mt-1">
+                            Cambia las pestañas visibles según el tipo de usuario
                           </p>
-                          {(!settings.myNit && !settings.myNrc) && (
-                             <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
-                                <HelpCircle className="w-3 h-3" />
-                                Requiere NIT o NRC
-                             </p>
-                          )}
-                       </div>
-                    </label>
-                 </div>
-               </div>
+                          <button
+                            onClick={() => window.location.reload()}
+                            className="mt-2 flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            Recargar para aplicar cambios
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-               <button
+                </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
                   onClick={handleSave}
-                  className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-xl font-medium hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
-               >
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                >
                   <Save className="w-4 h-4" />
                   Guardar Cambios
-               </button>
-
+                </button>
+              </div>
             </div>
           )}
         </div>

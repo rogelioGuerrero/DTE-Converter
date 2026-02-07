@@ -21,6 +21,14 @@ export const formasPago: CatalogoItem[] = [
   { codigo: '99', descripcion: 'Otros' },
 ];
 
+// Formas de pago que requieren procesamiento Stripe
+export const formasPagoStripe = ['03', '04']; // Tarjeta de Crédito y Débito
+
+// Verificar si una forma de pago requiere Stripe
+export const requiereStripe = (formaPago: string): boolean => {
+  return formasPagoStripe.includes(formaPago);
+};
+
 // CAT-018: Plazo
 export const plazos: CatalogoItem[] = [
   { codigo: '01', descripcion: 'Días' },

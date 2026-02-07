@@ -1,15 +1,23 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import BatchDashboard from './components/BatchDashboard';
 import ClientManager from './components/ClientManager';
+import SistemaInventario from './components/inventario/SistemaInventario';
 import FacturaGenerator from './components/FacturaGenerator';
 import DTEDashboard from './components/DTEDashboard';
 import AdminModal from './components/AdminModal';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import ClientFormPage from './components/ClientFormPage';
 import GlobalToastHost from './components/GlobalToastHost';
-import { LayoutDashboard, Users, FileText, CheckCircle, History } from 'lucide-react';
+import { LicenseManager } from './components/LicenseManager';
+import { LicenseStatus } from './components/LicenseStatus';
+import { UserModeSetup } from './components/UserModeSetup';
+import { NavigationTabs } from './components/NavigationTabs';
+import { licenseValidator } from './utils/licenseValidator';
+import { LayoutDashboard, CheckCircle, Download } from 'lucide-react';
+import { downloadBackup, restoreBackupFromText } from './utils/backup';
+import { notify } from './utils/notifications';
 
-type AppTab = 'batch' | 'clients' | 'factura' | 'historial';
+type AppTab = 'batch' | 'clients' | 'products' | 'inventory' | 'factura' | 'historial';
 
 // Detectar si estamos en la pagina publica del cliente
 const isClientFormPage = (): boolean => {
@@ -32,10 +40,49 @@ const App: React.FC = () => {
     );
   }
 
-  const [activeTab, setActiveTab] = useState<AppTab>('clients');
+  const [activeTab, setActiveTab] = useState<AppTab>('factura');
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showLicenseManager, setShowLicenseManager] = useState(false);
+  const [showUserModeSetup, setShowUserModeSetup] = useState(false);
+  const [showBackupMenu, setShowBackupMenu] = useState(false);
+  // TODO: Implementar modal de restauración
+  // const [showRestoreModal, setShowRestoreModal] = useState(false);
   const clickCountRef = useRef(0);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restoreFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Verificar si es primera vez que se usa la app
+  useEffect(() => {
+    const hasCompletedSetup = localStorage.getItem('dte_setup_completed');
+    if (!hasCompletedSetup) {
+      setShowUserModeSetup(true);
+    }
+  }, []);
+
+  // Inicializar licencia al cargar la app
+  useEffect(() => {
+    licenseValidator.loadLicenseFromStorage();
+  }, []);
+
+  // Compatibilidad: si alguien quedó en la pestaña antigua de Productos, redirigir a Inventario
+  useEffect(() => {
+    if (activeTab === 'products') setActiveTab('inventory');
+  }, [activeTab]);
+
+  // Cerrar dropdown de backup al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showBackupMenu) {
+        const target = event.target as Element;
+        if (!target.closest('.backup-dropdown')) {
+          setShowBackupMenu(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showBackupMenu]);
 
   const handleLogoClick = () => {
     clickCountRef.current += 1;
@@ -48,6 +95,50 @@ const App: React.FC = () => {
       setShowAdminModal(true);
     }
   };
+
+  const handleSetupComplete = () => {
+    localStorage.setItem('dte_setup_completed', 'true');
+    setShowUserModeSetup(false);
+  };
+
+  const handleExportBackup = () => {
+    setShowBackupMenu(false);
+    (async () => {
+      try {
+        await downloadBackup();
+        notify('Backup descargado', 'success');
+      } catch (e: any) {
+        notify(e?.message || 'No se pudo descargar el backup', 'error');
+      }
+    })();
+  };
+
+  const handleRestoreBackup = () => {
+    setShowBackupMenu(false);
+    const ok = confirm('Restaurar un backup reemplazará los datos locales (inventario, clientes, historial y configuración). ¿Continuar?');
+    if (!ok) return;
+    restoreFileInputRef.current?.click();
+  };
+
+  const handleRestoreBackupFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      await restoreBackupFromText(text);
+      notify('Backup restaurado. Recargando...', 'success');
+      setTimeout(() => window.location.reload(), 400);
+    } catch (e: any) {
+      notify(e?.message || 'No se pudo restaurar el backup', 'error');
+    }
+  };
+
+  // Si está en modo setup, mostrar pantalla completa
+  if (showUserModeSetup) {
+    return <UserModeSetup onComplete={handleSetupComplete} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50/50 flex flex-col font-sans text-slate-900">
@@ -76,50 +167,73 @@ const App: React.FC = () => {
           
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center p-1 bg-gray-100/80 rounded-xl">
-             <button 
-               onClick={() => setActiveTab('batch')}
-               className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === 'batch' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-             >
-               <LayoutDashboard className="w-4 h-4" />
-               <span>Libros IVA</span>
-             </button>
-             <button 
-               onClick={() => setActiveTab('clients')}
-               className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === 'clients' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-             >
-               <Users className="w-4 h-4" />
-               <span>Clientes</span>
-             </button>
-             <button 
-               onClick={() => setActiveTab('factura')}
-               className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === 'factura' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-             >
-               <FileText className="w-4 h-4" />
-               <span>Facturar</span>
-             </button>
-             <button 
-               onClick={() => setActiveTab('historial')}
-               className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === 'historial' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-             >
-               <History className="w-4 h-4" />
-               <span>Historial</span>
-             </button>
+            <NavigationTabs 
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              isMobile={false}
+            />
           </nav>
           
           {/* Mobile: Current tab indicator */}
           <div className="md:hidden text-sm font-medium text-gray-600">
             {activeTab === 'batch' && 'Libros IVA'}
             {activeTab === 'clients' && 'Clientes'}
+            {activeTab === 'inventory' && 'Inventario'}
             {activeTab === 'factura' && 'Facturar'}
             {activeTab === 'historial' && 'Historial'}
+          </div>
+          
+          {/* Right Actions */}
+          <div className="flex items-center gap-2">
+            {/* Backup Button */}
+            <div className="relative backup-dropdown">
+              <input
+                ref={restoreFileInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={handleRestoreBackupFile}
+              />
+              <button
+                onClick={() => setShowBackupMenu(!showBackupMenu)}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Backup</span>
+              </button>
+              
+              {/* Backup Dropdown */}
+              {showBackupMenu && (
+                <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[200px] z-50">
+                  <button
+                    onClick={handleExportBackup}
+                    className="w-full px-4 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Descargar Backup
+                  </button>
+                  <button
+                    onClick={handleRestoreBackup}
+                    className="w-full px-4 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Restaurar Backup
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content Area - with bottom padding for mobile nav */}
       <main className="flex-grow px-3 sm:px-6 lg:px-8 py-4 md:py-10 pb-20 md:pb-10">
+        <LicenseStatus onManageLicense={() => setShowLicenseManager(true)} />
         {activeTab === 'batch' && <BatchDashboard />}
         {activeTab === 'clients' && <ClientManager />}
+        {activeTab === 'inventory' && <SistemaInventario />}
         {activeTab === 'factura' && <FacturaGenerator />}
         {activeTab === 'historial' && <DTEDashboard />}
       </main>
@@ -127,42 +241,11 @@ const App: React.FC = () => {
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
         <div className="flex items-center justify-around h-16">
-          <button
-            onClick={() => setActiveTab('batch')}
-            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-              activeTab === 'batch' ? 'text-indigo-600' : 'text-gray-400'
-            }`}
-          >
-            <LayoutDashboard className={`w-5 h-5 ${activeTab === 'batch' ? 'scale-110' : ''} transition-transform`} />
-            <span className="text-[10px] mt-1 font-medium">Libros</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('clients')}
-            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-              activeTab === 'clients' ? 'text-blue-600' : 'text-gray-400'
-            }`}
-          >
-            <Users className={`w-5 h-5 ${activeTab === 'clients' ? 'scale-110' : ''} transition-transform`} />
-            <span className="text-[10px] mt-1 font-medium">Clientes</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('factura')}
-            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-              activeTab === 'factura' ? 'text-green-600' : 'text-gray-400'
-            }`}
-          >
-            <FileText className={`w-5 h-5 ${activeTab === 'factura' ? 'scale-110' : ''} transition-transform`} />
-            <span className="text-[10px] mt-1 font-medium">Facturar</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('historial')}
-            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-              activeTab === 'historial' ? 'text-purple-600' : 'text-gray-400'
-            }`}
-          >
-            <History className={`w-5 h-5 ${activeTab === 'historial' ? 'scale-110' : ''} transition-transform`} />
-            <span className="text-[10px] mt-1 font-medium">Historial</span>
-          </button>
+          <NavigationTabs 
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            isMobile={true}
+          />
         </div>
       </nav>
 
@@ -195,6 +278,15 @@ const App: React.FC = () => {
         </div>
       </footer>
       <AdminModal isOpen={showAdminModal} onClose={() => setShowAdminModal(false)} />
+      {showLicenseManager && (
+        <LicenseManager 
+          onClose={() => setShowLicenseManager(false)}
+          onLicenseValid={() => {
+            // Opcional: recargar componentes o actualizar estado
+            window.location.reload();
+          }}
+        />
+      )}
       <PWAInstallPrompt />
       <GlobalToastHost />
     </div>

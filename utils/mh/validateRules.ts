@@ -17,6 +17,18 @@ export const validateDteRules = (dte: DTEJSON): ErrorValidacionMH[] => {
     }
   }
 
+  if (dte.receptor.tipoDocumento === null) {
+    if (dte.receptor.numDocumento !== null) {
+      errores.push({
+        codigo: 'RULE-0001B',
+        campo: 'receptor.numDocumento',
+        descripcion: 'receptor.tipoDocumento=null requiere receptor.numDocumento=null',
+        severidad: 'ERROR',
+      });
+    }
+    return errores;
+  }
+
   if (dte.receptor.tipoDocumento === '13' && dte.receptor.numDocumento && dte.receptor.numDocumento.length !== 9) {
     errores.push({
       codigo: 'RULE-0002',

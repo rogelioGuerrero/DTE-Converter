@@ -2,7 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Loader2, Save, Search, Users, Trash2, 
   Download, FileUp, Plus, Edit3, Building2,
-  ScanLine
+  ScanLine,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { 
   addClient, getClients, deleteClient, updateClient, exportClients, importClients, ClientData 
@@ -36,6 +38,7 @@ interface FormData {
   direccion: string;
   email: string;
   telefono: string;
+  esConsumidorFinal: boolean;
 }
 
 const emptyForm: FormData = {
@@ -50,6 +53,7 @@ const emptyForm: FormData = {
   direccion: '',
   email: '',
   telefono: '',
+  esConsumidorFinal: false,
 };
 
 const ClientManager: React.FC = () => {
@@ -60,13 +64,68 @@ const ClientManager: React.FC = () => {
   const [formData, setFormData] = useState<FormData>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessingOCR, setIsProcessingOCR] = useState(false);
+  const [importMode, setImportMode] = useState<'ventas' | 'compras'>('ventas');
+  const [clientsViewMode, setClientsViewMode] = useState<'list' | 'cards'>('list');
+  const [clientsGroupMode, setClientsGroupMode] = useState<'none' | 'az' | 'tipo' | 'departamento'>('none');
+  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(360);
+  const [isResizingPanels, setIsResizingPanels] = useState(false);
+  const [mobilePane, setMobilePane] = useState<'list' | 'detail'>('list');
   
   const { toasts, addToast, removeToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const panelsContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadClients();
+  }, []);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('clients_left_panel_width');
+      if (stored) {
+        const val = parseInt(stored, 10);
+        if (!Number.isNaN(val)) setLeftPanelWidth(val);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingPanels) return;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!panelsContainerRef.current) return;
+      const rect = panelsContainerRef.current.getBoundingClientRect();
+      const raw = ev.clientX - rect.left;
+      const min = 280;
+      const max = 520;
+      const next = Math.min(max, Math.max(min, raw));
+      setLeftPanelWidth(next);
+    };
+
+    const onMouseUp = () => {
+      setIsResizingPanels(false);
+      try {
+        localStorage.setItem('clients_left_panel_width', String(leftPanelWidth));
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [isResizingPanels, leftPanelWidth]);
+
+  useEffect(() => {
+    if (!importInputRef.current) return;
+    importInputRef.current.setAttribute('webkitdirectory', '');
+    importInputRef.current.setAttribute('directory', '');
   }, []);
 
   const loadClients = async () => {
@@ -78,6 +137,24 @@ const ClientManager: React.FC = () => {
     }
   };
 
+  const handleDeleteAllClients = async () => {
+    if (clients.length === 0) return;
+    const ok = window.confirm('¿Deseas borrar todos los clientes? Esta acción no se puede deshacer.');
+    if (!ok) return;
+
+    try {
+      const { clearClients } = await import('../utils/clientDb');
+      await clearClients();
+      await loadClients();
+      setSelectedClient(null);
+      setFormData(emptyForm);
+      setIsEditing(false);
+      addToast('Clientes eliminados', 'info');
+    } catch {
+      addToast('Error al borrar clientes', 'error');
+    }
+  };
+
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
     client.nit.includes(clientSearch) ||
@@ -85,18 +162,56 @@ const ClientManager: React.FC = () => {
     client.nombreComercial?.toLowerCase().includes(clientSearch.toLowerCase())
   );
 
+  const groupedClients = React.useMemo(() => {
+    const getGroupKey = (client: ClientData): string => {
+      if (clientsGroupMode === 'az') {
+        const v = (client.name || '').trim();
+        return v ? v[0].toUpperCase() : '#';
+      }
+      if (clientsGroupMode === 'tipo') {
+        return client.nrc ? 'Contribuyentes' : 'Consumidor final';
+      }
+      if (clientsGroupMode === 'departamento') {
+        return (client.departamento || '').trim() || 'Sin departamento';
+      }
+      return 'Todos';
+    };
+
+    const map = filteredClients.reduce((acc, client) => {
+      const key = getGroupKey(client);
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(client);
+      return acc;
+    }, {} as Record<string, ClientData[]>);
+
+    const sortKeys = (keys: string[]) => {
+      if (clientsGroupMode === 'none') return keys;
+      if (clientsGroupMode === 'tipo') {
+        const order = ['Contribuyentes', 'Consumidor final'];
+        return keys.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+      }
+      return keys.sort((a, b) => a.localeCompare(b, 'es'));
+    };
+
+    return sortKeys(Object.keys(map)).map((key) => ({
+      key,
+      clients: map[key]
+    }));
+  }, [filteredClients, clientsGroupMode]);
+
   // Validaciones
   const nitValidation = validateNIT(formData.nit);
   const nrcValidation = validateNRC(formData.nrc);
   const phoneValidation = validatePhone(formData.telefono);
   const emailValidation = validateEmail(formData.email);
 
-  const isFormValid = nitValidation.valid && formData.name.trim() && phoneValidation.valid && emailValidation.valid;
+  const isFormValid = (formData.esConsumidorFinal || nitValidation.valid) && formData.name.trim() && phoneValidation.valid && emailValidation.valid;
 
   const handleNewClient = () => {
     setSelectedClient(null);
     setFormData(emptyForm);
     setIsEditing(true);
+    setMobilePane('detail');
   };
 
   const handleSelectClient = (client: ClientData) => {
@@ -113,8 +228,10 @@ const ClientManager: React.FC = () => {
       direccion: formatMultilineTextInput(client.direccion || ''),
       email: formatEmailInput(client.email),
       telefono: formatPhoneInput(client.telefono),
+      esConsumidorFinal: !client.nit || client.nit === '' || client.name === 'Consumidor Final',
     });
     setIsEditing(false);
+    setMobilePane('detail');
   };
 
   const handleDeleteClient = async (id: number) => {
@@ -140,18 +257,21 @@ const ClientManager: React.FC = () => {
 
     setIsSaving(true);
     try {
+      const clientData = {
+        ...formData,
+        nit: formData.esConsumidorFinal ? '' : formData.nit,
+        name: formData.esConsumidorFinal ? 'Consumidor Final' : formData.name,
+        timestamp: Date.now(),
+      };
+      
       if (selectedClient?.id) {
         await updateClient({
           ...selectedClient,
-          ...formData,
-          timestamp: Date.now(),
+          ...clientData,
         });
         addToast('Cliente actualizado', 'success');
       } else {
-        await addClient({
-          ...formData,
-          timestamp: Date.now(),
-        });
+        await addClient(clientData);
         addToast('Cliente guardado', 'success');
       }
       await loadClients();
@@ -180,14 +300,44 @@ const ClientManager: React.FC = () => {
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     try {
-      const text = await file.text();
-      const result = await importClients(text);
+      let imported = 0;
+      let skipped = 0;
+
+      const jsonFiles = files.filter(f => f.name.toLowerCase().endsWith('.json'));
+
+      for (const file of jsonFiles) {
+        const text = await file.text();
+
+        try {
+          const parsed = JSON.parse(text);
+          const sample = Array.isArray(parsed) ? parsed[0] : parsed;
+
+          if (sample?.identificacion?.numeroControl) {
+            const { importClientsFromDTE } = await import('../utils/clientDb');
+            const result = await importClientsFromDTE(text, importMode);
+            imported += result.imported;
+            skipped += result.skipped;
+          } else {
+            const result = await importClients(text);
+            imported += result.imported;
+            skipped += result.skipped;
+          }
+        } catch {
+          const result = await importClients(text);
+          imported += result.imported;
+          skipped += result.skipped;
+        }
+      }
+
       await loadClients();
-      addToast(`${result.imported} importados, ${result.skipped} omitidos (duplicados)`, 'success');
+      const hint = imported === 0 && skipped > 0
+        ? ` Revisa si seleccionaste el modo correcto (${importMode === 'ventas' ? 'Ventas' : 'Compras'}).`
+        : '';
+      addToast(`${imported} importados, ${skipped} omitidos (ya existían o repetidos).${hint}`, 'success');
     } catch (error) {
       addToast('Error al importar: formato inválido', 'error');
     }
@@ -247,12 +397,40 @@ const ClientManager: React.FC = () => {
         <div className="flex items-center gap-2">
           <div className="hidden md:flex items-center gap-2">
             <Tooltip content="Importar clientes desde archivo JSON" position="bottom">
+              <div className="flex items-center">
+                <div className="bg-gray-100 p-1 rounded-lg flex items-center mr-2">
+                  <button
+                    type="button"
+                    onClick={() => setImportMode('ventas')}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${importMode === 'ventas' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Ventas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImportMode('compras')}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${importMode === 'compras' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Compras
+                  </button>
+                </div>
+                <button
+                  onClick={() => importInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <FileUp className="w-4 h-4" />
+                  Importar
+                </button>
+              </div>
+            </Tooltip>
+            <Tooltip content="Borrar todos los clientes" position="bottom">
               <button
-                onClick={() => importInputRef.current?.click()}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={handleDeleteAllClients}
+                disabled={clients.length === 0}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-white border border-gray-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
               >
-                <FileUp className="w-4 h-4" />
-                Importar
+                <Trash2 className="w-4 h-4" />
+                Borrar todos
               </button>
             </Tooltip>
             <Tooltip content="Exportar todos los clientes a JSON" position="bottom">
@@ -276,23 +454,69 @@ const ClientManager: React.FC = () => {
         </div>
       </div>
 
-      <input type="file" ref={importInputRef} className="hidden" accept=".json" onChange={handleImport} />
+      <input
+        type="file"
+        ref={importInputRef}
+        className="hidden"
+        accept=".json"
+        onChange={handleImport}
+        multiple
+      />
 
       {/* Main Content */}
-      <div className="flex-1 grid grid-cols-12 gap-4 min-h-0 md:grid-cols-12">
+      <div
+        ref={panelsContainerRef}
+        className="flex-1 flex flex-col md:flex-row gap-4 md:gap-0 min-h-0"
+      >
         
         {/* Left: Client List */}
-        <div className="col-span-12 md:col-span-4 bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden">
+        <div
+          className={`bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden md:flex-none ${mobilePane === 'detail' ? 'hidden md:flex' : 'flex'}`}
+          style={{ width: leftPanelWidth }}
+        >
           <div className="p-3 border-b border-gray-100 bg-gray-50/50">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={clientSearch}
-                onChange={(e) => setClientSearch(e.target.value)}
-                placeholder="Buscar por nombre, NIT..."
-                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  placeholder="Buscar por nombre, NIT..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <select
+                value={clientsGroupMode}
+                onChange={(e) => setClientsGroupMode(e.target.value as any)}
+                className="h-9 text-sm border border-gray-200 rounded-lg bg-white px-2 text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                title="Agrupar"
+              >
+                <option value="none">Sin agrupar</option>
+                <option value="az">A-Z</option>
+                <option value="tipo">Tipo</option>
+                <option value="departamento">Departamento</option>
+              </select>
+
+              <div className="bg-gray-100 p-1 rounded-lg flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setClientsViewMode('list')}
+                  className={`p-1.5 rounded-md transition-all ${clientsViewMode === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  title="Vista lista"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClientsViewMode('cards')}
+                  className={`p-1.5 rounded-md transition-all ${clientsViewMode === 'cards' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  title="Vista tarjetas"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
           
@@ -303,36 +527,95 @@ const ClientManager: React.FC = () => {
                 <p className="text-sm">{clients.length === 0 ? 'Sin clientes' : 'Sin resultados'}</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {filteredClients.map((client) => (
-                  <div
-                    key={client.id}
-                    onClick={() => handleSelectClient(client)}
-                    className={`p-3 cursor-pointer transition-colors group ${
-                      selectedClient?.id === client.id ? 'bg-blue-50 border-l-2 border-blue-500' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{client.name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">NIT: {client.nit}</p>
-                        {client.nombreComercial && (
-                          <p className="text-xs text-gray-400 truncate">{client.nombreComercial}</p>
-                        )}
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (client.id) handleDeleteClient(client.id);
-                        }}
-                        className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+              clientsViewMode === 'list' ? (
+                <div className="divide-y divide-gray-100">
+                  {groupedClients.map(group => (
+                    <div key={group.key}>
+                      {clientsGroupMode !== 'none' && (
+                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 bg-gray-50 border-b border-gray-100 sticky top-0">
+                          {group.key} <span className="font-normal">({group.clients.length})</span>
+                        </div>
+                      )}
+                      {group.clients.map((client) => (
+                        <div
+                          key={client.id}
+                          onClick={() => handleSelectClient(client)}
+                          className={`p-3 cursor-pointer transition-colors group ${
+                            selectedClient?.id === client.id ? 'bg-blue-50 border-l-2 border-blue-500' : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-gray-900 truncate">{client.name}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">NIT: {client.nit}</p>
+                              {client.nombreComercial && (
+                                <p className="text-xs text-gray-400 truncate">{client.nombreComercial}</p>
+                              )}
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (client.id) handleDeleteClient(client.id);
+                              }}
+                              className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-3 space-y-4">
+                  {groupedClients.map(group => (
+                    <div key={group.key}>
+                      {clientsGroupMode !== 'none' && (
+                        <div className="px-1 pb-2 text-xs font-semibold text-gray-500">
+                          {group.key} <span className="font-normal">({group.clients.length})</span>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {group.clients.map((client) => (
+                          <div
+                            key={client.id}
+                            onClick={() => handleSelectClient(client)}
+                            className={`cursor-pointer rounded-xl border p-3 transition-all group ${
+                              selectedClient?.id === client.id
+                                ? 'border-blue-300 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-gray-900 truncate">{client.name}</p>
+                                <p className="text-xs text-gray-500 mt-1 truncate">NIT: {client.nit}</p>
+                                {client.nrc && (
+                                  <p className="text-xs text-gray-500 mt-0.5 truncate">NRC: {client.nrc}</p>
+                                )}
+                                {client.nombreComercial && (
+                                  <p className="text-xs text-gray-400 mt-0.5 truncate">{client.nombreComercial}</p>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (client.id) handleDeleteClient(client.id);
+                                }}
+                                className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
           
@@ -341,8 +624,44 @@ const ClientManager: React.FC = () => {
           </div>
         </div>
 
+        {/* Divider (solo desktop/tablet) */}
+        <div
+          className="hidden md:flex items-stretch px-1"
+          onDoubleClick={() => {
+            setLeftPanelWidth(360);
+            try {
+              localStorage.setItem('clients_left_panel_width', String(360));
+            } catch {
+              // ignore
+            }
+          }}
+        >
+          <div
+            className="cursor-col-resize"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setIsResizingPanels(true);
+            }}
+            title="Arrastra para ajustar"
+          >
+            <div
+              className={`w-[2px] h-full rounded ${isResizingPanels ? 'bg-blue-300' : 'bg-gray-200 hover:bg-gray-300'}`}
+            />
+          </div>
+        </div>
+
         {/* Right: Form */}
-        <div className="col-span-12 md:col-span-8 bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden mt-4 md:mt-0">
+        <div className={`bg-white rounded-xl border border-gray-200 flex-1 flex flex-col overflow-hidden mt-4 md:mt-0 ${mobilePane === 'list' ? 'hidden md:flex' : 'flex'}`}>
+          {/* Mobile back */}
+          <div className="md:hidden border-b border-gray-100 p-3">
+            <button
+              type="button"
+              onClick={() => setMobilePane('list')}
+              className="text-sm font-medium text-gray-600 hover:text-gray-900"
+            >
+              Volver
+            </button>
+          </div>
           {!selectedClient && !isEditing ? (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8">
               <Building2 className="w-16 h-16 mb-4 opacity-30" />
@@ -394,17 +713,50 @@ const ClientManager: React.FC = () => {
 
               {/* Form Content */}
               <div className="flex-1 overflow-y-auto p-4">
+                {/* Consumidor Final Toggle */}
+                {isEditing && (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.esConsumidorFinal}
+                        onChange={(e) => {
+                          const esConsumidorFinal = e.target.checked;
+                          setFormData({
+                            ...formData,
+                            esConsumidorFinal,
+                            nit: esConsumidorFinal ? '' : formData.nit,
+                            name: esConsumidorFinal ? 'Consumidor Final' : formData.name,
+                            nrc: esConsumidorFinal ? '' : formData.nrc,
+                            nombreComercial: esConsumidorFinal ? '' : formData.nombreComercial,
+                            actividadEconomica: esConsumidorFinal ? '' : formData.actividadEconomica,
+                            descActividad: esConsumidorFinal ? '' : formData.descActividad,
+                            departamento: esConsumidorFinal ? '' : formData.departamento,
+                            municipio: esConsumidorFinal ? '' : formData.municipio,
+                            direccion: esConsumidorFinal ? '' : formData.direccion,
+                          });
+                        }}
+                        className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-900">Consumidor Final</span>
+                        <p className="text-xs text-gray-600 mt-0.5">Para operaciones menores a $25,000 (opcional según normativa)</p>
+                      </div>
+                    </label>
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                   
                   {/* NIT */}
                   <div>
                     <NitOrDuiField
                       label="NIT / DUI"
-                      required
+                      required={!formData.esConsumidorFinal}
                       value={formData.nit}
                       onChange={(nit) => setFormData({ ...formData, nit })}
-                      validation={nitValidation}
-                      disabled={!isEditing}
+                      validation={formData.esConsumidorFinal ? { valid: true, message: '' } : nitValidation}
+                      disabled={!isEditing || formData.esConsumidorFinal}
                       placeholder="0000-000000-000-0"
                       messageVariant="overlay-when-value"
                       colorMode="blue"
@@ -417,8 +769,8 @@ const ClientManager: React.FC = () => {
                       label="NRC"
                       value={formData.nrc}
                       onChange={(nrc) => setFormData({ ...formData, nrc })}
-                      validation={nrcValidation}
-                      disabled={!isEditing}
+                      validation={formData.esConsumidorFinal ? { valid: true, message: '' } : nrcValidation}
+                      disabled={!isEditing || formData.esConsumidorFinal}
                       placeholder="000000-0"
                       messageVariant="overlay-when-value"
                       colorMode="blue"
@@ -434,8 +786,8 @@ const ClientManager: React.FC = () => {
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: formatTextInput(e.target.value) })}
-                      disabled={!isEditing}
-                      placeholder="Nombre completo del cliente"
+                      disabled={!isEditing || formData.esConsumidorFinal}
+                      placeholder={formData.esConsumidorFinal ? 'Consumidor Final' : 'Nombre completo del cliente'}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-600 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
@@ -447,7 +799,7 @@ const ClientManager: React.FC = () => {
                       type="text"
                       value={formData.nombreComercial}
                       onChange={(e) => setFormData({ ...formData, nombreComercial: formatTextInput(e.target.value) })}
-                      disabled={!isEditing}
+                      disabled={!isEditing || formData.esConsumidorFinal}
                       placeholder="Personalizar nombre comercial"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-600 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
@@ -460,7 +812,7 @@ const ClientManager: React.FC = () => {
                       onChange={(codigo, descripcion) =>
                         setFormData((prev) => ({ ...prev, actividadEconomica: codigo, descActividad: descripcion }))
                       }
-                      disabled={!isEditing}
+                      disabled={!isEditing || formData.esConsumidorFinal}
                       label="Actividad Económica"
                       placeholder="Escribe una actividad..."
                     />
@@ -473,7 +825,7 @@ const ClientManager: React.FC = () => {
                       municipio={formData.municipio}
                       onDepartamentoChange={(codigo) => setFormData(prev => ({ ...prev, departamento: codigo, municipio: '' }))}
                       onMunicipioChange={(codigo) => setFormData(prev => ({ ...prev, municipio: codigo }))}
-                      disabled={!isEditing}
+                      disabled={!isEditing || formData.esConsumidorFinal}
                       showLabels
                       layout="horizontal"
                       size="md"
@@ -486,7 +838,7 @@ const ClientManager: React.FC = () => {
                     <textarea
                       value={formData.direccion}
                       onChange={(e) => setFormData({ ...formData, direccion: formatMultilineTextInput(e.target.value) })}
-                      disabled={!isEditing}
+                      disabled={!isEditing || formData.esConsumidorFinal}
                       rows={2}
                       placeholder="Digite el complemento de la dirección"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-600 focus:ring-2 focus:ring-blue-500 outline-none resize-none"

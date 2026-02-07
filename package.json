@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@netlify/blobs": "^7.0.0",
+    "@types/stripe": "^8.0.416",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "idb": "^8.0.3",
@@ -21,7 +22,8 @@
     "node-forge": "^1.3.3",
     "qrcode": "^1.5.4",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "stripe": "^20.3.0"
   },
   "devDependencies": {
     "@types/node-forge": "^1.3.14",

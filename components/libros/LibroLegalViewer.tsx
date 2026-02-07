@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Printer, Download, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
-import { GroupedData } from '../../types';
+import { GroupedData, ProcessedFile } from '../../types';
 import { getEmisor, EmisorData } from '../../utils/emisorDb';
 import { consumeExportSlot } from '../../utils/usageLimit';
 import { notify } from '../../utils/notifications';
@@ -8,6 +8,7 @@ import { TipoLibro, getConfigLibro, formatMoneda } from './librosConfig';
 
 interface LibroLegalViewerProps {
   groupedData: GroupedData;
+  groupedDataForResumen?: GroupedData;
   tipoLibro: TipoLibro;
 }
 
@@ -16,7 +17,18 @@ const MESES = [
   'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
 ];
 
-const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLibro }) => {
+const getSucursalLabelFromNumeroControl = (numeroControl?: string): string | null => {
+  if (!numeroControl) return null;
+  const match = numeroControl.match(/-(M|S)(\d{3})/);
+  if (!match) return null;
+
+  const tipo = match[1];
+  const correlativo = match[2]; // Mantener ceros a la izquierda (ej: 001)
+
+  return tipo === 'M' ? `MATRIZ ${correlativo}` : `SUCURSAL ${correlativo}`;
+};
+
+const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupedDataForResumen, tipoLibro }) => {
   const [emisor, setEmisor] = useState<EmisorData | null>(null);
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(0);
   const libroRef = useRef<HTMLDivElement>(null);
@@ -47,16 +59,73 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
     getEmisor().then(setEmisor);
   }, []);
 
-  // Meses disponibles ordenados
+  // Obtener el mes anterior al actual para el título (solo para compras)
+  const getPreviousMonth = () => {
+    const now = new Date();
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const year = prevMonth.getFullYear();
+    const month = String(prevMonth.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  };
+
+  // Para compras: consolidar todos los archivos válidos de los últimos 3 meses
+  const consolidatedItems = useMemo(() => {
+    if (tipoLibro !== 'compras') {
+      return null; // Para otros tipos, usar el comportamiento normal
+    }
+
+    // Consolidar todos los archivos no fuera de tiempo
+    const allValidFiles: ProcessedFile[] = [];
+    
+    Object.entries(groupedData).forEach(([, files]) => {
+      const validFiles = files.filter(file => !file.isOutOfTime);
+      allValidFiles.push(...validFiles);
+    });
+
+    // Ordenar todos por fecha
+    allValidFiles.sort((a, b) => {
+      const dateA = new Date(a.data.date.split('/').reverse().join('-'));
+      const dateB = new Date(b.data.date.split('/').reverse().join('-'));
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    return allValidFiles;
+  }, [groupedData, tipoLibro]);
+
+  // Meses disponibles ordenados (solo para no-compras)
   const availableMonths = useMemo(() => {
+    if (tipoLibro === 'compras') {
+      return [getPreviousMonth()]; // Para compras, solo mostrar el mes anterior
+    }
     return Object.keys(groupedData).sort();
-  }, [groupedData]);
+  }, [groupedData, tipoLibro]);
 
   // Mes seleccionado actual
   const selectedMonth = availableMonths[selectedMonthIndex] || null;
+  
+  // Determinar si es vista consolidada
+  const isConsolidatedView = tipoLibro === 'compras';
+  
+  // Obtener el mes a mostrar en el título
+  const displayMonth = isConsolidatedView ? getPreviousMonth() : selectedMonth;
 
-  // Determinar datos del contribuyente (Dueño del Libro) basado en los archivos del mes
+  // Determinar datos del contribuyente (Dueño del Libro)
   const currentTaxpayer = useMemo(() => {
+    if (isConsolidatedView && consolidatedItems && consolidatedItems.length > 0) {
+      // Para compras consolidadas: usar el primer archivo válido
+      const fileWithInfo = consolidatedItems.find(f => f.taxpayer?.nombre);
+      if (fileWithInfo?.taxpayer) {
+        return {
+          ...emisor,
+          nombre: fileWithInfo.taxpayer.nombre,
+          nit: fileWithInfo.taxpayer.nit,
+          nrc: fileWithInfo.taxpayer.nrc,
+          nombreComercial: emisor?.nombreComercial || '',
+        } as EmisorData;
+      }
+      return emisor;
+    }
+    
     if (!selectedMonth || !groupedData[selectedMonth] || groupedData[selectedMonth].length === 0) {
       return emisor;
     }
@@ -72,10 +141,46 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
       } as EmisorData;
     }
     return emisor;
-  }, [selectedMonth, groupedData, emisor]);
+  }, [selectedMonth, groupedData, emisor, isConsolidatedView, consolidatedItems]);
+
+  const sucursalLabel = useMemo(() => {
+    const file = isConsolidatedView
+      ? consolidatedItems?.[0]
+      : (selectedMonth ? groupedData[selectedMonth]?.[0] : undefined);
+
+    return getSucursalLabelFromNumeroControl(file?.data?.controlNumber);
+  }, [isConsolidatedView, consolidatedItems, selectedMonth, groupedData]);
 
   // Generar items del libro según el tipo
   const items = useMemo(() => {
+    if (isConsolidatedView) {
+      // Para compras consolidadas
+      if (!consolidatedItems || consolidatedItems.length === 0) return [];
+      
+      return consolidatedItems.map((file, index) => {
+        const csvParts = file.csvLine.split(';');
+        const exentas = parseFloat(file.data.exentas || '0');
+        const neto = parseFloat(file.data.neto || '0');
+        const iva = parseFloat(file.data.iva || '0');
+        const total = parseFloat(file.data.total || '0');
+        return {
+          correlativo: index + 1,
+          fecha: file.data.date,
+          codigoGeneracion: csvParts[3] || '',
+          nrc: '',
+          nitSujetoExcluido: '',
+          nombreProveedor: file.data.receiver,
+          comprasExentas: exentas,
+          comprasGravadasLocales: neto,
+          creditoFiscal: iva,
+          totalCompras: total,
+          retencionTerceros: 0,
+          comprasSujetoExcluido: 0,
+        };
+      });
+    }
+    
+    // Comportamiento normal para otros casos
     if (!selectedMonth || !groupedData[selectedMonth]) return [];
 
     const monthFiles = [...groupedData[selectedMonth]];
@@ -87,63 +192,204 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
       return dateA.getTime() - dateB.getTime();
     });
 
+    // Procesamiento especial para libro consumidor
+    if (tipoLibro === 'consumidor') {
+      // Agrupar facturas por prefijo para mostrar rangos consecutivos
+      const facturasAgrupadas = new Map<string, {
+        fecha: string;
+        prefijo: string;
+        numeros: number[];
+        codigoGeneracion: string;
+        ventasExentas: number;
+        ventasGravadas: number;
+        ventaTotal: number;
+        montosPorNumero: Map<number, {
+          ventasExentas: number;
+          ventasGravadas: number;
+          ventaTotal: number;
+        }>;
+      }>();
+
+      monthFiles.forEach(file => {
+        const csvParts = file.csvLine.split(';');
+        const numeroControl = file.data.controlNumber || '';
+        const codigoGeneracion = csvParts[5] || csvParts[3] || '';
+        
+        // Extraer el prefijo y el número del número de control
+        // Formato: DTE-01-M001P001-000000000000016
+        const match = numeroControl.match(/^(.*-)(\d+)$/);
+        if (match) {
+          const prefijo = match[1];
+          const numero = parseInt(match[2], 10);
+          const ventasExentas = parseFloat(file.data.exentas || '0');
+          const ventasGravadas = parseFloat(file.data.total || '0');
+          const ventaTotal = parseFloat(file.data.total || '0');
+          
+          if (!facturasAgrupadas.has(prefijo)) {
+            facturasAgrupadas.set(prefijo, {
+              fecha: file.data.date,
+              prefijo,
+              numeros: [],
+              codigoGeneracion,
+              ventasExentas: 0,
+              ventasGravadas: 0,
+              ventaTotal: 0,
+              montosPorNumero: new Map(),
+            });
+          }
+          
+          const grupo = facturasAgrupadas.get(prefijo)!;
+          grupo.numeros.push(numero);
+          
+          // Guardar los montos por número individual
+          grupo.montosPorNumero.set(numero, {
+            ventasExentas,
+            ventasGravadas,
+            ventaTotal,
+          });
+          
+          // Sumar los montos totales
+          grupo.ventasExentas += ventasExentas;
+          grupo.ventasGravadas += ventasGravadas;
+          grupo.ventaTotal += ventaTotal;
+        }
+      });
+
+      // Función para encontrar rangos consecutivos
+      const encontrarRangosConsecutivos = (numeros: number[]): Array<{inicio: number, fin: number}> => {
+        if (numeros.length === 0) return [];
+        
+        const numerosOrdenados = [...numeros].sort((a, b) => a - b);
+        const rangos = [];
+        let inicio = numerosOrdenados[0];
+        let fin = numerosOrdenados[0];
+        
+        for (let i = 1; i < numerosOrdenados.length; i++) {
+          if (numerosOrdenados[i] === fin + 1) {
+            // Es consecutivo
+            fin = numerosOrdenados[i];
+          } else {
+            // No es consecutivo, guardar el rango actual y empezar uno nuevo
+            rangos.push({ inicio, fin });
+            inicio = numerosOrdenados[i];
+            fin = numerosOrdenados[i];
+          }
+        }
+        
+        // Agregar el último rango
+        rangos.push({ inicio, fin });
+        
+        return rangos;
+      };
+
+      // Convertir los grupos agrupados en filas, separando por rangos consecutivos
+      const filasAgrupadas: any[] = [];
+      
+      facturasAgrupadas.forEach(grupo => {
+        const rangos = encontrarRangosConsecutivos(grupo.numeros);
+        
+        rangos.forEach(rango => {
+          // Sumar los montos solo para los números en este rango
+          let ventasExentasRango = 0;
+          let ventasGravadasRango = 0;
+          let ventaTotalRango = 0;
+          
+          for (let num = rango.inicio; num <= rango.fin; num++) {
+            const montos = grupo.montosPorNumero.get(num);
+            if (montos) {
+              ventasExentasRango += montos.ventasExentas;
+              ventasGravadasRango += montos.ventasGravadas;
+              ventaTotalRango += montos.ventaTotal;
+            }
+          }
+          
+          const numeroControlDel = `${grupo.prefijo}${rango.inicio.toString().padStart(15, '0')}`;
+          const numeroControlAl = `${grupo.prefijo}${rango.fin.toString().padStart(15, '0')}`;
+          
+          filasAgrupadas.push({
+            fecha: grupo.fecha,
+            codigoGeneracionInicial: grupo.codigoGeneracion,
+            codigoGeneracionFinal: grupo.codigoGeneracion,
+            numeroControlDel,
+            numeroControlAl,
+            ventasExentas: ventasExentasRango,
+            ventasGravadas: ventasGravadasRango,
+            exportaciones: 0,
+            ventaTotal: ventaTotalRango,
+          });
+        });
+      });
+
+      // Ordenar las filas por fecha y luego por número de control inicial
+      filasAgrupadas.sort((a, b) => {
+        const fechaA = new Date(a.fecha.split('/').reverse().join('-'));
+        const fechaB = new Date(b.fecha.split('/').reverse().join('-'));
+        if (fechaA.getTime() !== fechaB.getTime()) {
+          return fechaA.getTime() - fechaB.getTime();
+        }
+        // Si misma fecha, ordenar por número de control
+        const numA = parseInt(a.numeroControlDel.split('-').pop() || '0', 10);
+        const numB = parseInt(b.numeroControlDel.split('-').pop() || '0', 10);
+        return numA - numB;
+      });
+
+      return filasAgrupadas;
+    }
+
+    // Para otros tipos de libros (contribuyentes)
     return monthFiles.map((file, index) => {
       const csvParts = file.csvLine.split(';');
       
-      // Mapear según el tipo de libro
-      switch (tipoLibro) {
-        case 'compras':
-          return {
-            correlativo: index + 1,
-            fecha: file.data.date,
-            codigoGeneracion: csvParts[3] || '',
-            nrc: csvParts[4] || '',
-            nitSujetoExcluido: '',
-            nombreProveedor: file.data.receiver,
-            comprasExentas: parseFloat(csvParts[6] || '0'),
-            comprasGravadasLocales: parseFloat(csvParts[9] || '0'),
-            creditoFiscal: parseFloat(csvParts[13] || '0'),
-            totalCompras: parseFloat(file.data.total),
-            retencionTerceros: 0,
-            comprasSujetoExcluido: 0,
-          };
-        
-        case 'contribuyentes':
-          return {
-            correlativo: index + 1,
-            fecha: file.data.date,
-            codigoGeneracion: csvParts[5] || csvParts[3] || '', // selloRecibido o codigoGeneracion
-            formUnico: '',
-            cliente: file.data.receiver,
-            nrc: csvParts[7] || '', // receptor.nrc
-            ventasExentas: parseFloat(csvParts[9] || '0'), // totalExenta (index 9 in VENTAS_CONFIG)
-            exportaciones: 0,
-            ventasGravadas: parseFloat(csvParts[11] || '0'), // totalGravada
-            debitoFiscal: parseFloat(csvParts[12] || '0'), // tributos
-            ventaCuentaTerceros: 0,
-            debitoFiscalTerceros: 0,
-            impuestoPercibido: 0,
-            ventasTotales: parseFloat(file.data.total),
-          };
-        
-        case 'consumidor':
-          return {
-            fecha: file.data.date,
-            codigoGeneracionInicial: csvParts[5] || csvParts[3] || '',
-            codigoGeneracionFinal: csvParts[5] || csvParts[3] || '',
-            numeroControlDel: csvParts[3] || '',
-            numeroControlAl: csvParts[3] || '',
-            ventasExentas: parseFloat(csvParts[9] || '0'), // totalExenta
-            ventasGravadas: parseFloat(csvParts[11] || '0') + parseFloat(csvParts[12] || '0'), // totalGravada (Neto) + IVA = Bruto (para consumidor final)
-            exportaciones: 0,
-            ventaTotal: parseFloat(file.data.total),
-          };
-        
-        default:
-          return {};
+      // Nota: aquí tipoLibro NO puede ser 'compras' porque esa ruta retorna arriba.
+      if (tipoLibro === 'contribuyentes') {
+        return {
+          correlativo: index + 1,
+          fecha: file.data.date,
+          codigoGeneracion: csvParts[5] || csvParts[3] || '', // selloRecibido o codigoGeneracion
+          formUnico: '',
+          cliente: file.data.receiver,
+          nrc: csvParts[7] || '', // receptor.nrc
+          ventasExentas: parseFloat(csvParts[9] || '0'), // totalExenta (index 9 in VENTAS_CONFIG)
+          exportaciones: 0,
+          ventasGravadas: parseFloat(csvParts[11] || '0'), // totalGravada
+          debitoFiscal: parseFloat(csvParts[12] || '0'), // tributos
+          ventaCuentaTerceros: 0,
+          debitoFiscalTerceros: 0,
+          impuestoPercibido: 0,
+          ventasTotales: parseFloat(file.data.total),
+        };
       }
+
+      return {};
     });
-  }, [selectedMonth, groupedData, tipoLibro]);
+  }, [selectedMonth, groupedData, tipoLibro, isConsolidatedView, consolidatedItems]);
+
+  const consumidorTotalesParaResumen = useMemo(() => {
+    if (tipoLibro !== 'contribuyentes') return null;
+    const fuente = groupedDataForResumen || groupedData;
+    if (!selectedMonth || !fuente[selectedMonth]) return null;
+
+    const monthFiles = [...fuente[selectedMonth]];
+    let totalBrutoGravadoConsumidor = 0;
+
+    monthFiles.forEach(file => {
+      // Consumidor final: Factura (tipoDte 01)
+      if (file.dteType !== '01') return;
+
+      // Para consumidor final, el monto viene como bruto (incluye IVA).
+      // Usamos el total como base para el cálculo inverso (igual que el Libro Consumidor).
+      const bruto = parseFloat(file.data?.total || '0');
+      totalBrutoGravadoConsumidor += bruto;
+    });
+
+    const valorNeto = totalBrutoGravadoConsumidor / 1.13;
+    const debitoFiscal = totalBrutoGravadoConsumidor - valorNeto;
+
+    return {
+      valorNeto,
+      debitoFiscal,
+    };
+  }, [tipoLibro, selectedMonth, groupedData, groupedDataForResumen]);
 
   // Calcular totales usando la config
   const totales = useMemo(() => {
@@ -153,10 +399,43 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
   // Generar filas de resumen dinámico
   const resumenFilas = useMemo<any[]>(() => {
     if (config.getResumen) {
-      return config.getResumen(items);
+      const resumen = config.getResumen(items);
+
+      if (tipoLibro === 'contribuyentes' && consumidorTotalesParaResumen) {
+        const rows = resumen.map((row: any) => {
+          const label = (row?.label || '').toString().trim().toUpperCase();
+          if (label === 'VENTAS NETAS INTERNAS GRAVADAS A CONSUMIDORES') {
+            return {
+              ...row,
+              valorNeto: consumidorTotalesParaResumen.valorNeto,
+              debitoFiscal: consumidorTotalesParaResumen.debitoFiscal,
+            };
+          }
+          return row;
+        });
+
+        const getRow = (labelToFind: string) => {
+          const key = labelToFind.trim().toUpperCase();
+          return rows.find((r: any) => (r?.label || '').toString().trim().toUpperCase() === key);
+        };
+
+        const rowContrib = getRow('VENTAS NETAS INTERNAS GRAVADAS A CONTRIBUYENTES');
+        const rowTotal = getRow('TOTAL OPERACIONES INTERNADAS GRAVADAS');
+        if (rowContrib && rowTotal) {
+          const netoTotal = (rowContrib.valorNeto || 0) + consumidorTotalesParaResumen.valorNeto;
+          const debitoTotal = (rowContrib.debitoFiscal || 0) + consumidorTotalesParaResumen.debitoFiscal;
+
+          rowTotal.valorNeto = netoTotal;
+          rowTotal.debitoFiscal = debitoTotal;
+        }
+
+        return rows;
+      }
+
+      return resumen;
     }
     return [];
-  }, [items, config]);
+  }, [config, items, tipoLibro, consumidorTotalesParaResumen]);
 
   const getNombreMes = (monthKey: string): string => {
     const monthNum = parseInt(monthKey.split('-')[1], 10);
@@ -168,10 +447,12 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
   };
 
   const handlePrevMonth = () => {
+    if (isConsolidatedView) return; // No permitir navegación en vista consolidada
     setSelectedMonthIndex(prev => Math.max(0, prev - 1));
   };
 
   const handleNextMonth = () => {
+    if (isConsolidatedView) return; // No permitir navegación en vista consolidada
     setSelectedMonthIndex(prev => Math.min(availableMonths.length - 1, prev + 1));
   };
 
@@ -246,7 +527,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${config.titulo} - ${selectedMonth || ''}</title>
+          <title>${config.titulo} - ${displayMonth || ''}</title>
           ${printStyles}
         </head>
         <body>
@@ -263,47 +544,23 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
     }, 250);
   };
 
-  const handleExportCSV = () => {
-    if (!selectedMonth) return;
+  const handleExportCSV = async () => {
+    if (!displayMonth) return;
 
     // Verificar límite de exportaciones
-    const slot = consumeExportSlot();
+    const slot = await consumeExportSlot();
     if (!slot.allowed) {
-      notify('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com', 'error');
+      notify(slot.message || 'No se puede exportar. Límite alcanzado.', 'error');
       return;
     }
     
-    // Headers
-    let csv = config.columnas.map(col => col.header.replace(/\n/g, ' ')).join(';') + '\n';
+    const csv = config.generarCSV(items, totales, resumenFilas);
     
-    // Data rows
-    items.forEach(item => {
-      const row = config.columnas.map(col => {
-        const valor = config.getValor(item, col.key);
-        if (col.format === 'moneda') {
-          return typeof valor === 'number' ? valor.toFixed(2) : valor;
-        }
-        return String(valor || '');
-      });
-      csv += row.join(';') + '\n';
-    });
-
-    // Totales row
-    const totalesKeys = Object.keys(totales);
-    if (totalesKeys.length > 0) {
-      const totalesRow = config.columnas.map(col => {
-        if (totales[col.key] !== undefined) {
-          return totales[col.key].toFixed(2);
-        }
-        return '';
-      });
-      csv += totalesRow.join(';') + '\n';
-    }
-
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${config.titulo.replace(/\s+/g, '_')}_${selectedMonth}.csv`;
+    const fileName = isConsolidatedView ? `LIBRO_COMPRAS_CONSOLIDADO.csv` : `${config.nombreArchivo}_${displayMonth}.csv`;
+    link.download = fileName;
     link.click();
   };
 
@@ -335,31 +592,42 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
       {/* Controles de navegación y acciones */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <div className="flex items-center gap-2">
-          <button
-            onClick={handlePrevMonth}
-            disabled={selectedMonthIndex === 0}
-            className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
+          {!isConsolidatedView && (
+            <button
+              onClick={handlePrevMonth}
+              disabled={selectedMonthIndex === 0}
+              className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          )}
           <div className="text-center min-w-[180px]">
             <div className="text-sm text-gray-500">Período</div>
             <div className="font-semibold text-gray-900">
-              {selectedMonth ? `${getNombreMes(selectedMonth)} ${getAnio(selectedMonth)}` : '---'}
+              {displayMonth ? `${getNombreMes(displayMonth)} ${getAnio(displayMonth)}` : '---'}
             </div>
+            {isConsolidatedView && (
+              <div className="text-xs text-blue-600 font-medium mt-1">
+                Consolidado 3 meses válidos
+              </div>
+            )}
           </div>
-          <button
-            onClick={handleNextMonth}
-            disabled={selectedMonthIndex === availableMonths.length - 1}
-            className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
+          {!isConsolidatedView && (
+            <button
+              onClick={handleNextMonth}
+              disabled={selectedMonthIndex === availableMonths.length - 1}
+              className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
-        <div className="text-sm text-gray-500">
-          {selectedMonthIndex + 1} de {availableMonths.length} meses
-        </div>
+        {!isConsolidatedView && (
+          <div className="text-sm text-gray-500">
+            {selectedMonthIndex + 1} de {availableMonths.length} meses
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           <button
@@ -395,19 +663,19 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, tipoLi
           <div className="flex justify-between items-start">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-700">SUCURSAL:</span>
-                <span className="text-gray-900">{currentTaxpayer?.nombreComercial || ''}</span>
+                <span className="font-semibold text-gray-700">ESTABLECIMIENTO:</span>
+                <span className="text-gray-900">{sucursalLabel || currentTaxpayer?.nombreComercial || ''}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-gray-700">MES:</span>
                 <span className="text-gray-900 uppercase">
-                  {selectedMonth ? getNombreMes(selectedMonth) : ''}
+                  {displayMonth ? getNombreMes(displayMonth) : ''}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-gray-700">AÑO:</span>
                 <span className="text-gray-900">
-                  {selectedMonth ? getAnio(selectedMonth) : ''}
+                  {displayMonth ? getAnio(displayMonth) : ''}
                 </span>
               </div>
             </div>

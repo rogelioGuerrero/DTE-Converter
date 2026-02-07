@@ -41,7 +41,16 @@ const BatchDashboard: React.FC = () => {
   const [fieldConfig, setFieldConfig] = useState<FieldConfiguration>([]);
 
   const MAX_EXPORTS_PER_DAY = 5;
-  const [usageInfo, setUsageInfo] = useState(() => getUsageInfo(MAX_EXPORTS_PER_DAY));
+  const [usageInfo, setUsageInfo] = useState({ count: 0, remaining: MAX_EXPORTS_PER_DAY, max: MAX_EXPORTS_PER_DAY, hasLicense: false });
+
+  // Load usage info
+  useEffect(() => {
+    const loadUsageInfo = async () => {
+      const info = await getUsageInfo();
+      setUsageInfo(info);
+    };
+    loadUsageInfo();
+  }, []);
 
   // Initialize or switch config when mode changes
   useEffect(() => {
@@ -63,17 +72,36 @@ const BatchDashboard: React.FC = () => {
   useEffect(() => {
     const loadSavedData = async () => {
       const savedData = await getAllLibrosData(appMode);
-      if (Object.keys(savedData).length > 0) {
-        setGroupedData(savedData);
-      }
+      setGroupedData(savedData);
     };
     loadSavedData();
   }, [appMode]);
 
+  // Refrescar cuando se generen libros automáticamente desde historial DTE
+  useEffect(() => {
+    const handler = async (evt: any) => {
+      const detailMode = evt?.detail?.modo;
+      if (detailMode && detailMode !== appMode) return;
+      const savedData = await getAllLibrosData(appMode);
+      setGroupedData(savedData);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dte-libros-updated', handler as any);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('dte-libros-updated', handler as any);
+      }
+    };
+  }, [appMode]);
+
   // Track daily usage info for the free plan indicator
   useEffect(() => {
-    const handler = () => {
-      setUsageInfo(getUsageInfo(MAX_EXPORTS_PER_DAY));
+    const handler = async () => {
+      const info = await getUsageInfo();
+      setUsageInfo(info);
     };
 
     // Inicializar al montar
@@ -213,9 +241,9 @@ const BatchDashboard: React.FC = () => {
   };
 
   const handleBatchDownload = async (selectedMonths: string[]) => {
-    const slot = consumeExportSlot();
+    const slot = await consumeExportSlot();
     if (!slot.allowed) {
-      notify('Has alcanzado el límite gratuito de 5 exportaciones para el día de hoy. Si necesitas más capacidad, escríbenos a info@agtisa.com', 'error');
+      notify(slot.message || 'No se puede exportar. Límite alcanzado.', 'error');
       setShowDownloadModal(false);
       return;
     }
@@ -320,10 +348,16 @@ const BatchDashboard: React.FC = () => {
   const validFilesCount = filesValues.reduce((acc, files) => acc + files.length, 0);
   const totalFiles = validFilesCount + errors.length;
   const allFiles = filesValues.flat();
-  const totalAmount = allFiles.reduce((acc, file) => acc + parseFloat(file.data.total), 0);
-  const totalNeto = allFiles.reduce((acc, file) => acc + parseFloat(file.data.neto || '0'), 0);
-  const totalIva = allFiles.reduce((acc, file) => acc + parseFloat(file.data.iva || '0'), 0);
-  const totalExentas = allFiles.reduce((acc, file) => acc + parseFloat(file.data.exentas || '0'), 0);
+
+  // En compras, el monto total procesado debe sumar solo los archivos dentro del período válido
+  const filesForTotals = appMode === 'compras'
+    ? allFiles.filter(file => !file.isOutOfTime)
+    : allFiles;
+
+  const totalAmount = filesForTotals.reduce((acc, file) => acc + parseFloat(file.data.total), 0);
+  const totalNeto = filesForTotals.reduce((acc, file) => acc + parseFloat(file.data.neto || '0'), 0);
+  const totalIva = filesForTotals.reduce((acc, file) => acc + parseFloat(file.data.iva || '0'), 0);
+  const totalExentas = filesForTotals.reduce((acc, file) => acc + parseFloat(file.data.exentas || '0'), 0);
 
   return (
     <>
@@ -447,6 +481,7 @@ const BatchDashboard: React.FC = () => {
               // Determinar tipo de libro y filtro
               let tipoLibro: TipoLibro = 'compras';
               let filteredDataForBook = filteredGroupedData;
+              let resumenDataForBook: GroupedData | undefined = undefined;
 
               if (currentView === 'libro_contribuyentes') {
                 tipoLibro = 'contribuyentes';
@@ -456,6 +491,8 @@ const BatchDashboard: React.FC = () => {
                   if (filtered.length > 0) acc[month] = filtered;
                   return acc;
                 }, {} as GroupedData);
+                // Para el resumen, necesitamos también los documentos de consumidor (01)
+                resumenDataForBook = filteredGroupedData;
               } else if (currentView === 'libro_consumidor') {
                 tipoLibro = 'consumidor';
                 // Filtrar solo Facturas (01)
@@ -469,7 +506,13 @@ const BatchDashboard: React.FC = () => {
                 // Para compras tomamos todo lo que esté en modo compras
               }
 
-              return <LibroLegalViewer groupedData={filteredDataForBook} tipoLibro={tipoLibro} />;
+              return (
+                <LibroLegalViewer
+                  groupedData={filteredDataForBook}
+                  groupedDataForResumen={resumenDataForBook}
+                  tipoLibro={tipoLibro}
+                />
+              );
             })()
           ) : (
             <div className="animate-in fade-in duration-500 space-y-8">
@@ -522,10 +565,13 @@ const BatchDashboard: React.FC = () => {
                    </button>
                    <div className="relative group inline-flex items-center">
                      <span className="text-[11px] text-gray-400 border border-dashed border-gray-300 rounded-full px-2 py-0.5 cursor-default">
-                       Plan gratuito: {Math.min(usageInfo.count, usageInfo.max)}/{usageInfo.max} exportaciones hoy
+                       {usageInfo.hasLicense ? 'Licencia activa' : `Plan gratuito: ${Math.min(usageInfo.count, usageInfo.max)}/${usageInfo.max} exportaciones hoy`}
                      </span>
                      <div className="absolute z-10 hidden group-hover:block -top-14 right-0 w-64 px-3 py-2 rounded-lg bg-gray-900 text-[11px] text-gray-100 shadow-xl">
-                       Las exportaciones se cuentan por día calendario. Este límite aplica solo como demostración del servicio.
+                       {usageInfo.hasLicense 
+                         ? 'Tu licencia está activa. Puedes exportar sin límites según tu plan.'
+                         : 'Las exportaciones se cuentan por día calendario. Este límite aplica solo como demostración del servicio.'
+                       }
                      </div>
                    </div>
                  </div>

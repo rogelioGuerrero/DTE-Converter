@@ -19,10 +19,10 @@ export const VENTAS_CONFIG: FieldConfiguration = [
   { id: 'v14', columnLetter: 'N', label: 'Vtas Terceros No Dom', sourceType: 'static', value: '0.00', transformation: 'none', enabled: true },
   { id: 'v15', columnLetter: 'O', label: 'Debito Vtas Terceros', sourceType: 'static', value: '0.00', transformation: 'none', enabled: true },
   { id: 'v16', columnLetter: 'P', label: 'Total Ventas', sourceType: 'json', value: 'resumen.montoTotalOperacion', transformation: 'currency', enabled: true },
-  { id: 'v17', columnLetter: 'Q', label: 'DUI (Cliente)', sourceType: 'static', value: '', transformation: 'none', enabled: true },
-  { id: 'v18', columnLetter: 'R', label: 'Tipo Operación', sourceType: 'static', value: '1', transformation: 'none', enabled: true },
-  { id: 'v19', columnLetter: 'S', label: 'Tipo Ingreso', sourceType: 'static', value: '2', transformation: 'none', enabled: true },
-  { id: 'v20', columnLetter: 'T', label: 'Número Anexo', sourceType: 'static', value: '1', transformation: 'none', enabled: true },
+  { id: 'v17', columnLetter: 'Q', label: 'DUI (Cliente)', sourceType: 'json', value: 'receptor.numDocumento', transformation: 'none', enabled: true },
+  { id: 'v18', columnLetter: 'R', label: 'Tipo Operación', sourceType: 'conditional', value: 'tipoOperacion', transformation: 'none', enabled: true },
+  { id: 'v19', columnLetter: 'S', label: 'Tipo Ingreso', sourceType: 'conditional', value: 'tipoIngreso', transformation: 'none', enabled: true },
+  { id: 'v20', columnLetter: 'T', label: 'Número Anexo', sourceType: 'conditional', value: 'numeroAnexo', transformation: 'none', enabled: true },
 ];
 
 // Alias for backward compatibility
@@ -47,12 +47,12 @@ export const COMPRAS_CONFIG: FieldConfiguration = [
   { id: 'c13', columnLetter: 'M', label: 'Imp. Grav. Servicios', sourceType: 'static', value: '0.00', transformation: 'none', enabled: true },
   { id: 'c14', columnLetter: 'N', label: 'Crédito Fiscal (IVA)', sourceType: 'json', value: 'resumen.tributos', transformation: 'first_element_currency', enabled: true },
   { id: 'c15', columnLetter: 'O', label: 'Total Compras', sourceType: 'json', value: 'resumen.montoTotalOperacion', transformation: 'currency', enabled: true },
-  { id: 'c16', columnLetter: 'P', label: 'DUI Proveedor', sourceType: 'static', value: '', transformation: 'none', enabled: true },
-  { id: 'c17', columnLetter: 'Q', label: 'Tipo Operación', sourceType: 'static', value: '1', transformation: 'none', enabled: true },
-  { id: 'c18', columnLetter: 'R', label: 'Clasificación', sourceType: 'static', value: '1', transformation: 'none', enabled: true }, // 1: Costo, 2: Gasto
-  { id: 'c19', columnLetter: 'S', label: 'Sector', sourceType: 'static', value: '1', transformation: 'none', enabled: true }, // 1: Industria...
-  { id: 'c20', columnLetter: 'T', label: 'Tipo Costo', sourceType: 'static', value: '1', transformation: 'none', enabled: true },
-  { id: 'c21', columnLetter: 'U', label: 'Número Anexo', sourceType: 'static', value: '3', transformation: 'none', enabled: true }, // Anexo 3 for Compras
+  { id: 'c16', columnLetter: 'P', label: 'DUI Proveedor', sourceType: 'json', value: 'emisor.numDocumento', transformation: 'none', enabled: true },
+  { id: 'c17', columnLetter: 'Q', label: 'Tipo Operación', sourceType: 'conditional', value: 'tipoOperacionCompras', transformation: 'none', enabled: true },
+  { id: 'c18', columnLetter: 'R', label: 'Clasificación', sourceType: 'conditional', value: 'clasificacionCompra', transformation: 'none', enabled: true }, // 1: Costo, 2: Gasto
+  { id: 'c19', columnLetter: 'S', label: 'Sector', sourceType: 'conditional', value: 'sectorCompra', transformation: 'none', enabled: true }, // 1: Industria...
+  { id: 'c20', columnLetter: 'T', label: 'Tipo Costo', sourceType: 'conditional', value: 'tipoCostoCompra', transformation: 'none', enabled: true },
+  { id: 'c21', columnLetter: 'U', label: 'Número Anexo', sourceType: 'conditional', value: 'numeroAnexoCompras', transformation: 'none', enabled: true }, // Anexo 3 for Compras
 ];
 
 // Helper to get nested property safely
@@ -66,11 +66,80 @@ const sanitizeText = (value: string): string => {
   return value.replace(/[;,]/g, ' ').replace(/\s+/g, ' ').trim();
 };
 
-export const extractValue = (data: DTEData, field: any): string => {
+// Helper to get conditional value based on DTE type and content
+const getConditionalValue = (data: DTEData, field: string, tipoDte?: string): any => {
+  const totalExenta = parseFloat(String(data.resumen?.totalExenta || '0'));
+  const totalNoSujeta = parseFloat(String(data.resumen?.totalNoSuj || '0'));
+  const totalGravada = parseFloat(String(data.resumen?.totalGravada || '0'));
+  
+  switch (field) {
+    case 'tipoOperacion':
+      // Columna R: Tipo Operación
+      // 1=Operación gravada, 2=Operación exenta, 3=Operación no sujeta
+      if (totalGravada > 0) return '1';
+      if (totalExenta > 0) return '2';
+      if (totalNoSujeta > 0) return '3';
+      return '1'; // Default a gravada
+      
+    case 'tipoIngreso':
+      // Columna S: Tipo Ingreso
+      // 1=Exportación, 2=Ordinario, 3=Extraordinario, 4=Financieros, 5=Otros
+      if (tipoDte === '11') return '1'; // Factura de exportación
+      if (tipoDte === '14') return '5'; // Sujeto excluido -> Otros
+      return '2'; // Default a ordinario
+      
+    case 'numeroAnexo':
+      // Columna T: Número Anexo
+      // 1=Exportaciones y Operaciones Exentas, 3=Compras, etc.
+      if (tipoDte === '11' || totalExenta > 0 || totalNoSujeta > 0) return '1';
+      return '3'; // Default a anexo 3 para operaciones gravadas
+      
+    case 'tipoOperacionCompras':
+      // Columna Q: Tipo Operación en compras
+      // 1=Operación gravada, 2=Operación exenta, 3=Operación no sujeta
+      if (totalGravada > 0) return '1';
+      if (totalExenta > 0) return '2';
+      if (totalNoSujeta > 0) return '3';
+      return '1'; // Default a gravada
+      
+    case 'clasificacionCompra':
+      // Columna R: Clasificación (1=Costo, 2=Gasto)
+      // Lógica: Si es factura de compra (01, 03, 08) y tiene items de inventario -> Costo
+      // Si es factura de servicios -> Gasto
+      // Por ahora, default a Costo para compras locales
+      if (tipoDte === '01' || tipoDte === '03' || tipoDte === '08') return '1'; // Costo
+      if (tipoDte === '02' || tipoDte === '04') return '2'; // Gasto (servicios)
+      return '1'; // Default a Costo
+      
+    case 'sectorCompra':
+      // Columna S: Sector (1=Industria, 2=Comercio, 3=Servicios, 4=Agropecuario, 5=Otros)
+      // Por ahora, default a Industria
+      return '1';
+      
+    case 'tipoCostoCompra':
+      // Columna T: Tipo Costo (1=Inicial, 2=Desarrollo, 3=Terminados, 4=Otros)
+      // Por ahora, default a Otros
+      return '4';
+      
+    case 'numeroAnexoCompras':
+      // Columna U: Número Anexo para compras
+      // 1=Exportaciones y Operaciones Exentas, 3=Compras locales
+      if (tipoDte === '11' || totalExenta > 0 || totalNoSujeta > 0) return '1';
+      return '3'; // Default a anexo 3 para compras gravadas
+      
+    default:
+      return '';
+  }
+};
+
+export const extractValue = (data: DTEData, field: any, tipoDte?: string): string => {
   let rawValue: any = '';
 
   if (field.sourceType === 'static') {
     rawValue = field.value;
+  } else if (field.sourceType === 'conditional') {
+    // Manejar campos condicionales según la lógica del DTE
+    rawValue = getConditionalValue(data, field.value, tipoDte);
   } else {
     rawValue = getNestedValue(data, field.value);
   }
@@ -92,13 +161,19 @@ export const extractValue = (data: DTEData, field: any): string => {
     
     case 'currency':
       const num = parseFloat(rawValue);
-      return isNaN(num) ? '0.00' : num.toFixed(2);
+      const finalNum = isNaN(num) ? 0 : num;
+      // Si es Nota de Crédito (05), aplicar valor negativo
+      const adjustedNum = (tipoDte === '05') ? -Math.abs(finalNum) : finalNum;
+      return adjustedNum.toFixed(2);
 
     case 'first_element_currency':
       // Special case for tributos array [0].valor
       if (Array.isArray(rawValue) && rawValue.length > 0) {
          const val = parseFloat(rawValue[0].valor);
-         return isNaN(val) ? '0.00' : val.toFixed(2);
+         const finalVal = isNaN(val) ? 0 : val;
+         // Si es Nota de Crédito (05), aplicar valor negativo
+         const adjustedVal = (tipoDte === '05') ? -Math.abs(finalVal) : finalVal;
+         return adjustedVal.toFixed(2);
       }
       return '0.00';
 
