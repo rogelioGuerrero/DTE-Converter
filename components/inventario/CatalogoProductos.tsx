@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Package, Edit, Trash2, Star, StarOff, Upload, Download, AlertCircle, Settings, Ban, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Search, Plus, Package, Edit, Trash2, Star, StarOff, Upload, Download, AlertCircle, Settings, Ban, CheckCircle2, RotateCcw, TrendingUp, TrendingDown } from 'lucide-react';
 import { Producto } from '../../types/inventario';
 import { inventarioService } from '../../utils/inventario/inventarioService';
 import { notify } from '../../utils/notifications';
@@ -46,6 +46,15 @@ const CatalogoProductos: React.FC<CatalogoProductosProps> = ({
   const [mostrarPreValidacion, setMostrarPreValidacion] = useState(false);
   const [analisisPreValidacion, setAnalisisPreValidacion] = useState<any>(null);
   const [filesPendientes, setFilesPendientes] = useState<File[]>([]);
+  const [mostrarModalEntrada, setMostrarModalEntrada] = useState(false);
+  const [mostrarModalSalida, setMostrarModalSalida] = useState(false);
+  const [formularioMovimiento, setFormularioMovimiento] = useState({
+    cantidad: '',
+    costoUnitario: '',
+    documentoReferencia: '',
+    proveedorNombre: '',
+    motivo: ''
+  });
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -857,6 +866,44 @@ const CatalogoProductos: React.FC<CatalogoProductosProps> = ({
                   <dd>{productoSeleccionado.lotes.length}</dd>
                 </div>
               </dl>
+
+              {/* Botones de ajuste manual de inventario */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setFormularioMovimiento({
+                        cantidad: '',
+                        costoUnitario: productoSeleccionado.costoPromedio.toFixed(2),
+                        documentoReferencia: '',
+                        proveedorNombre: '',
+                        motivo: ''
+                      });
+                      setMostrarModalEntrada(true);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-green-700 bg-white border border-green-200 rounded-lg hover:bg-green-50 transition-colors"
+                  >
+                    <TrendingUp className="w-3 h-3" />
+                    Añadir Stock
+                  </button>
+                  <button
+                    onClick={() => {
+                      setFormularioMovimiento({
+                        cantidad: '',
+                        costoUnitario: '',
+                        documentoReferencia: '',
+                        proveedorNombre: '',
+                        motivo: ''
+                      });
+                      setMostrarModalSalida(true);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-red-700 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                  >
+                    <TrendingDown className="w-3 h-3" />
+                    Salida Manual
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -889,6 +936,219 @@ const CatalogoProductos: React.FC<CatalogoProductosProps> = ({
           }}
           onConfirm={handleConfirmarImportacion}
         />
+      )}
+
+      {/* Modal para entrada manual de stock */}
+      {mostrarModalEntrada && productoSeleccionado && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Añadir Stock - {productoSeleccionado.descripcion}</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Cantidad *
+                </label>
+                <input
+                  type="number"
+                  value={formularioMovimiento.cantidad}
+                  onChange={(e) => setFormularioMovimiento({...formularioMovimiento, cantidad: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="0"
+                  min="0.01"
+                  step="0.01"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Costo Unitario
+                </label>
+                <input
+                  type="number"
+                  value={formularioMovimiento.costoUnitario}
+                  onChange={(e) => setFormularioMovimiento({...formularioMovimiento, costoUnitario: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Dejar vacío para usar costo promedio actual ({formatMoneda(productoSeleccionado.costoPromedio)})
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Documento de Referencia
+                </label>
+                <input
+                  type="text"
+                  value={formularioMovimiento.documentoReferencia}
+                  onChange={(e) => setFormularioMovimiento({...formularioMovimiento, documentoReferencia: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Ej: FACT-001, AJUSTE_MANUAL"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Proveedor
+                </label>
+                <input
+                  type="text"
+                  value={formularioMovimiento.proveedorNombre}
+                  onChange={(e) => setFormularioMovimiento({...formularioMovimiento, proveedorNombre: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Nombre del proveedor (opcional)"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={() => setMostrarModalEntrada(false)}
+                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  const cantidad = Number(formularioMovimiento.cantidad);
+                  if (!cantidad || cantidad <= 0) {
+                    notify('Cantidad inválida', 'error');
+                    return;
+                  }
+
+                  setLoading(true);
+                  try {
+                    await inventarioService.registrarEntradaManual({
+                      productoId: productoSeleccionado.id,
+                      cantidad,
+                      costoUnitario: formularioMovimiento.costoUnitario ? Number(formularioMovimiento.costoUnitario) : undefined,
+                      documentoReferencia: formularioMovimiento.documentoReferencia || 'AJUSTE_MANUAL',
+                      proveedorNombre: formularioMovimiento.proveedorNombre || 'AJUSTE'
+                    });
+                    
+                    notify('Stock añadido correctamente', 'success');
+                    cargarDatos();
+                    setProductoSeleccionado(inventarioService.getProductoById(productoSeleccionado.id));
+                    setMostrarModalEntrada(false);
+                  } catch (e: any) {
+                    notify(e?.message || 'Error al añadir stock', 'error');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+                className="flex-1 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Procesando...' : 'Añadir Stock'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para salida manual de stock */}
+      {mostrarModalSalida && productoSeleccionado && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Salida Manual - {productoSeleccionado.descripcion}</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Cantidad *
+                </label>
+                <input
+                  type="number"
+                  value={formularioMovimiento.cantidad}
+                  onChange={(e) => setFormularioMovimiento({...formularioMovimiento, cantidad: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="0"
+                  min="0.01"
+                  max={productoSeleccionado.existenciasTotales}
+                  step="0.01"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Stock disponible: {productoSeleccionado.existenciasTotales} unidades
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Documento de Referencia
+                </label>
+                <input
+                  type="text"
+                  value={formularioMovimiento.documentoReferencia}
+                  onChange={(e) => setFormularioMovimiento({...formularioMovimiento, documentoReferencia: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Ej: DEV-001, MERMA, AJUSTE"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Motivo
+                </label>
+                <textarea
+                  value={formularioMovimiento.motivo}
+                  onChange={(e) => setFormularioMovimiento({...formularioMovimiento, motivo: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Motivo de la salida (opcional)"
+                  rows={2}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={() => setMostrarModalSalida(false)}
+                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  const cantidad = Number(formularioMovimiento.cantidad);
+                  if (!cantidad || cantidad <= 0) {
+                    notify('Cantidad inválida', 'error');
+                    return;
+                  }
+                  if (cantidad > productoSeleccionado.existenciasTotales) {
+                    notify('Stock insuficiente', 'error');
+                    return;
+                  }
+
+                  setLoading(true);
+                  try {
+                    await inventarioService.registrarSalidaManual({
+                      productoId: productoSeleccionado.id,
+                      cantidad,
+                      documentoReferencia: formularioMovimiento.documentoReferencia || 'AJUSTE_SALIDA',
+                      motivo: formularioMovimiento.motivo
+                    });
+                    
+                    notify('Salida registrada correctamente', 'success');
+                    cargarDatos();
+                    setProductoSeleccionado(inventarioService.getProductoById(productoSeleccionado.id));
+                    setMostrarModalSalida(false);
+                  } catch (e: any) {
+                    notify(e?.message || 'Error al registrar salida', 'error');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+                className="flex-1 px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Procesando...' : 'Registrar Salida'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
