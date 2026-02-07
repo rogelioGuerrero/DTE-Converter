@@ -34,3 +34,8 @@
   from = "/api/stripe/payment"
   to = "/.netlify/functions/stripe-payment"
   status = 200
+
+[[redirects]]
+  from = "/api/licensing/config"
+  to = "/.netlify/functions/licensing-config"
+  status = 200

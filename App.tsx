@@ -11,8 +11,9 @@ import GlobalToastHost from './components/GlobalToastHost';
 import { LicenseManager } from './components/LicenseManager';
 import { LicenseStatus } from './components/LicenseStatus';
 import { UserModeSetup } from './components/UserModeSetup';
-import { NavigationTabs } from './components/NavigationTabs';
+import { shouldShowUserModeSelection } from './utils/remoteLicensing';
 import { licenseValidator } from './utils/licenseValidator';
+import { NavigationTabs } from './components/NavigationTabs';
 import { LayoutDashboard, CheckCircle, Download } from 'lucide-react';
 import { downloadBackup, restoreBackupFromText } from './utils/backup';
 import { notify } from './utils/notifications';
@@ -51,12 +52,18 @@ const App: React.FC = () => {
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoreFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Verificar si es primera vez que se usa la app
+  // Verificar si es primera vez que se usa la app o si se activó licenciamiento
   useEffect(() => {
-    const hasCompletedSetup = localStorage.getItem('dte_setup_completed');
-    if (!hasCompletedSetup) {
-      setShowUserModeSetup(true);
-    }
+    const checkSetup = async () => {
+      const hasCompletedSetup = localStorage.getItem('dte_setup_completed');
+      const shouldShow = await shouldShowUserModeSelection();
+      
+      if (!hasCompletedSetup || shouldShow) {
+        setShowUserModeSetup(true);
+      }
+    };
+    
+    checkSetup();
   }, []);
 
   // Inicializar licencia al cargar la app

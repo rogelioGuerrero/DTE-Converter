@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Save, Settings, Shield, RefreshCw, HelpCircle, X, Key } from 'lucide-react';
+import { Lock, Save, Settings, Shield, X, Key } from 'lucide-react';
 import { loadSettings, saveSettings, AppSettings } from '../utils/settings';
-import { setUserMode, UserMode, getUserModeConfig } from '../utils/userMode';
+import { validateAdminPin, hasAdminPin } from '../utils/adminPin';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -12,7 +12,6 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
   const [settings, setSettings] = useState<AppSettings>(loadSettings());
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState('');
-  const [currentUserMode, setCurrentUserMode] = useState<UserMode>(getUserModeConfig().mode);
   const [activeTab, setActiveTab] = useState('general');
   const [error, setError] = useState('');
   
@@ -29,7 +28,7 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinInput === settings.pin) {
+    if (validateAdminPin(pinInput)) {
       setIsAuthenticated(true);
       setError('');
     } else {
@@ -74,7 +73,9 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                 <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
                     <Key className="w-6 h-6 text-gray-500" />
                 </div>
-                <p className="text-sm text-gray-500">Ingresa el PIN de seguridad para acceder.</p>
+                <p className="text-sm text-gray-500">
+                  Ingresa el PIN de seguridad para acceder.
+                </p>
               </div>
               
               <div>
@@ -130,10 +131,10 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                     <h4 className="text-sm font-semibold text-gray-700">PIN de Acceso</h4>
                     <div className="p-3 bg-gray-50 rounded-lg">
                       <p className="text-sm text-gray-600">
-                        PIN actual: <span className="font-mono font-bold">@1321rg</span>
+                        Estado: <span className="font-mono font-bold">{hasAdminPin() ? 'Configurado por variable de entorno' : 'No configurado (solo desarrollo)'}</span>
                       </p>
-                      <p className="text-[10px] text-gray-500 mt-1">
-                        El PIN es fijo por seguridad. Para cambiarlo, modifica el código fuente.
+                      <p className="text-xs text-gray-500 mt-1">
+                        El PIN se configura via variable de entorno VITE_ADMIN_PIN
                       </p>
                     </div>
                   </div>
@@ -141,66 +142,25 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
 
                 {activeTab === 'licencias' && (
                   <div className="space-y-4">
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-sm text-amber-800">
+                        El licenciamiento es controlado remotamente por el administrador del sistema.
+                      </p>
+                      <p className="text-xs text-amber-600 mt-1">
+                        Los cambios se aplican automáticamente a todos los usuarios.
+                      </p>
+                    </div>
                     <div className="space-y-3">
-                      <h4 className="text-sm font-semibold text-gray-700">Gestión de Licencias</h4>
-                      <div>
-                        <label className="flex items-start gap-3 cursor-pointer group">
-                          <input
-                            type="checkbox"
-                            checked={settings.licensingEnabled}
-                            onChange={(e) => setSettings({ ...settings, licensingEnabled: e.target.checked })}
-                            className="mt-0.5 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                          />
-                          <div className="flex-1">
-                            <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
-                              Activar Licenciamiento
-                            </span>
-                            <p className="text-[10px] text-gray-500 mt-0.5">
-                              Controla el acceso a funcionalidades premium mediante licencias
-                            </p>
-                            <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
-                              <HelpCircle className="w-3 h-3" />
-                              Desactivar esto permite uso ilimitado (solo para desarrollo/pruebas)
-                            </p>
-                          </div>
-                        </label>
+                      <h4 className="text-sm font-semibold text-gray-700">Estado del Licenciamiento</h4>
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <p className="text-sm text-gray-600">
+                          Estado: <span className="font-mono font-bold">Controlado por servidor</span>
+                        </p>
                       </div>
                     </div>
-                    
-                    {settings.licensingEnabled && (
-                      <div className="space-y-3 pt-4 border-t border-gray-100">
-                        <h4 className="text-sm font-semibold text-gray-700">Modo de Usuario</h4>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Usuario</label>
-                          <select
-                            value={currentUserMode}
-                            onChange={(e) => {
-                              const newMode = e.target.value as UserMode;
-                              setCurrentUserMode(newMode);
-                              setUserMode(newMode);
-                            }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                          >
-                            <option value="profesional">Profesional (acceso completo)</option>
-                            <option value="negocio">Negocio / Tienda (solo facturación)</option>
-                          </select>
-                          <p className="text-[10px] text-gray-500 mt-1">
-                            Cambia las pestañas visibles según el tipo de usuario
-                          </p>
-                          <button
-                            onClick={() => window.location.reload()}
-                            className="mt-2 flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700"
-                          >
-                            <RefreshCw className="w-3 h-3" />
-                            Recargar para aplicar cambios
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
-
-                </div>
+              </div>
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

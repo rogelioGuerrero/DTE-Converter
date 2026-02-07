@@ -1,6 +1,6 @@
 import { licenseValidator } from './licenseValidator';
-import { loadSettings } from './settings';
 import { getUserModeConfig } from './userMode';
+import { fetchLicensingConfig } from './remoteLicensing';
 
 const STORAGE_KEY = 'dte_daily_export_limit';
 
@@ -38,10 +38,19 @@ const writeUsage = (usage: DailyUsage) => {
 };
 
 export const consumeExportSlot = async (): Promise<{ allowed: boolean; remaining: number; message?: string }> => {
-  // Verificar si el licenciamiento está desactivado en configuración
-  const settings = loadSettings();
-  if (!settings.licensingEnabled) {
+  // Verificar si el licenciamiento está activado remotamente
+  const licensingConfig = await fetchLicensingConfig();
+  if (!licensingConfig.enabled) {
     return { allowed: true, remaining: -1 }; // Siempre permitido, ilimitado
+  }
+
+  // Verificar modo mantenimiento
+  if (licensingConfig.maintenanceMode) {
+    return { 
+      allowed: false, 
+      remaining: 0, 
+      message: licensingConfig.maintenanceMessage || 'La aplicación está en mantenimiento.' 
+    };
   }
 
   // Obtener modo de usuario
@@ -52,7 +61,7 @@ export const consumeExportSlot = async (): Promise<{ allowed: boolean; remaining
   
   // Si no tiene licencia, usar límite gratuito según modo
   if (!hasLicense) {
-    const maxPerDay = 5;
+    const maxPerDay = licensingConfig.dailyExportLimit || 5; // Usar límite desde servidor
     const today = getTodayString();
     const current = readUsage();
 
@@ -110,9 +119,9 @@ export const consumeExportSlot = async (): Promise<{ allowed: boolean; remaining
 };
 
 export const getUsageInfo = async (): Promise<{ count: number; remaining: number; max: number; hasLicense: boolean }> => {
-  // Verificar si el licenciamiento está desactivado en configuración
-  const settings = loadSettings();
-  if (!settings.licensingEnabled) {
+  // Verificar si el licenciamiento está activado remotamente
+  const licensingConfig = await fetchLicensingConfig();
+  if (!licensingConfig.enabled) {
     return { count: 0, remaining: -1, max: -1, hasLicense: true }; // Ilimitado
   }
 

@@ -7,8 +7,9 @@ export interface AppSettings {
   aiProvider?: string;
   aiModel?: string;
 
-  // --- Gestión de Licencias ---
-  licensingEnabled: boolean; // Control para activar/desactivar sistema de licencias
+  // --- Gestión de Licencias (solo lectura, controlado remotamente) ---
+  // NOTA: Este valor es ahora controlado por variables de entorno del servidor
+  // licensingEnabled: boolean; // Eliminado - ahora es remoto
 
   // --- Inventario simplificado (avanzado) ---
   inventoryCostingMethod?: 'UEPS' | 'PEPS' | 'PROMEDIO';
@@ -22,7 +23,7 @@ const SETTINGS_KEY = 'dte_app_settings';
 
 const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
-  pin: '@1321rg', // PIN mejorado para seguridad
+  pin: '', // PIN configurable - se debe establecer en primer uso
   myNit: '',
   myNrc: '',
   useAutoDetection: false,
@@ -30,8 +31,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   inventoryShowLotProvider: false,
   inventoryFallbackByDescription: true,
   inventoryAutoMatchThreshold: 0.9,
-  inventoryAskMatchThreshold: 0.75,
-  licensingEnabled: false // Por defecto desactivado
+  inventoryAskMatchThreshold: 0.75
+  // licensingEnabled eliminado - ahora es controlado remotamente
 };
 
 export const loadSettings = (): AppSettings => {
