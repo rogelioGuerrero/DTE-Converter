@@ -9,6 +9,7 @@
     "dev:netlify": "npx netlify-cli dev",
     "prebuild": "node scripts/generate-catalogos.mjs",
     "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit",
     "prepreview": "node scripts/generate-catalogos.mjs",
     "preview": "vite preview"
   },

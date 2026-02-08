@@ -1,9 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  FileText, Plus, Trash2, Search, User, Building2, 
-  ChevronDown, Calculator, Settings, Save,
-  CheckCircle, Loader2, FileSignature, Eye, X, Zap
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { getClients, ClientData } from '../utils/clientDb';
 import { ProductData } from '../utils/productDb';
 import { getEmisor, saveEmisor, EmisorData } from '../utils/emisorDb';
@@ -13,23 +8,27 @@ import {
 } from '../utils/dteGenerator';
 import { requiereStripe } from '../catalogos';
 import { ToastContainer, useToast } from './Toast';
-import Tooltip from './Tooltip';
-import TransmisionModal from './TransmisionModal';
-import SimuladorTransmision from './SimuladorTransmision';
-import DTEPreviewModal from './DTEPreviewModal';
-import QRClientCapture from './QRClientCapture';
 import MobileFactura from './MobileFactura';
 import MobileEmisorModal from './MobileEmisorModal';
-import { StripeConnectModal } from './StripeConnectModal';
-import QRPaymentModal from './QRPaymentModal';
-import { applySalesFromDTE, getAllStock, InventoryStock, validateStockForSale } from '../utils/inventoryDb';
+import { ResolverItem } from './ResolveNoCodeModal';
+import { FacturaHeader } from './FacturaHeader';
+import { FacturaMainContent } from './FacturaMainContent';
+import { FacturaModals } from './FacturaModals';
+import TransmisionModal from './TransmisionModal';
+import SimuladorTransmision from './SimuladorTransmision';
+import QRClientCapture from './QRClientCapture';
+import { applySalesFromDTE, validateStockForSale } from '../utils/inventoryDb';
 import { revertSalesFromDTE } from '../utils/inventoryDb';
 import { inventarioService } from '../utils/inventario/inventarioService';
-import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectActividad, SelectUbicacion } from './formularios';
-import { hasCertificate, saveCertificate } from '../utils/secureStorage';
-import LogoUploader from './LogoUploader';
-import { leerP12, CertificadoInfo, formatearFechaCertificado, validarCertificadoDTE } from '../utils/p12Handler';
 import { getUserModeConfig, hasFeature } from '../utils/userMode';
+import { resolveProductForDescription } from '../utils/facturaGeneratorHelpers';
+import { useStockByCode } from '../hooks/useStockByCode';
+import { useCertificateManager } from '../hooks/useCertificateManager';
+import { 
+  buildInventarioDTEFromGenerated,
+  getPresentacionesForCodigo as getPresentacionesForCodigoHelper,
+  validateStockForInventario as validateStockForInventarioHelper,
+} from '../utils/facturaGeneratorInventoryHelpers';
 import {
   validateNIT,
   validateNRC,
@@ -51,16 +50,6 @@ interface ItemForm {
   uniMedida: number;
   esExento: boolean;
 }
-
-type ResolverItem = {
-  index: number;
-  descripcion: string;
-  cantidad: number;
-  selectedProductoId: string;
-  recordar: boolean;
-  candidates: Array<{ productoId: string; label: string; score: number }>;
-  search: string;
-};
 
 const emptyItem: ItemForm = {
   codigo: '',
@@ -115,7 +104,6 @@ const FacturaGenerator: React.FC = () => {
   const [productPickerIndex, setProductPickerIndex] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState('');
 
-  const [stockByCode, setStockByCode] = useState<Record<string, InventoryStock>>({});
   const [stockError, setStockError] = useState<string>('');
 
   const [items, setItems] = useState<ItemForm[]>([{ ...defaultItem }]);
@@ -128,23 +116,34 @@ const FacturaGenerator: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSavingEmisor, setIsSavingEmisor] = useState(false);
 
-  const [hasCert, setHasCert] = useState(false);
-  const [certificateFile, setCertificateFile] = useState<File | null>(null);
-  const [certificatePassword, setCertificatePassword] = useState('');
-  const [showCertPassword, setShowCertPassword] = useState(false);
-  const [certificateInfo, setCertificateInfo] = useState<CertificadoInfo | null>(null);
-  const [certificateError, setCertificateError] = useState<string | null>(null);
-  const [isValidatingCert, setIsValidatingCert] = useState(false);
-  const [isSavingCert, setIsSavingCert] = useState(false);
-  const [p12Data, setP12Data] = useState<ArrayBuffer | null>(null);
-
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolverItems, setResolverItems] = useState<ResolverItem[]>([]);
   const [isRetryAfterResolve, setIsRetryAfterResolve] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   const { toasts, addToast, removeToast } = useToast();
+
+  const { stockByCode } = useStockByCode();
+
+  const {
+    hasCert,
+    certificateFile,
+    certificatePassword,
+    showCertPassword,
+    certificateInfo,
+    certificateError,
+    isValidatingCert,
+    isSavingCert,
+    fileInputRef,
+    setCertificatePassword,
+    setShowCertPassword,
+    setCertificateInfo,
+    setCertificateError,
+    handleCertFileSelect,
+    handleValidateCertificate,
+    handleSaveCertificate,
+  } = useCertificateManager({
+    onToast: (message: string, type: 'success' | 'error' | 'info') => addToast(message, type),
+  });
 
   const getStockDisplayForCodigo = (codigo: string): number | null => {
     const c = (codigo || '').trim();
@@ -183,53 +182,9 @@ const FacturaGenerator: React.FC = () => {
       .filter(Boolean) as ProductData[];
   };
 
-  const validateStockForInventario = async (
-    goods: Array<{ codigo: string; cantidad: number; descripcion?: string }>
-  ): Promise<{ ok: true } | { ok: false; message: string }> => {
-    for (const g of goods) {
-      const codigo = (g.codigo || '').trim();
-      if (!codigo) continue;
-      const producto = inventarioService.findProductoByCodigo?.(codigo) as any;
-      if (!producto) continue;
-      const qty = Number(g.cantidad) || 0;
-      if (qty <= 0) continue;
-      const stock = Number(producto.existenciasTotales) || 0;
-      if (stock < qty) {
-        return {
-          ok: false,
-          message: `Stock insuficiente para "${producto.descripcion}". Disponible: ${stock}, solicitado: ${qty}`,
-        };
-      }
-    }
-    return { ok: true };
-  };
-
   useEffect(() => {
     loadData();
-    refreshCertificateStatus();
   }, []);
-
-  useEffect(() => {
-    const loadStock = async () => {
-      try {
-        const all = await getAllStock();
-        const map: Record<string, InventoryStock> = {};
-        for (const s of all) {
-          const code = (s.productCode || '').trim();
-          if (code) map[code] = s;
-        }
-        setStockByCode(map);
-      } catch {
-        // ignore
-      }
-    };
-    loadStock();
-  }, []);
-
-  const refreshCertificateStatus = async () => {
-    const has = await hasCertificate();
-    setHasCert(has);
-  };
 
   const loadData = async () => {
     const [emisorData, clientsData, productsData] = await Promise.all([
@@ -278,56 +233,6 @@ const FacturaGenerator: React.FC = () => {
 
   const totales = calcularTotales(itemsParaCalculo);
 
-  const handleCertFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && (file.name.endsWith('.p12') || file.name.endsWith('.pfx'))) {
-      setCertificateFile(file);
-      setCertificateInfo(null);
-      setCertificateError(null);
-      const buffer = await file.arrayBuffer();
-      setP12Data(buffer);
-    }
-  };
-
-  const handleValidateCertificate = async () => {
-    if (!p12Data || !certificatePassword) return;
-    setIsValidatingCert(true);
-    setCertificateError(null);
-    try {
-      const result = await leerP12(p12Data, certificatePassword);
-      if (!result.success) {
-        setCertificateError(result.error || 'Error al leer certificado');
-        setCertificateInfo(null);
-        setHasCert(false);
-      } else if (result.certificateInfo) {
-        const validation = validarCertificadoDTE(result.certificateInfo);
-        if (!validation.valid) {
-          setCertificateError(validation.errors.join('. '));
-        }
-        setCertificateInfo(result.certificateInfo);
-      }
-    } catch (error) {
-      setCertificateError(error instanceof Error ? error.message : 'Error desconocido');
-    } finally {
-      setIsValidatingCert(false);
-    }
-  };
-
-  const handleSaveCertificate = async () => {
-    if (!p12Data || !certificatePassword || !certificateInfo) return;
-    setIsSavingCert(true);
-    try {
-      await saveCertificate(p12Data, certificatePassword);
-      setHasCert(true);
-      addToast('Certificado guardado correctamente', 'success');
-    } catch (error) {
-      console.error('Error guardando certificado:', error);
-      setCertificateError('Error al guardar el certificado. Intenta de nuevo.');
-      setHasCert(false);
-    } finally {
-      setIsSavingCert(false);
-    }
-  };
 
   const handleSaveEmisor = async () => {
     const nombreValid = emisorForm.nombre.trim().length >= 3;
@@ -459,68 +364,17 @@ const FacturaGenerator: React.FC = () => {
   };
 
   const getPresentacionesForCodigo = (codigo: string): Array<{ nombre: string; factor: number }> => {
-    const producto = inventarioService.findProductoByCodigo?.(codigo);
-    if (!producto) return [{ nombre: 'UNIDAD', factor: 1 }];
-    const base = (producto.unidadBase || 'UNIDAD').toUpperCase();
-    const pres = Array.isArray(producto.presentaciones) && producto.presentaciones.length
-      ? producto.presentaciones.map((p) => ({ nombre: (p.nombre || '').toUpperCase(), factor: Number(p.factor) || 1 }))
-      : [{ nombre: base, factor: 1 }];
-    if (!pres.some((x) => x.nombre === base)) pres.unshift({ nombre: base, factor: 1 });
-    if (!pres.some((x) => x.nombre === 'UNIDAD')) pres.unshift({ nombre: 'UNIDAD', factor: 1 });
-    const unique: Array<{ nombre: string; factor: number }> = [];
-    for (const x of pres) {
-      if (!x.nombre) continue;
-      if (unique.some((u) => u.nombre === x.nombre)) continue;
-      unique.push(x);
-    }
-    return unique;
-  };
-
-  const buildInventarioDTEFromGenerated = (dte: DTEJSON): any => {
-    const body = Array.isArray((dte as any)?.cuerpoDocumento) ? (dte as any).cuerpoDocumento : [];
-    const used = new Array(items.length).fill(false);
-    const converted = body.map((it: any) => {
-      const codigo = ((it?.codigo || '') as string).toString().trim();
-      const desc = ((it?.descripcion || '') as string).toString().trim();
-
-      const matchIdx = items.findIndex((x, i) => {
-        if (used[i]) return false;
-        const c = (x.codigo || '').toString().trim();
-        const d = (x.descripcion || '').toString().trim();
-        if (codigo && c) return c === codigo;
-        return d === desc;
-      });
-
-      const form = matchIdx >= 0 ? items[matchIdx] : undefined;
-      if (matchIdx >= 0) used[matchIdx] = true;
-
-      const factor = form ? Number(form.factorConversion) || 1 : 1;
-      const cantidad = Number(it?.cantidad) || 0;
-      return { ...it, cantidad: cantidad * factor };
+    return getPresentacionesForCodigoHelper({
+      codigo,
+      findProductoByCodigo: inventarioService.findProductoByCodigo,
     });
-    return { ...dte, cuerpoDocumento: converted };
-  };
-
-  const normalizeProductText = (value: string): string => {
-    return (value || '').trim().replace(/\s+/g, ' ').toUpperCase();
-  };
-
-  const resolveProductForDescription = (raw: string): ProductData | undefined => {
-    const value = (raw || '').trim();
-    if (!value) return undefined;
-
-    const byCode = products.find((p) => p.codigo && p.codigo.trim() === value);
-    if (byCode) return byCode;
-
-    const needle = normalizeProductText(value);
-    return products.find((p) => normalizeProductText(p.descripcion) === needle);
   };
 
   const handleItemDescriptionBlur = (index: number) => {
     const current = items[index];
     if (!current) return;
 
-    const found = resolveProductForDescription(current.descripcion);
+    const found = resolveProductForDescription({ raw: current.descripcion, products });
     if (!found) return;
 
     const newItems = [...items];
@@ -567,7 +421,10 @@ const FacturaGenerator: React.FC = () => {
       return !Boolean(inventarioService.findProductoByCodigo?.(code));
     });
 
-    const invCheck = await validateStockForInventario(invGoods);
+    const invCheck = await validateStockForInventarioHelper({
+      goods: invGoods,
+      findProductoByCodigo: inventarioService.findProductoByCodigo,
+    });
     if (!invCheck.ok) {
       setStockError(invCheck.message);
       return;
@@ -643,7 +500,10 @@ const FacturaGenerator: React.FC = () => {
     });
 
     const stockCheck = invGoods.length
-      ? await validateStockForInventario(invGoods)
+      ? await validateStockForInventarioHelper({
+          goods: invGoods,
+          findProductoByCodigo: inventarioService.findProductoByCodigo,
+        })
       : ({ ok: true } as const);
     if (!stockCheck.ok) {
       addToast(stockCheck.message, 'error');
@@ -759,7 +619,7 @@ const FacturaGenerator: React.FC = () => {
 
       setGeneratedDTE(dte);
       await applySalesFromDTE(dte);
-      const dteInventario = buildInventarioDTEFromGenerated(dte);
+      const dteInventario = buildInventarioDTEFromGenerated({ dte, items });
       await inventarioService.aplicarVentaDesdeDTE(dteInventario as any);
       addToast('DTE generado correctamente', 'success');
     } catch (error) {
@@ -845,6 +705,39 @@ const FacturaGenerator: React.FC = () => {
 
   const handleSimular = () => {
     setShowSimulador(true);
+  };
+
+  const handleDeleteGeneratedDTE = () => {
+    if (!generatedDTE) return;
+
+    if (confirm('¿Eliminar DTE generado? Esto restaurará el inventario.')) {
+      (async () => {
+        try {
+          // Inventario (IndexedDB)
+          const invDb = await revertSalesFromDTE(generatedDTE);
+          if (!invDb.ok) {
+            console.warn('No se pudo revertir inventario (IndexedDB):', invDb.message);
+          }
+
+          // Inventario simplificado
+          const docRef = (generatedDTE?.identificacion?.numeroControl || '').toString().trim();
+          if (docRef) {
+            const simp = await inventarioService.revertirVentaPorDocumentoReferencia(docRef);
+            if (!simp.ok) {
+              console.warn('No se pudo revertir inventario simplificado:', simp.message);
+            }
+          }
+        } catch (e) {
+          console.error('Error revirtiendo inventario:', e);
+        } finally {
+          setGeneratedDTE(null);
+          setShowTransmision(false);
+          setShowStripeConnect(false);
+          setShowQRPayment(false);
+          addToast('DTE eliminado. Inventario restaurado.', 'info');
+        }
+      })();
+    }
   };
 
   const handleCopyJSON = () => {
@@ -967,1022 +860,131 @@ const FacturaGenerator: React.FC = () => {
     <div className="h-[calc(100vh-180px)] flex flex-col md:h-auto">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
-      {/* Resolver items sin código */}
-      {showResolveModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Resolver productos sin código</p>
-                <p className="text-xs text-gray-500">Selecciona el producto correcto para evitar errores de inventario y cumplimiento.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowResolveModal(false);
-                  setResolverItems([]);
-                }}
-                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-                title="Cerrar"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
-              {resolverItems.map((r, idx) => (
-                <div key={`${r.index}-${idx}`} className="border border-gray-200 rounded-xl p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{r.descripcion}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">Cantidad: <span className="font-mono">{r.cantidad}</span></p>
-                    </div>
-                    <label className="flex items-center gap-2 text-xs text-gray-600 select-none">
-                      <input
-                        type="checkbox"
-                        checked={r.recordar}
-                        onChange={(e) => {
-                          const v = e.target.checked;
-                          setResolverItems((prev) => prev.map((x) => x.index === r.index ? { ...x, recordar: v } : x));
-                        }}
-                      />
-                      Recordar
-                    </label>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Producto</label>
-                      <select
-                        value={r.selectedProductoId}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setResolverItems((prev) => prev.map((x) => x.index === r.index ? { ...x, selectedProductoId: v } : x));
-                        }}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      >
-                        <option value="">Seleccionar…</option>
-                        {r.candidates.map((c) => (
-                          <option key={c.productoId} value={c.productoId}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
-                      {r.candidates.length === 0 && (
-                        <p className="text-[10px] text-amber-600 mt-1">No hay candidatos. Crea el producto en Productos o ajusta la descripción.</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Buscar en inventario</label>
-                      <input
-                        type="text"
-                        value={r.search}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          const candidatos = inventarioService.buscarProductosFacturacion(v)
-                            .slice(0, 8)
-                            .map((p) => ({
-                              productoId: p.id,
-                              label: `${inventarioService.getCodigoPreferidoProducto(p) ? `[${inventarioService.getCodigoPreferidoProducto(p)}] ` : ''}${p.descripcion}`,
-                              score: 0,
-                            }));
-                          setResolverItems((prev) => prev.map((x) => x.index === r.index ? { ...x, search: v, candidates: v.trim() ? candidatos : x.candidates } : x));
-                        }}
-                        placeholder="Escribe para buscar…"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      />
-                      <p className="text-[10px] text-gray-400 mt-1">Opcional: si no aparece, búscalo manualmente.</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowResolveModal(false);
-                  setResolverItems([]);
-                }}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmarResolucion}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-              >
-                Continuar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Transmision Modal */}
-      {showTransmision && generatedDTE && (
-        <TransmisionModal
-          dte={generatedDTE}
-          onClose={() => setShowTransmision(false)}
-          onSuccess={(sello) => {
-            addToast(`DTE transmitido. Sello: ${sello.substring(0, 8)}...`, 'success');
-          }}
-          ambiente="00"
-          logoUrl={emisor?.logo}
-        />
-      )}
-
-      {showSimulador && generatedDTE && (
-        <SimuladorTransmision
-          dte={generatedDTE}
-          onClose={() => setShowSimulador(false)}
-          onSuccess={(res) => {
-            setShowSimulador(false);
-            if (res.success && res.selloRecepcion) {
-              addToast(`Simulación OK. Sello: ${res.selloRecepcion.substring(0, 8)}...`, 'success');
-            } else {
-              addToast('Simulación finalizada con errores.', 'error');
-            }
-          }}
-        />
-      )}
-
-      {/* DTE Preview Modal */}
-      {showDTEPreview && generatedDTE && (
-        <DTEPreviewModal
-          dte={generatedDTE}
-          onClose={() => setShowDTEPreview(false)}
-          onTransmit={() => {
-            setShowDTEPreview(false);
-            setShowTransmision(true);
-          }}
-          onCopy={handleCopyJSON}
-          onDownload={handleDownloadJSON}
-        />
-      )}
-
-      {/* QR Client Capture Modal */}
-      {showQRCapture && (
-        <QRClientCapture
-          onClose={() => setShowQRCapture(false)}
-          onClientImported={(client) => {
-            setSelectedReceptor(client);
-            setShowQRCapture(false);
-            addToast(`Cliente "${client.name}" importado`, 'success');
-            loadData();
-          }}
-        />
-      )}
+      <FacturaModals
+        // ResolveNoCodeModal
+        showResolveModal={showResolveModal}
+        setShowResolveModal={setShowResolveModal}
+        resolverItems={resolverItems}
+        setResolverItems={setResolverItems}
+        inventarioService={inventarioService}
+        addToast={addToast}
+        confirmarResolucion={confirmarResolucion}
+        // TransmisionModal
+        showTransmision={showTransmision}
+        generatedDTE={generatedDTE}
+        emisor={emisor}
+        setShowTransmision={setShowTransmision}
+        // SimuladorTransmision
+        showSimulador={showSimulador}
+        setShowSimulador={setShowSimulador}
+        // DTEPreviewModal
+        showDTEPreview={showDTEPreview}
+        setShowDTEPreview={setShowDTEPreview}
+        handleCopyJSON={handleCopyJSON}
+        handleDownloadJSON={handleDownloadJSON}
+        // QRClientCapture
+        showQRCapture={showQRCapture}
+        setShowQRCapture={setShowQRCapture}
+        setSelectedReceptor={setSelectedReceptor}
+        loadData={loadData}
+        // EmisorConfigModal
+        showEmisorConfig={showEmisorConfig}
+        setShowEmisorConfig={setShowEmisorConfig}
+        emisorForm={emisorForm}
+        setEmisorForm={setEmisorForm}
+        nitValidation={nitValidation}
+        nrcValidation={nrcValidation}
+        telefonoValidation={telefonoValidation}
+        correoValidation={correoValidation}
+        formatTextInput={formatTextInput}
+        formatMultilineTextInput={formatMultilineTextInput}
+        handleSaveEmisor={handleSaveEmisor}
+        isSavingEmisor={isSavingEmisor}
+        hasCert={hasCert}
+        fileInputRef={fileInputRef}
+        certificateFile={certificateFile}
+        certificatePassword={certificatePassword}
+        showCertPassword={showCertPassword}
+        certificateInfo={certificateInfo}
+        certificateError={certificateError}
+        isValidatingCert={isValidatingCert}
+        isSavingCert={isSavingCert}
+        setCertificatePassword={setCertificatePassword}
+        setShowCertPassword={setShowCertPassword}
+        setCertificateInfo={setCertificateInfo}
+        setCertificateError={setCertificateError}
+        handleCertFileSelect={handleCertFileSelect}
+        handleValidateCertificate={handleValidateCertificate}
+        handleSaveCertificate={handleSaveCertificate}
+        // ProductPickerModal
+        canUseCatalogoProductos={canUseCatalogoProductos}
+        showProductPicker={showProductPicker}
+        productSearch={productSearch}
+        setProductSearch={setProductSearch}
+        filteredProductsForPicker={filteredProductsForPicker}
+        productPickerIndex={productPickerIndex}
+        applyProductToItem={applyProductToItem}
+        setShowProductPicker={setShowProductPicker}
+        // QRPaymentModal
+        showQRPayment={showQRPayment}
+        setShowQRPayment={setShowQRPayment}
+        // StripeConnectModal
+        showStripeConnect={showStripeConnect}
+        setShowStripeConnect={setShowStripeConnect}
+        handleStripeConnectSuccess={handleStripeConnectSuccess}
+        totales={totales}
+      />
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Generar Factura DTE</h2>
-          <p className="text-sm text-gray-500">Crea documentos tributarios electrónicos</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Tooltip
-            content={emisor ? 'Datos del emisor configurados' : 'Configura los datos del emisor'}
-            position="bottom"
-          >
-            <button
-              onClick={() => setShowEmisorConfig(true)}
-              className={`p-2 rounded-lg transition-colors ${
-                emisor 
-                  ? 'text-green-600 bg-green-50 hover:bg-green-100' 
-                  : 'text-amber-600 bg-amber-50 hover:bg-amber-100'
-              }`}
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          </Tooltip>
-        </div>
-      </div>
+      <FacturaHeader emisor={emisor} onOpenEmisorConfig={() => setShowEmisorConfig(true)} />
 
       {/* Main Content */}
-      <div className="flex-1 grid grid-cols-12 gap-4 min-h-0">
-        
-        {/* Left: Form */}
-        <div className="col-span-8 bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            
-            {/* Receptor y Tipo de Documento */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
-                  Receptor (Cliente) <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <button
-                    onClick={() => setShowClientSearch(!showClientSearch)}
-                    className={`w-full px-3 py-2 border rounded-lg text-sm text-left flex items-center justify-between ${
-                      selectedReceptor ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-blue-400'
-                    }`}
-                  >
-                    {selectedReceptor ? (
-                      <span className="truncate">{selectedReceptor.name}</span>
-                    ) : (
-                      <span className="text-gray-400">Seleccionar cliente...</span>
-                    )}
-                    <User className="w-4 h-4 text-gray-400" />
-                  </button>
-
-                  {showClientSearch && (
-                    <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-hidden">
-                      <div className="p-2 border-b border-gray-100">
-                        <div className="relative">
-                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <input
-                            type="text"
-                            value={clientSearch}
-                            onChange={(e) => setClientSearch(e.target.value)}
-                            placeholder="Buscar por nombre o NIT..."
-                            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                            autoFocus
-                          />
-                        </div>
-                      </div>
-                      <div className="max-h-48 overflow-y-auto">
-                        <button
-                          onClick={() =>
-                            handleSelectReceptor({
-                              nit: '',
-                              name: 'Consumidor Final',
-                              nrc: '',
-                              nombreComercial: '',
-                              actividadEconomica: '',
-                              descActividad: '',
-                              departamento: '',
-                              municipio: '',
-                              direccion: '',
-                              email: '',
-                              telefono: '',
-                              timestamp: Date.now(),
-                            })
-                          }
-                          className="w-full px-3 py-2 text-left hover:bg-blue-50 transition-colors border-b border-gray-100"
-                        >
-                          <p className="text-sm font-medium text-gray-800 truncate">Consumidor Final</p>
-                          <p className="text-xs text-gray-400">Sin documento</p>
-                        </button>
-                        {filteredClients.length === 0 ? (
-                          <p className="p-3 text-sm text-gray-400 text-center">Sin resultados</p>
-                        ) : (
-                          filteredClients.map(client => (
-                            <button
-                              key={client.id}
-                              onClick={() => handleSelectReceptor(client)}
-                              className="w-full px-3 py-2 text-left hover:bg-blue-50 transition-colors"
-                            >
-                              <p className="text-sm font-medium text-gray-800 truncate">{client.name}</p>
-                              <p className="text-xs text-gray-400">NIT: {client.nit}</p>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
-                  Tipo de Documento
-                  {receptorEsConsumidorFinal && (
-                    <Tooltip content="Para Consumidor Final solo se permiten: Factura (01), Factura Simplificada (02), Tiquetes (10) y Factura de Exportación (11)" position="bottom">
-                      <span className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold cursor-help">
-                        i
-                      </span>
-                    </Tooltip>
-                  )}
-                </label>
-                <div className="relative">
-                  <select
-                    value={tipoDocumento}
-                    onChange={(e) => setTipoDocumento(e.target.value)}
-                    disabled={!selectedReceptor}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white disabled:bg-gray-50 disabled:text-gray-400"
-                  >
-                    {tiposDocumentoFiltrados.map(t => (
-                      <option
-                        key={t.codigo}
-                        value={t.codigo}
-                      >
-                        {t.codigo} - {t.descripcion}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                </div>
-
-                {!selectedReceptor && (
-                  <p className="mt-1 text-[11px] text-gray-400">
-                    Selecciona receptor para ver documentos disponibles.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Items */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-medium text-gray-500 uppercase">Detalle de Items</label>
-                <button
-                  onClick={handleAddItem}
-                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
-                >
-                  <Plus className="w-3 h-3" /> Agregar
-                </button>
-              </div>
-
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-                    <tr>
-                      <th className="px-2 py-2 text-left w-8">#</th>
-                      <th className="px-2 py-2 text-left">Descripción</th>
-                      <th className="px-2 py-2 text-center w-20">Cant.</th>
-                      <th className="px-2 py-2 text-right w-24">Precio</th>
-                      <th className="px-2 py-2 text-right w-24">Subtotal</th>
-                      <th className="px-2 py-2 text-center w-16">Exento</th>
-                      <th className="px-2 py-2 w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {items.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-2 py-2 text-gray-400">{idx + 1}</td>
-                        <td className="px-2 py-2">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={item.descripcion}
-                              onChange={(e) => handleItemChange(idx, 'descripcion', e.target.value)}
-                              onBlur={() => handleItemDescriptionBlur(idx)}
-                              className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                            />
-                            {canUseCatalogoProductos && (
-                              <button
-                                type="button"
-                                onClick={() => openProductPicker(idx)}
-                                className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors whitespace-nowrap"
-                                title="Buscar en catálogo"
-                              >
-                                Catálogo
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-2 py-2">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              value={item.cantidad}
-                              onChange={(e) => handleItemChange(idx, 'cantidad', parseFloat(e.target.value) || 0)}
-                              className="w-16 px-2 py-1 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                              min="0"
-                              step="0.01"
-                            />
-                            <select
-                              value={(item.unidadVenta || 'UNIDAD').toUpperCase()}
-                              onChange={(e) => {
-                                const unidad = (e.target.value || 'UNIDAD').toUpperCase();
-                                const pres = getPresentacionesForCodigo(item.codigo || '');
-                                const found = pres.find((p) => p.nombre === unidad);
-                                handleItemChange(idx, 'unidadVenta', unidad);
-                                handleItemChange(idx, 'factorConversion', found ? found.factor : 1);
-                              }}
-                              disabled={!(item.codigo || '').trim()}
-                              className="px-2 py-1 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                            >
-                              {getPresentacionesForCodigo(item.codigo || '').map((p) => (
-                                <option key={p.nombre} value={p.nombre}>{p.nombre}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </td>
-                        <td className="px-2 py-1">
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={item.precioUniRaw ?? Number(item.precioUni || 0).toFixed(2)}
-                            onChange={(e) => handlePrecioUniChange(idx, e.target.value)}
-                            onBlur={() => handlePrecioUniBlur(idx)}
-                            className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right focus:ring-1 focus:ring-blue-500 outline-none"
-                          />
-                          {(() => {
-                            const code = (item.codigo || '').trim();
-                            if (!code) return null;
-                            const stock = getStockDisplayForCodigo(code);
-                            if (stock === null) return null;
-                            return (
-                              <p className="mt-1 text-[10px] text-gray-400 text-center">
-                                Stock: {Number(stock).toFixed(2)}
-                              </p>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-2 py-2 text-right font-mono text-gray-700">
-                          ${redondear(item.cantidad * item.precioUni, 2).toFixed(2)}
-                        </td>
-                        <td className="px-2 py-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={item.esExento}
-                            onChange={(e) => handleItemChange(idx, 'esExento', e.target.checked)}
-                            className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <button
-                            onClick={() => handleRemoveItem(idx)}
-                            disabled={items.length === 1}
-                            className="p-1 text-gray-300 hover:text-red-500 disabled:opacity-30"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Forma de Pago y Observaciones */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Forma de Pago</label>
-                <div className="relative">
-                  <select
-                    value={formaPago}
-                    onChange={(e) => setFormaPago(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
-                  >
-                    {formasPago.map(f => (
-                      <option key={f.codigo} value={f.codigo}>{f.descripcion}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Condición</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setCondicionOperacion(1)}
-                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      condicionOperacion === 1 ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    Contado
-                  </button>
-                  <button
-                    onClick={() => setCondicionOperacion(2)}
-                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      condicionOperacion === 2 ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    Crédito
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Observaciones</label>
-              <textarea
-                value={observaciones}
-                onChange={(e) => setObservaciones(e.target.value)}
-                rows={2}
-                placeholder="Observaciones opcionales..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-              />
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="p-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-2">
-            {stockError && (
-              <div className="mr-auto text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">
-                {stockError}
-              </div>
-            )}
-            <button
-              onClick={handleGenerateDTE}
-              disabled={isGenerating || !emisor || !selectedReceptor || !!stockError}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isGenerating ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <FileText className="w-4 h-4" />
-              )}
-              {generatedDTE ? 'Actualizar DTE' : 'Generar DTE'}
-            </button>
-            <button
-              onClick={handleNuevaFactura}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Nueva Factura
-            </button>
-          </div>
-        </div>
-
-        {/* Right: Totals & Preview */}
-        <div className="col-span-4 flex flex-col gap-4">
-          
-          {/* Totales */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-              <Calculator className="w-4 h-4" /> Resumen
-            </h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Gravado:</span>
-                <span className="font-mono">${totales.totalGravada.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Exento:</span>
-                <span className="font-mono">${totales.totalExenta.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Subtotal:</span>
-                <span className="font-mono">${totales.subTotalVentas.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-blue-600">
-                <span>IVA 13%:</span>
-                <span className="font-mono">${totales.iva.toFixed(2)}</span>
-              </div>
-              <div className="border-t border-gray-200 pt-2 flex justify-between text-lg font-bold">
-                <span>Total:</span>
-                <span className="font-mono text-green-600">${totales.totalPagar.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Receptor Info */}
-          {selectedReceptor && (
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                <User className="w-4 h-4" /> Receptor
-              </h3>
-              <div className="text-sm space-y-1">
-                <p className="font-medium text-gray-800">{selectedReceptor.name}</p>
-                <p className="text-gray-500">NIT: {selectedReceptor.nit}</p>
-                {selectedReceptor.nrc && <p className="text-gray-500">NRC: {selectedReceptor.nrc}</p>}
-                <p className="text-gray-500">{selectedReceptor.email}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Generated DTE - Compact Card */}
-          {generatedDTE && (
-            <div className="bg-white rounded-xl border border-green-200 p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-gray-900">DTE Generado</h3>
-                  <p className="text-xs text-gray-500 font-mono truncate">
-                    {generatedDTE.identificacion.codigoGeneracion.substring(0, 20)}...
-                  </p>
-                </div>
-              </div>
-              
-              <div className="bg-green-50 rounded-lg p-3 mb-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-green-600">Total</span>
-                  <span className="text-lg font-bold text-green-700">
-                    ${generatedDTE.resumen.totalPagar.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <button
-                  onClick={() => setShowDTEPreview(true)}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium transition-colors"
-                >
-                  <Eye className="w-4 h-4" />
-                  Ver Detalles
-                </button>
-                
-                <button
-                  onClick={handleTransmitir}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors"
-                >
-                  <FileText className="w-4 h-4" />
-                  {requiereStripe(formaPago) ? 'Cobrar con Tarjeta' : 'Transmitir a Hacienda'}
-                </button>
-                
-                <button
-                  onClick={handleSimular}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium transition-colors"
-                >
-                  <Zap className="w-4 h-4" />
-                  Simular Transmisión
-                </button>
-                
-                {generatedDTE && (
-                  <button
-                    onClick={() => {
-                      if (confirm('¿Eliminar DTE generado? Esto restaurará el inventario.')) {
-                        (async () => {
-                          try {
-                            // Inventario (IndexedDB)
-                            const invDb = await revertSalesFromDTE(generatedDTE);
-                            if (!invDb.ok) {
-                              console.warn('No se pudo revertir inventario (IndexedDB):', invDb.message);
-                            }
-
-                            // Inventario simplificado
-                            const docRef = (generatedDTE?.identificacion?.numeroControl || '').toString().trim();
-                            if (docRef) {
-                              const simp = await inventarioService.revertirVentaPorDocumentoReferencia(docRef);
-                              if (!simp.ok) {
-                                console.warn('No se pudo revertir inventario simplificado:', simp.message);
-                              }
-                            }
-                          } catch (e) {
-                            console.error('Error revirtiendo inventario:', e);
-                          } finally {
-                            setGeneratedDTE(null);
-                            setShowTransmision(false);
-                            setShowStripeConnect(false);
-                            setShowQRPayment(false);
-                            addToast('DTE eliminado. Inventario restaurado.', 'info');
-                          }
-                        })();
-                      }
-                    }}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Eliminar DTE
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Modal: Configurar Emisor */}
-      {showEmisorConfig && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <Building2 className="w-5 h-5" /> Configurar Datos del Emisor
-              </h3>
-              <button onClick={() => setShowEmisorConfig(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded">
-                ✕
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <NitOrDuiField
-                    label="NIT"
-                    required
-                    value={emisorForm.nit}
-                    onChange={(nit) => setEmisorForm({ ...emisorForm, nit })}
-                    validation={nitValidation}
-                    placeholder="0000-000000-000-0"
-                    messageVariant="below-invalid"
-                    colorMode="status"
-                  />
-                </div>
-                <div>
-                  <NrcField
-                    label="NRC"
-                    required
-                    value={emisorForm.nrc}
-                    onChange={(nrc) => setEmisorForm({ ...emisorForm, nrc })}
-                    validation={nrcValidation}
-                    placeholder="000000-0"
-                    messageVariant="below-invalid"
-                    colorMode="status"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Nombre / Razón Social <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    value={emisorForm.nombre}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, nombre: formatTextInput(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="Nombre legal del contribuyente"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Nombre Comercial</label>
-                  <input
-                    type="text"
-                    value={emisorForm.nombreComercial}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, nombreComercial: formatTextInput(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="Nombre comercial (opcional)"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <LogoUploader
-                    currentLogo={emisorForm.logo}
-                    onLogoChange={(logo) => setEmisorForm({ ...emisorForm, logo })}
-                  />
-                </div>
-                <div>
-                  <SelectActividad
-                    value={emisorForm.actividadEconomica}
-                    onChange={(codigo, descripcion) => setEmisorForm({ ...emisorForm, actividadEconomica: codigo, descActividad: descripcion })}
-                    required
-                    label="Actividad Económica"
-                    placeholder="Escribe una actividad..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Código Actividad <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    value={emisorForm.actividadEconomica}
-                    readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 text-gray-700 font-mono focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="Se completa al seleccionar"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <SelectUbicacion
-                    departamento={emisorForm.departamento}
-                    municipio={emisorForm.municipio}
-                    onDepartamentoChange={(codigo) =>
-                      setEmisorForm((prev) => ({ ...prev, departamento: codigo, municipio: '' }))
-                    }
-                    onMunicipioChange={(codigo) => setEmisorForm((prev) => ({ ...prev, municipio: codigo }))}
-                    required
-                    showLabels
-                    layout="horizontal"
-                    size="md"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Dirección <span className="text-red-500">*</span></label>
-                  <textarea
-                    value={emisorForm.direccion}
-                    onChange={(e) => setEmisorForm({ ...emisorForm, direccion: formatMultilineTextInput(e.target.value) })}
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                    placeholder="Calle, número, colonia, etc."
-                  />
-                </div>
-                <div>
-                  <PhoneField
-                    label="Teléfono"
-                    required
-                    value={emisorForm.telefono}
-                    onChange={(telefono) => setEmisorForm({ ...emisorForm, telefono })}
-                    validation={telefonoValidation}
-                    placeholder="0000-0000"
-                    messageVariant="below-invalid"
-                    colorMode="status"
-                  />
-                </div>
-                <div>
-                  <EmailField
-                    label="Correo"
-                    required
-                    value={emisorForm.correo}
-                    onChange={(correo) => setEmisorForm({ ...emisorForm, correo })}
-                    validation={correoValidation}
-                    placeholder="correo@ejemplo.com"
-                    messageVariant="below-invalid"
-                    colorMode="status"
-                  />
-                </div>
-                <div className="col-span-2 mt-2 pt-4 border-t border-gray-100">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <FileSignature className={`w-4 h-4 ${hasCert ? 'text-blue-600' : 'text-gray-400'}`} />
-                      <div>
-                        <p className="text-xs font-semibold text-gray-700 uppercase">Firma electrónica</p>
-                        <p className="text-[11px] text-gray-500">
-                          {hasCert
-                                ? 'Tu certificado está guardado. Puedes actualizarlo cuando quieras.'
-                                : 'Aún no has registrado tu certificado digital (.p12/.pfx) y PIN.'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".p12,.pfx"
-                    onChange={handleCertFileSelect}
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`w-full p-3 border-2 border-dashed rounded-xl text-sm mb-3 transition-colors ${
-                      certificateFile ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-300 text-gray-600 hover:border-blue-400 hover:bg-blue-50'
-                    }`}
-                  >
-                    {certificateFile ? (
-                      <span>{certificateFile.name}</span>
-                    ) : (
-                      <span>Seleccionar archivo .p12 / .pfx</span>
-                    )}
-                  </button>
-                  {certificateFile && (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Contraseña / PIN del certificado</label>
-                        <div className="relative">
-                          <input
-                            type={showCertPassword ? 'text' : 'password'}
-                            value={certificatePassword}
-                            onChange={(e) => {
-                              setCertificatePassword(e.target.value);
-                              setCertificateInfo(null);
-                              setCertificateError(null);
-                            }}
-                            placeholder="PIN que te dio Hacienda"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm pr-10 focus:ring-2 focus:ring-blue-500 outline-none"
-                          />
-                          <button
-                                type="button"
-                                onClick={() => setShowCertPassword(!showCertPassword)}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs"
-                              >
-                                {showCertPassword ? 'Ocultar' : 'Ver'}</button>
-                        </div>
-                        <p className="text-[11px] text-gray-400 mt-1">Es el PIN que recibiste junto con tu certificado.</p>
-                      </div>
-                      {certificatePassword.length >= 4 && !certificateInfo && (
-                        <button
-                          onClick={handleValidateCertificate}
-                          disabled={isValidatingCert}
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                        >
-                          {isValidatingCert ? 'Validando…' : 'Validar certificado'}
-                        </button>
-                      )}
-                      {certificateError && (
-                        <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
-                          {certificateError}
-                        </div>
-                      )}
-                      {certificateInfo && (
-                        <div className="p-3 rounded-lg border bg-green-50 border-green-200 text-xs space-y-1">
-                          <p className="font-semibold text-green-700 flex items-center gap-1">
-                            <span>Certificado válido</span>
-                          </p>
-                          <p className="text-gray-700">Titular: {certificateInfo.subject.commonName}</p>
-                          <p className="text-gray-700">
-                            Válido hasta: {formatearFechaCertificado(certificateInfo.validTo)}
-                          </p>
-                        </div>
-                      )}
-                      <button
-                            onClick={handleSaveCertificate}
-                            disabled={!certificateInfo || isSavingCert}
-                            className="w-full mt-2 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-                          >
-                            {isSavingCert ? 'Guardando firma…' : 'Guardar firma digital'}</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-4 border-t border-gray-100 flex items-center justify-between">
-              <p className="text-xs text-gray-400"><span className="text-red-500">*</span> Campos obligatorios</p>
-              <div className="flex gap-2">
-              <button
-                onClick={() => setShowEmisorConfig(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveEmisor}
-                disabled={isSavingEmisor}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {isSavingEmisor ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Guardar
-              </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {canUseCatalogoProductos && showProductPicker && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-900 truncate">Seleccionar producto</p>
-                <p className="text-xs text-gray-500">Busca por código o descripción</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowProductPicker(false)}
-                className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
-              >
-                Cerrar
-              </button>
-            </div>
-
-            <div className="p-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  placeholder="Ej: 14848 o TOMA ADAPTADOR..."
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  autoFocus
-                />
-              </div>
-
-              <div className="mt-3 max-h-80 overflow-y-auto border border-gray-100 rounded-xl">
-                {filteredProductsForPicker.length === 0 ? (
-                  <div className="p-6 text-sm text-gray-400 text-center">Sin resultados</div>
-                ) : (
-                  filteredProductsForPicker.slice(0, 200).map((p) => (
-                    <button
-                      key={p.id ?? p.key}
-                      type="button"
-                      onClick={() => {
-                        const idx = productPickerIndex;
-                        if (typeof idx === 'number') {
-                          applyProductToItem(idx, p);
-                        }
-                        setShowProductPicker(false);
-                      }}
-                      className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">{p.descripcion}</p>
-                          <p className="text-xs text-gray-500 mt-0.5 truncate">
-                            {p.codigo ? `Código: ${p.codigo}` : 'Sin código'}
-                          </p>
-                        </div>
-                        <div className="text-right whitespace-nowrap">
-                          <p className="text-sm font-mono text-gray-900">${p.precioUni.toFixed(2)}</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-
-              {filteredProductsForPicker.length > 200 && (
-                <p className="mt-2 text-xs text-gray-400">Mostrando 200 resultados. Refina tu búsqueda.</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Modal: QR Payment */}
-      {showQRPayment && generatedDTE && (
-        <QRPaymentModal
-          isOpen={showQRPayment}
-          onClose={() => setShowQRPayment(false)}
-          totalAmount={Number(generatedDTE.resumen?.totalPagar || 0)}
-          dteJson={generatedDTE}
-          sellerInfo={{
-            businessName: (emisor as any)?.nombreComercial || (emisor as any)?.nombre || '',
-            name: (emisor as any)?.nombre || ''
-          }}
-          onPaymentGenerated={(checkoutUrl, sessionId) => {
-            console.log('Pago generado:', { checkoutUrl, sessionId });
-            // Aquí puedes manejar el seguimiento del pago
-          }}
-        />
-      )}
-      
-      {/* Modal: Stripe Connect */}
-      {showStripeConnect && generatedDTE && (
-        <StripeConnectModal
-          isOpen={showStripeConnect}
-          onClose={() => setShowStripeConnect(false)}
-          onSuccess={handleStripeConnectSuccess}
-          clienteId={String((emisor as any)?.nit || '')}
-          clienteNombre={String((emisor as any)?.nombreComercial || (emisor as any)?.nombre || '')}
-          totalVenta={Number(totales.subTotalVentas || 0)}
-        />
-      )}
+      <FacturaMainContent
+        // Left column
+        selectedReceptor={selectedReceptor}
+        showClientSearch={showClientSearch}
+        setShowClientSearch={setShowClientSearch}
+        clientSearch={clientSearch}
+        setClientSearch={setClientSearch}
+        filteredClients={filteredClients}
+        onSelectReceptor={handleSelectReceptor}
+        tipoDocumento={tipoDocumento}
+        setTipoDocumento={setTipoDocumento}
+        receptorEsConsumidorFinal={receptorEsConsumidorFinal}
+        tiposDocumentoFiltrados={tiposDocumentoFiltrados}
+        items={items}
+        canUseCatalogoProductos={canUseCatalogoProductos}
+        onAddItem={handleAddItem}
+        onRemoveItem={handleRemoveItem}
+        onOpenProductPicker={openProductPicker}
+        onItemChange={handleItemChange}
+        onItemDescriptionBlur={handleItemDescriptionBlur}
+        onPrecioUniChange={handlePrecioUniChange}
+        onPrecioUniBlur={handlePrecioUniBlur}
+        getPresentacionesForCodigo={getPresentacionesForCodigo}
+        getStockDisplayForCodigo={getStockDisplayForCodigo}
+        redondear={redondear}
+        formaPago={formaPago}
+        setFormaPago={setFormaPago}
+        formasPago={formasPago}
+        condicionOperacion={condicionOperacion}
+        setCondicionOperacion={setCondicionOperacion}
+        observaciones={observaciones}
+        setObservaciones={setObservaciones}
+        stockError={stockError}
+        isGenerating={isGenerating}
+        emisor={emisor}
+        generatedDTE={generatedDTE}
+        onGenerateDTE={handleGenerateDTE}
+        onNuevaFactura={handleNuevaFactura}
+        // Right column
+        totales={totales}
+        requiereStripe={requiereStripe}
+        onOpenDTEPreview={() => setShowDTEPreview(true)}
+        onTransmit={handleTransmitir}
+        onSimulate={handleSimular}
+        onDeleteDTE={handleDeleteGeneratedDTE}
+      />
     </div>
   );
 };
