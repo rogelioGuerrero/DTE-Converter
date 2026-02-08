@@ -109,4 +109,11 @@ function showForceUpdateModal(minVersion: string) {
     minVersion,
     message: `Por favor actualiza la app a la versión ${minVersion} para continuar.`
   }));
+
+  // Notificar a la app actual (misma pestaña) para que reaccione inmediatamente
+  try {
+    window.dispatchEvent(new Event('dte-force-update'));
+  } catch {
+    // noop
+  }
 }

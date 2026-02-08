@@ -17,6 +17,7 @@ import { NavigationTabs } from './components/NavigationTabs';
 import { LayoutDashboard, CheckCircle, Download } from 'lucide-react';
 import { downloadBackup, restoreBackupFromText } from './utils/backup';
 import { notify } from './utils/notifications';
+import ForceUpdateModal from './components/ForceUpdateModal';
 
 type AppTab = 'batch' | 'clients' | 'products' | 'inventory' | 'factura' | 'historial';
 
@@ -46,11 +47,46 @@ const App: React.FC = () => {
   const [showLicenseManager, setShowLicenseManager] = useState(false);
   const [showUserModeSetup, setShowUserModeSetup] = useState(false);
   const [showBackupMenu, setShowBackupMenu] = useState(false);
+  const [forceUpdateInfo, setForceUpdateInfo] = useState<{ minVersion: string; message?: string } | null>(null);
   // TODO: Implementar modal de restauración
   // const [showRestoreModal, setShowRestoreModal] = useState(false);
   const clickCountRef = useRef(0);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoreFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const readForceUpdateInfo = () => {
+    try {
+      const raw = localStorage.getItem('dte_force_update');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed?.required || !parsed?.minVersion) return null;
+      return { minVersion: String(parsed.minVersion), message: parsed.message ? String(parsed.message) : undefined };
+    } catch {
+      return null;
+    }
+  };
+
+  // Escuchar bandera de actualización forzada
+  useEffect(() => {
+    const apply = () => {
+      const info = readForceUpdateInfo();
+      setForceUpdateInfo(info);
+    };
+
+    apply();
+
+    const onForceUpdate = () => apply();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'dte_force_update') apply();
+    };
+
+    window.addEventListener('dte-force-update', onForceUpdate);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('dte-force-update', onForceUpdate);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 
   // Verificar si es primera vez que se usa la app o si se activó licenciamiento
   useEffect(() => {
@@ -150,6 +186,21 @@ const App: React.FC = () => {
   // Si está en modo setup, mostrar pantalla completa
   if (showUserModeSetup) {
     return <UserModeSetup onComplete={handleSetupComplete} />;
+  }
+
+  // Actualización requerida: bloquear el uso de la app hasta recargar
+  if (forceUpdateInfo) {
+    return (
+      <>
+        <ForceUpdateModal
+          isOpen={true}
+          minVersion={forceUpdateInfo.minVersion}
+          message={forceUpdateInfo.message}
+          onReload={() => window.location.reload()}
+        />
+        <GlobalToastHost />
+      </>
+    );
   }
 
   return (
