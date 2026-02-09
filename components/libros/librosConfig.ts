@@ -267,9 +267,9 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
         },
         getValor: (item, key) => item[key] || '',
         calcularTotales: (items) => {
-          const totales = {
+          const totales: Record<string, number> = {
             ventasExentas: 0,
-            exportaciones: 0,
+            ventasNoSujetas: 0,
             ventasGravadas: 0,
             debitoFiscal: 0,
             ventaCuentaTerceros: 0,
@@ -280,7 +280,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           
           items.forEach(item => {
             totales.ventasExentas += item.ventasExentas || 0;
-            totales.exportaciones += item.exportaciones || 0;
+            totales.ventasNoSujetas += item.ventasNoSujetas || 0;
             totales.ventasGravadas += item.ventasGravadas || 0;
             totales.debitoFiscal += item.debitoFiscal || 0;
             totales.ventaCuentaTerceros += item.ventaCuentaTerceros || 0;

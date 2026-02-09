@@ -249,13 +249,14 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
           cliente: file.data.receiver,
           nrc: csvParts[7] || '', // receptor.nrc
           ventasExentas: parseFloat(csvParts[9] || '0'), // totalExenta (index 9 in VENTAS_CONFIG)
-          exportaciones: 0,
+          ventasNoSujetas: parseFloat(csvParts[10] || '0'), // ventas no sujetas
           ventasGravadas: parseFloat(csvParts[11] || '0'), // totalGravada
           debitoFiscal: parseFloat(csvParts[12] || '0'), // tributos
           ventaCuentaTerceros: 0,
           debitoFiscalTerceros: 0,
           impuestoPercibido: 0,
           ventasTotales: parseFloat(file.data.total),
+          dui: csvParts[16] || '', // DUI del cliente
         };
       }
 
