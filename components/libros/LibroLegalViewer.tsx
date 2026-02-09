@@ -144,12 +144,19 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
   }, [selectedMonth, groupedData, emisor, isConsolidatedView, consolidatedItems]);
 
   const sucursalLabel = useMemo(() => {
-    const file = isConsolidatedView
-      ? consolidatedItems?.[0]
-      : (selectedMonth ? groupedData[selectedMonth]?.[0] : undefined);
+  const file = isConsolidatedView
+    ? consolidatedItems?.[0]
+    : (selectedMonth ? groupedData[selectedMonth]?.[0] : undefined);
 
-    return getSucursalLabelFromNumeroControl(file?.data?.controlNumber);
-  }, [isConsolidatedView, consolidatedItems, selectedMonth, groupedData]);
+  const labelFromControl = getSucursalLabelFromNumeroControl(file?.data?.controlNumber);
+  
+  // Si no hay label del control, usar MATRIZ 001 como default para consumidor final
+  if (!labelFromControl && tipoLibro === 'consumidor') {
+    return 'MATRIZ 001';
+  }
+  
+  return labelFromControl || currentTaxpayer?.nombreComercial || 'MATRIZ 001';
+}, [isConsolidatedView, consolidatedItems, selectedMonth, groupedData, tipoLibro, currentTaxpayer]);
 
   // Generar items del libro según el tipo
   const items = useMemo(() => {
