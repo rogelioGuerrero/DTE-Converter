@@ -363,15 +363,27 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
         calcularTotales: (items) => {
           const totales = {
             ventasExentas: 0,
+            ventasInternasExentas: 0,
+            ventasNoSujetas: 0,
             ventasGravadas: 0,
-            exportaciones: 0,
-            ventaTotal: 0
+            exportacionesCentroAmerica: 0,
+            exportacionesFueraCentroAmerica: 0,
+            exportacionesServicios: 0,
+            ventasZonasFrancas: 0,
+            ventasCuentaTerceros: 0,
+            ventaTotal: 0,
           };
           
           items.forEach(item => {
             totales.ventasExentas += item.ventasExentas || 0;
+            totales.ventasInternasExentas += item.ventasInternasExentas || 0;
+            totales.ventasNoSujetas += item.ventasNoSujetas || 0;
             totales.ventasGravadas += item.ventasGravadas || 0;
-            totales.exportaciones += item.exportaciones || 0;
+            totales.exportacionesCentroAmerica += item.exportacionesCentroAmerica || 0;
+            totales.exportacionesFueraCentroAmerica += item.exportacionesFueraCentroAmerica || 0;
+            totales.exportacionesServicios += item.exportacionesServicios || 0;
+            totales.ventasZonasFrancas += item.ventasZonasFrancas || 0;
+            totales.ventasCuentaTerceros += item.ventasCuentaTerceros || 0;
             totales.ventaTotal += item.ventaTotal || 0;
           });
           
@@ -403,9 +415,8 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             const tipoIngresoRenta = '1'; // 1 = Profesiones, Artes y Oficios
             const numeroAnexo = '2'; // Anexo 2 para consumidor final
             
-            // Para DTEs individuales, las columnas F-I (DEL-AL) van vacías
-            // El código de generación va en la columna J (N° DE MAQUINA REGISTRADORA)
-            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};;;;;${codigoGeneracionSinGuiones};${item.ventasExentas.toFixed(2)};;${item.ventasGravadas.toFixed(2)};;;;;;;;${item.ventaTotal.toFixed(2)};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
+            // Para DTEs individuales, los valores DEL y AL son los mismos
+            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};;${item.ventasExentas.toFixed(2)};${item.ventasInternasExentas.toFixed(2)};${item.ventasNoSujetas.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.exportacionesCentroAmerica.toFixed(2)};${item.exportacionesFueraCentroAmerica.toFixed(2)};${item.exportacionesServicios.toFixed(2)};${item.ventasZonasFrancas.toFixed(2)};${item.ventasCuentaTerceros.toFixed(2)};${item.ventaTotal.toFixed(2)};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
           });
           
           return csv;
