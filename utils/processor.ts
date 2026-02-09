@@ -162,7 +162,7 @@ export const processJsonContent = (
       fileName,
       month: yearMonth,
       csvLine: linea,
-      isValid: true,
+      isValid: true, // El JSON ya está validado
       data: {
         date: displayDate,
         controlNumber: displayControl,
@@ -170,12 +170,15 @@ export const processJsonContent = (
         receiver: displayCounterparty, // This property name remains 'receiver' but holds Counterparty name
         neto: displayNeto,
         iva: displayIva,
-        exentas: displayExentas
+        exentas: displayExentas,
+        tipoDTE: tipoDte, // Agregar tipo de DTE
+        codigoGeneracion: data.identificacion?.codigoGeneracion || '', // Agregar código de generación
+        selloRecibido: data.selloRecibido || '', // Agregar sello de recepción
       },
       taxpayer: taxpayerInfo,
       dteType: tipoDte,
+      isOutOfTime, // Determinar según lógica de tiempo
       detectedMode: effectiveMode, // Store the detected mode (ventas or compras)
-      isOutOfTime // true si está fuera del plazo de 3 meses para compras
     };
 
   } catch (error: unknown) {

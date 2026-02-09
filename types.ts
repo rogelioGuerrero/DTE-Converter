@@ -52,6 +52,9 @@ export interface ProcessedFile {
     neto: string; // Base gravada (totalGravada)
     iva: string; // IVA (tributos[0].valor)
     exentas: string; // Ventas/Compras exentas
+    tipoDTE?: string; // Tipo de DTE (01, 03, 05, 06)
+    codigoGeneracion?: string; // Código de generación
+    selloRecibido?: string; // Sello de recepción
   };
   taxpayer?: {
     nombre: string;

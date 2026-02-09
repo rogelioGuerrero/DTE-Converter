@@ -198,14 +198,20 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
       const filasAgrupadas: { [key: string]: any } = {};
       
       monthFiles.forEach((file) => {
-        const csvParts = file.csvLine.split(';');
         const numeroControl = file.data.controlNumber || '';
-        const codigoGeneracion = csvParts[5] || csvParts[3] || '';
-        const ventasExentas = parseFloat(file.data.exentas || '0');
-        const ventasInternasExentas = parseFloat(csvParts[10] || '0');
-        const ventasNoSujetas = parseFloat(csvParts[11] || '0');
-        const ventasGravadas = parseFloat(csvParts[12] || '0');
-        const ventaTotal = parseFloat(file.data.total || '0');
+        const codigoGeneracion = file.data.codigoGeneracion || '';
+        const tipoDTE = file.data.tipoDTE || '01'; // Obtener tipo de DTE desde JSON
+        
+        // Determinar si es nota de crédito (05) o débito (06)
+        const esNotaCredito = tipoDTE === '05';
+        const esNotaDebito = tipoDTE === '06';
+        const multiplicador = esNotaCredito || esNotaDebito ? -1 : 1;
+        
+        const ventasExentas = parseFloat(file.data.exentas || '0') * multiplicador;
+        const ventasInternasExentas = 0; // No viene en JSON para consumidor
+        const ventasNoSujetas = 0; // No viene en JSON para consumidor
+        const ventasGravadas = parseFloat(file.data.neto || '0') * multiplicador; // Usar neto del JSON
+        const ventaTotal = parseFloat(file.data.total || '0') * multiplicador;
         
         // Formatear fecha: DD/MM/YYYY (con ceros)
         const fechaParts = file.data.date.split('/');
@@ -220,7 +226,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
             fecha: fechaFormateada,
             codigosGeneracion: [],
             numerosControl: [],
-            selloRecibido: csvParts[4] || '',
+            selloRecibido: file.data.selloRecibido || '',
             ventasExentas: 0,
             ventasInternasExentas: 0,
             ventasNoSujetas: 0,
@@ -231,6 +237,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
             ventasZonasFrancas: 0,
             ventasCuentaTerceros: 0,
             ventaTotal: 0,
+            tieneNotas: false, // Rastrear si hay notas en esta fecha
           };
         }
         
@@ -243,6 +250,11 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
         fila.ventasNoSujetas += ventasNoSujetas;
         fila.ventasGravadas += ventasGravadas;
         fila.ventaTotal += ventaTotal;
+        
+        // Marcar si hay notas de crédito/débito
+        if (esNotaCredito || esNotaDebito) {
+          fila.tieneNotas = true;
+        }
       });
       
       // Convertir a array y establecer rangos
@@ -278,6 +290,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
           ventasZonasFrancas: fila.ventasZonasFrancas,
           ventasCuentaTerceros: fila.ventasCuentaTerceros,
           ventaTotal: fila.ventaTotal,
+          tieneNotas: fila.tieneNotas || false, // Indicar si hay notas en esta fecha
         };
       });
 
@@ -293,28 +306,36 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
 
     // Para otros tipos de libros (contribuyentes)
     return monthFiles.map((file, index) => {
-      const csvParts = file.csvLine.split(';');
+      const tipoDTE = file.data.tipoDTE || '01'; // Obtener tipo de DTE desde JSON
+      
+      // Determinar si es nota de crédito (05) o débito (06)
+      const esNotaCredito = tipoDTE === '05';
+      const esNotaDebito = tipoDTE === '06';
+      const multiplicador = esNotaCredito || esNotaDebito ? -1 : 1;
       
       // Nota: aquí tipoLibro NO puede ser 'compras' porque esa ruta retorna arriba.
       if (tipoLibro === 'contribuyentes') {
         return {
           correlativo: index + 1,
           fecha: file.data.date,
-          codigoGeneracion: csvParts[5] || '', // Columna F: NÚMERO DE DOCUMENTO
+          codigoGeneracion: file.data.codigoGeneracion || '', // Del JSON
           formUnico: '',
           cliente: file.data.receiver,
-          nrc: csvParts[7] || '', // Columna H: NIT O NRC
-          ventasExentas: parseFloat(csvParts[9] || '0'), // Columna J: VENTAS EXENTAS
-          ventasNoSujetas: parseFloat(csvParts[10] || '0'), // Columna K: VENTAS NO SUJETAS
-          ventasGravadas: parseFloat(csvParts[11] || '0'), // Columna L: VENTAS GRAVADAS
-          debitoFiscal: parseFloat(csvParts[12] || '0'), // Columna M: DÉBITO FISCAL
+          nrc: '', // Para contribuyentes, esto viene de otra fuente
+          ventasExentas: parseFloat(file.data.exentas || '0') * multiplicador, // Del JSON
+          ventasNoSujetas: 0, // No viene en JSON para contribuyentes
+          ventasGravadas: parseFloat(file.data.neto || '0') * multiplicador, // Del JSON
+          debitoFiscal: parseFloat(file.data.iva || '0') * multiplicador, // Del JSON
           ventaCuentaTerceros: 0,
           debitoFiscalTerceros: 0,
           impuestoPercibido: 0,
-          ventasTotales: parseFloat(file.data.total),
-          dui: csvParts[16] || '', // Columna Q: DUI DEL CLIENTE
+          ventasTotales: parseFloat(file.data.total) * multiplicador,
+          dui: '', // Para contribuyentes, esto viene de otra fuente
+          tipoDTE: tipoDTE, // Agregar tipo de DTE para visualización
+          esNotaCredito: esNotaCredito,
+          esNotaDebito: esNotaDebito,
           numeroControlDel: file.data.controlNumber, // Para columna D
-          selloRecibido: csvParts[4] || '', // Columna E: NÚMERO DE SERIE
+          selloRecibido: file.data.selloRecibido || '', // Del JSON
         };
       }
 
@@ -535,13 +556,61 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
   }
 
   // Renderizar celda según formato
-  const renderCelda = (valor: any, formato?: string) => {
+  const renderCelda = (valor: any, formato?: string, item?: any) => {
+    // Determinar si es nota de crédito/débito para formato especial
+    const esNotaCredito = item?.esNotaCredito;
+    const esNotaDebito = item?.esNotaDebito;
+    
     if (formato === 'moneda') {
-      return formatMoneda(valor);
+      const valorNumerico = Number(valor) || 0;
+      const esNegativo = valorNumerico < 0;
+      
+      // Aplicar colores para notas de crédito/débito
+      let className = '';
+      if (esNotaCredito) {
+        className = 'text-green-600'; // Verde para crédito
+      } else if (esNotaDebito) {
+        className = 'text-red-600'; // Rojo para débito
+      } else if (esNegativo) {
+        className = 'text-red-600'; // Rojo para valores negativos
+      }
+      
+      return (
+        <span className={className}>
+          {formatMoneda(valor)}
+        </span>
+      );
     }
+    
     if (formato === 'codigo') {
       return <span className="font-mono text-[10px]">{valor}</span>;
     }
+    
+    // Mostrar icono para tipo de DTE
+    if (item?.tipoDTE) {
+      let icono = '';
+      let className = '';
+      
+      switch (item.tipoDTE) {
+        case '05':
+          icono = '📄';
+          className = 'text-green-600';
+          break;
+        case '06':
+          icono = '📄';
+          className = 'text-red-600';
+          break;
+        default:
+          return valor || '';
+      }
+      
+      return (
+        <span className={className}>
+          {icono} {valor || ''}
+        </span>
+      );
+    }
+    
     return valor || '';
   };
 
@@ -680,7 +749,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
                         col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''
                       } ${col.format === 'moneda' && Number(config.getValor(item, col.key) || 0) > 0 ? 'font-semibold' : ''} ${col.class || ''}`}
                     >
-                      {renderCelda(config.getValor(item, col.key), col.format) || ''}
+                      {renderCelda(config.getValor(item, col.key), col.format, item)}
                     </td>
                   ))}
                 </tr>

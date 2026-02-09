@@ -309,9 +309,16 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             const codigoGeneracion = item.codigoGeneracion || '';
             const codigoGeneracionSinGuiones = codigoGeneracion.replace(/-/g, '');
             
-            // Para DTEs de contribuyentes
+            // Para DTEs de contribuyentes - determinar tipo de documento
             const claseDocumento = '4'; // DTE
-            const tipoDocumento = '03'; // CCF para contribuyentes
+            let tipoDocumento = '03'; // Default: CCF para contribuyentes
+            
+            // Ajustar tipo de documento según tipoDTE
+            if (item.tipoDTE === '05') {
+              tipoDocumento = '05'; // Nota de Crédito
+            } else if (item.tipoDTE === '06') {
+              tipoDocumento = '06'; // Nota de Débito
+            }
             
             // Valores fijos según normativa DGII para servicios profesionales
             const tipoOperacionRenta = '1'; // 1 = Gravada
@@ -409,9 +416,16 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             const codigoGeneracion = item.codigoGeneracionInicial || '';
             const codigoGeneracionSinGuiones = codigoGeneracion.replace(/-/g, '');
             
-            // Para DTEs de consumidor final
+            // Para DTEs de consumidor final - determinar tipo de documento
             const claseDocumento = '4'; // DTE
-            const tipoDocumento = '01'; // Factura consumidor final
+            let tipoDocumento = '01'; // Default: Factura consumidor final
+            
+            // Ajustar tipo de documento según tipoDTE
+            if (item.tipoDTE === '05') {
+              tipoDocumento = '05'; // Nota de Crédito
+            } else if (item.tipoDTE === '06') {
+              tipoDocumento = '06'; // Nota de Débito
+            }
             
             // Valores fijos según normativa DGII para consumidor final
             const tipoOperacionRenta = '1'; // 1 = Gravada
