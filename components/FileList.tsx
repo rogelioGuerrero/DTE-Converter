@@ -229,65 +229,43 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
       
 
       if (!config) {
-
         notify('Error de configuración para contribuyentes', 'error');
-
         return;
-
       }
-
       
-
       // Procesar archivos como lo hace LibroLegalViewer
-
       const processedItems = contribuyentesFiles.map((file, index) => {
-
         const csvParts = file.csvLine.split(';');
-
+        
+        // Formatear fecha: DD/MM/YYYY (con ceros)
+        const fechaParts = file.data.date.split('/');
+        const dia = parseInt(fechaParts[0], 10).toString().padStart(2, '0');
+        const mes = parseInt(fechaParts[1], 10).toString().padStart(2, '0');
+        const anio = fechaParts[2];
+        const fechaFormateada = `${dia}/${mes}/${anio}`;
+        
         return {
-
           correlativo: index + 1,
-
-          fecha: file.data.date,
-
+          fecha: fechaFormateada, // Usar fecha formateada
           codigoGeneracion: csvParts[5] || '', // Columna F: NÚMERO DE DOCUMENTO
-
           formUnico: '',
-
           cliente: file.data.receiver,
-
           nrc: csvParts[7] || '', // Columna H: NIT O NRC
-
           ventasExentas: parseFloat(csvParts[9] || '0'), // Columna J: VENTAS EXENTAS
-
           ventasNoSujetas: parseFloat(csvParts[10] || '0'), // Columna K: VENTAS NO SUJETAS
-
           ventasGravadas: parseFloat(csvParts[11] || '0'), // Columna L: VENTAS GRAVADAS
-
           debitoFiscal: parseFloat(csvParts[12] || '0'), // Columna M: DÉBITO FISCAL
-
           ventaCuentaTerceros: 0,
-
           debitoFiscalTerceros: 0,
-
           impuestoPercibido: 0,
-
           ventasTotales: parseFloat(file.data.total),
-
           dui: csvParts[16] || '', // Columna Q: DUI DEL CLIENTE
-
           numeroControlDel: file.data.controlNumber, // Para columna D
-
           selloRecibido: csvParts[4] || '', // Columna E: NÚMERO DE SERIE
-
         };
-
       });
-
       
-
       const totales = config.calcularTotales(processedItems);
-
       const contribuyentesContent = config.generarCSV(processedItems, totales);
 
       
@@ -351,45 +329,33 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
       // Procesar archivos como lo hace LibroLegalViewer
 
       const processedItems = consumidorFiles.map((file) => {
-
         const csvParts = file.csvLine.split(';');
-
+        
+        // Formatear fecha: DD/MM/YYYY (con ceros)
+        const fechaParts = file.data.date.split('/');
+        const dia = parseInt(fechaParts[0], 10).toString().padStart(2, '0');
+        const mes = parseInt(fechaParts[1], 10).toString().padStart(2, '0');
+        const anio = fechaParts[2];
+        const fechaFormateada = `${dia}/${mes}/${anio}`;
+        
         return {
-
-          fecha: file.data.date,
-
+          fecha: fechaFormateada, // Usar fecha formateada
           codigoGeneracionInicial: csvParts[5] || csvParts[3] || '',
-
           codigoGeneracionFinal: csvParts[5] || csvParts[3] || '',
-
           numeroControlDel: file.data.controlNumber,
-
           numeroControlAl: file.data.controlNumber,
-
           selloRecibido: csvParts[4] || '', // Columna E: NÚMERO DE SERIE
-
           ventasExentas: parseFloat(csvParts[9] || '0'),
-
           ventasInternasExentas: parseFloat(csvParts[10] || '0'), // Columna L
-
           ventasNoSujetas: parseFloat(csvParts[11] || '0'), // Columna M
-
           ventasGravadas: parseFloat(csvParts[12] || '0'), // Columna N
-
           exportacionesCentroAmerica: 0, // Columna O
-
           exportacionesFueraCentroAmerica: 0, // Columna P
-
           exportacionesServicios: 0, // Columna Q
-
           ventasZonasFrancas: 0, // Columna R
-
           ventasCuentaTerceros: 0, // Columna S
-
           ventaTotal: parseFloat(file.data.total),
-
         };
-
       });
 
       
