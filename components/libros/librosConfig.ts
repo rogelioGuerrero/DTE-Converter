@@ -307,7 +307,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
     
     case 'consumidor':
       return {
-        titulo: 'LIBRO DE CONSUMIDOR FINAL',
+        titulo: 'LIBRO DE OPERACIONES DE VENTA A CONSUMIDOR FINAL',
         columnas: [
           { key: 'fecha', header: 'FECHA', width: 'w-20', align: 'center' },
           { key: 'codigoGeneracionInicial', header: 'CÓDIGO\nGENERACIÓN\nINICIAL', width: 'w-32', align: 'center', format: 'codigo' },

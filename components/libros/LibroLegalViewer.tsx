@@ -25,7 +25,7 @@ const getSucursalLabelFromNumeroControl = (numeroControl?: string): string | nul
   const tipo = match[1];
   const correlativo = match[2]; // Mantener ceros a la izquierda (ej: 001)
 
-  return tipo === 'M' ? `MATRIZ ${correlativo}` : `SUCURSAL ${correlativo}`;
+  return tipo === 'M' ? `Casa Matriz ${correlativo}` : `SUCURSAL ${correlativo}`;
 };
 
 const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupedDataForResumen, tipoLibro }) => {
@@ -144,19 +144,12 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
   }, [selectedMonth, groupedData, emisor, isConsolidatedView, consolidatedItems]);
 
   const sucursalLabel = useMemo(() => {
-  const file = isConsolidatedView
-    ? consolidatedItems?.[0]
-    : (selectedMonth ? groupedData[selectedMonth]?.[0] : undefined);
+    const file = isConsolidatedView
+      ? consolidatedItems?.[0]
+      : (selectedMonth ? groupedData[selectedMonth]?.[0] : undefined);
 
-  const labelFromControl = getSucursalLabelFromNumeroControl(file?.data?.controlNumber);
-  
-  // Si no hay label del control, usar MATRIZ 001 como default para consumidor final
-  if (!labelFromControl && tipoLibro === 'consumidor') {
-    return 'MATRIZ 001';
-  }
-  
-  return labelFromControl || currentTaxpayer?.nombreComercial || 'MATRIZ 001';
-}, [isConsolidatedView, consolidatedItems, selectedMonth, groupedData, tipoLibro, currentTaxpayer]);
+    return getSucursalLabelFromNumeroControl(file?.data?.controlNumber);
+  }, [isConsolidatedView, consolidatedItems, selectedMonth, groupedData]);
 
   // Generar items del libro según el tipo
   const items = useMemo(() => {
@@ -577,9 +570,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
                 <span className="text-gray-900 uppercase">
                   {displayMonth ? getNombreMes(displayMonth) : ''}
                 </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-700">AÑO:</span>
+                <span className="text-gray-900 mx-2">AÑO:</span>
                 <span className="text-gray-900">
                   {displayMonth ? getAnio(displayMonth) : ''}
                 </span>
