@@ -194,134 +194,33 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
 
     // Procesamiento especial para libro consumidor
     if (tipoLibro === 'consumidor') {
-      // Agrupar facturas por prefijo para mostrar rangos consecutivos
-      const facturasAgrupadas = new Map<string, {
-        fecha: string;
-        prefijo: string;
-        numeros: number[];
-        codigoGeneracion: string;
-        ventasExentas: number;
-        ventasGravadas: number;
-        ventaTotal: number;
-        montosPorNumero: Map<number, {
-          ventasExentas: number;
-          ventasGravadas: number;
-          ventaTotal: number;
-        }>;
-      }>();
-
-      monthFiles.forEach(file => {
+      // Cada DTE es una fila individual (sin agrupamiento)
+      const filasIndividuales: any[] = [];
+      
+      monthFiles.forEach((file, index) => {
         const csvParts = file.csvLine.split(';');
         const numeroControl = file.data.controlNumber || '';
         const codigoGeneracion = csvParts[5] || csvParts[3] || '';
+        const ventasExentas = parseFloat(file.data.exentas || '0');
+        const ventasGravadas = parseFloat(file.data.total || '0');
+        const ventaTotal = parseFloat(file.data.total || '0');
         
-        // Extraer el prefijo y el número del número de control
-        // Formato: DTE-01-M001P001-000000000000016
-        const match = numeroControl.match(/^(.*-)(\d+)$/);
-        if (match) {
-          const prefijo = match[1];
-          const numero = parseInt(match[2], 10);
-          const ventasExentas = parseFloat(file.data.exentas || '0');
-          const ventasGravadas = parseFloat(file.data.total || '0');
-          const ventaTotal = parseFloat(file.data.total || '0');
-          
-          if (!facturasAgrupadas.has(prefijo)) {
-            facturasAgrupadas.set(prefijo, {
-              fecha: file.data.date,
-              prefijo,
-              numeros: [],
-              codigoGeneracion,
-              ventasExentas: 0,
-              ventasGravadas: 0,
-              ventaTotal: 0,
-              montosPorNumero: new Map(),
-            });
-          }
-          
-          const grupo = facturasAgrupadas.get(prefijo)!;
-          grupo.numeros.push(numero);
-          
-          // Guardar los montos por número individual
-          grupo.montosPorNumero.set(numero, {
-            ventasExentas,
-            ventasGravadas,
-            ventaTotal,
-          });
-          
-          // Sumar los montos totales
-          grupo.ventasExentas += ventasExentas;
-          grupo.ventasGravadas += ventasGravadas;
-          grupo.ventaTotal += ventaTotal;
-        }
-      });
-
-      // Función para encontrar rangos consecutivos
-      const encontrarRangosConsecutivos = (numeros: number[]): Array<{inicio: number, fin: number}> => {
-        if (numeros.length === 0) return [];
-        
-        const numerosOrdenados = [...numeros].sort((a, b) => a - b);
-        const rangos = [];
-        let inicio = numerosOrdenados[0];
-        let fin = numerosOrdenados[0];
-        
-        for (let i = 1; i < numerosOrdenados.length; i++) {
-          if (numerosOrdenados[i] === fin + 1) {
-            // Es consecutivo
-            fin = numerosOrdenados[i];
-          } else {
-            // No es consecutivo, guardar el rango actual y empezar uno nuevo
-            rangos.push({ inicio, fin });
-            inicio = numerosOrdenados[i];
-            fin = numerosOrdenados[i];
-          }
-        }
-        
-        // Agregar el último rango
-        rangos.push({ inicio, fin });
-        
-        return rangos;
-      };
-
-      // Convertir los grupos agrupados en filas, separando por rangos consecutivos
-      const filasAgrupadas: any[] = [];
-      
-      facturasAgrupadas.forEach(grupo => {
-        const rangos = encontrarRangosConsecutivos(grupo.numeros);
-        
-        rangos.forEach(rango => {
-          // Sumar los montos solo para los números en este rango
-          let ventasExentasRango = 0;
-          let ventasGravadasRango = 0;
-          let ventaTotalRango = 0;
-          
-          for (let num = rango.inicio; num <= rango.fin; num++) {
-            const montos = grupo.montosPorNumero.get(num);
-            if (montos) {
-              ventasExentasRango += montos.ventasExentas;
-              ventasGravadasRango += montos.ventasGravadas;
-              ventaTotalRango += montos.ventaTotal;
-            }
-          }
-          
-          const numeroControlDel = `${grupo.prefijo}${rango.inicio.toString().padStart(15, '0')}`;
-          const numeroControlAl = `${grupo.prefijo}${rango.fin.toString().padStart(15, '0')}`;
-          
-          filasAgrupadas.push({
-            fecha: grupo.fecha,
-            codigoGeneracionInicial: grupo.codigoGeneracion,
-            codigoGeneracionFinal: grupo.codigoGeneracion,
-            numeroControlDel,
-            numeroControlAl,
-            ventasExentas: ventasExentasRango,
-            ventasGravadas: ventasGravadasRango,
-            exportaciones: 0,
-            ventaTotal: ventaTotalRango,
-          });
+        // Para cada DTE, las columnas DEL y AL contienen el mismo valor
+        filasIndividuales.push({
+          fecha: file.data.date,
+          codigoGeneracionInicial: codigoGeneracion,
+          codigoGeneracionFinal: codigoGeneracion,
+          numeroControlDel: numeroControl,
+          numeroControlAl: numeroControl,
+          ventasExentas: ventasExentas,
+          ventasGravadas: ventasGravadas,
+          exportaciones: 0,
+          ventaTotal: ventaTotal,
         });
       });
 
-      // Ordenar las filas por fecha y luego por número de control inicial
-      filasAgrupadas.sort((a, b) => {
+      // Ordenar las filas por fecha y luego por número de control
+      filasIndividuales.sort((a, b) => {
         const fechaA = new Date(a.fecha.split('/').reverse().join('-'));
         const fechaB = new Date(b.fecha.split('/').reverse().join('-'));
         if (fechaA.getTime() !== fechaB.getTime()) {
@@ -333,7 +232,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
         return numA - numB;
       });
 
-      return filasAgrupadas;
+      return filasIndividuales;
     }
 
     // Para otros tipos de libros (contribuyentes)
