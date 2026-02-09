@@ -291,7 +291,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           
           return totales;
         },
-        generarCSV: (items, totales) => {
+        generarCSV: (items, _totales) => {
           let csv = '';
           
           items.forEach(item => {
@@ -319,8 +319,6 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             
             csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};;${item.nrc || ''};${item.cliente || ''};${item.ventasExentas.toFixed(2)};${item.ventasNoSujetas.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.debitoFiscal.toFixed(2)};${item.ventaCuentaTerceros.toFixed(2)};${item.debitoFiscalTerceros.toFixed(2)};${item.ventasTotales.toFixed(2)};${item.dui || ''};${tipoOperacionRenta};${tipoIngresoRenta};1\n`;
           });
-
-          csv += `;;;;;;;;;;;;;;;;;${totales.ventasExentas.toFixed(2)};${totales.ventasNoSujetas.toFixed(2)};${totales.ventasGravadas.toFixed(2)};${totales.debitoFiscal.toFixed(2)};${totales.ventaCuentaTerceros.toFixed(2)};${totales.debitoFiscalTerceros.toFixed(2)};${totales.ventasTotales.toFixed(2)};;1;2;1\n`;
           
           return csv;
         },
@@ -379,7 +377,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           
           return totales;
         },
-        generarCSV: (items, totales) => {
+        generarCSV: (items, _totales) => {
           let csv = '';
           
           items.forEach(item => {
@@ -408,8 +406,6 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             // Para DTEs individuales, los valores DEL y AL son los mismos
             csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};;${item.ventasExentas.toFixed(2)};;${item.ventasGravadas.toFixed(2)};;;;;;;;${item.ventaTotal.toFixed(2)};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
           });
-
-          csv += `;;;;;;;;;;;;;;;;;;;${totales.ventasExentas.toFixed(2)};;${totales.ventasGravadas.toFixed(2)};;;;;;;;${totales.ventaTotal.toFixed(2)};1;1;2\n`;
           
           return csv;
         },
