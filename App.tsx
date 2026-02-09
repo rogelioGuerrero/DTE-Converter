@@ -338,6 +338,9 @@ const App: React.FC = () => {
              <CheckCircle className="w-3 h-3" />
              <span>100% Seguro & Privado</span>
           </div>
+          <div className="text-xs text-gray-400">
+            v{import.meta.env.VITE_APP_VERSION || '1.0.0'}
+          </div>
         </div>
       </footer>
       <AdminModal isOpen={showAdminModal} onClose={() => setShowAdminModal(false)} />
