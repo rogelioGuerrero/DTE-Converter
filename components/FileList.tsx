@@ -124,21 +124,21 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
         return {
           correlativo: index + 1,
           fecha: file.data.date,
-          codigoGeneracion: csvParts[5] || csvParts[3] || '',
+          codigoGeneracion: csvParts[5] || '', // Columna F: NÚMERO DE DOCUMENTO
           formUnico: '',
           cliente: file.data.receiver,
-          nrc: csvParts[7] || '',
-          ventasExentas: parseFloat(csvParts[9] || '0'),
-          ventasNoSujetas: parseFloat(csvParts[10] || '0'),
-          ventasGravadas: parseFloat(csvParts[11] || '0'),
-          debitoFiscal: parseFloat(csvParts[12] || '0'),
+          nrc: csvParts[7] || '', // Columna H: NIT O NRC
+          ventasExentas: parseFloat(csvParts[9] || '0'), // Columna J: VENTAS EXENTAS
+          ventasNoSujetas: parseFloat(csvParts[10] || '0'), // Columna K: VENTAS NO SUJETAS
+          ventasGravadas: parseFloat(csvParts[11] || '0'), // Columna L: VENTAS GRAVADAS
+          debitoFiscal: parseFloat(csvParts[12] || '0'), // Columna M: DÉBITO FISCAL
           ventaCuentaTerceros: 0,
           debitoFiscalTerceros: 0,
           impuestoPercibido: 0,
           ventasTotales: parseFloat(file.data.total),
-          dui: csvParts[16] || '',
-          numeroControlDel: file.data.controlNumber,
-          selloRecibido: csvParts[4] || '',
+          dui: csvParts[16] || '', // Columna Q: DUI DEL CLIENTE
+          numeroControlDel: file.data.controlNumber, // Para columna D
+          selloRecibido: csvParts[4] || '', // Columna E: NÚMERO DE SERIE
         };
       });
       
