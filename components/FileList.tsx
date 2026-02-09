@@ -164,7 +164,34 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
     
     // Generar CSV para consumidor final si hay archivos
     if (consumidorFiles.length > 0) {
-      const consumidorContent = consumidorFiles.map(f => f.csvLine).join('');
+      // Usar la misma configuración que Exportar CSV
+      const { getConfigLibro } = await import('./libros/librosConfig');
+      const config = getConfigLibro('consumidor');
+      
+      if (!config) {
+        notify('Error de configuración para consumidor final', 'error');
+        return;
+      }
+      
+      // Procesar archivos como lo hace LibroLegalViewer
+      const processedItems = consumidorFiles.map((file) => {
+        const csvParts = file.csvLine.split(';');
+        return {
+          fecha: file.data.date,
+          codigoGeneracionInicial: csvParts[5] || csvParts[3] || '',
+          codigoGeneracionFinal: csvParts[5] || csvParts[3] || '',
+          numeroControlDel: file.data.controlNumber,
+          numeroControlAl: file.data.controlNumber,
+          ventasExentas: parseFloat(csvParts[9] || '0'),
+          ventasGravadas: parseFloat(csvParts[11] || '0'),
+          exportaciones: 0,
+          ventaTotal: parseFloat(file.data.total),
+        };
+      });
+      
+      const totales = config.calcularTotales(processedItems);
+      const consumidorContent = config.generarCSV(processedItems, totales);
+      
       if (consumidorContent) {
         const fileName = `LIBRO_CONSUMIDOR_FINAL_${month}.csv`;
         downloadCSV(consumidorContent, fileName);
