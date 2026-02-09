@@ -103,25 +103,57 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
     const files = groupedData[month];
     if (!files || files.length === 0) return;
 
-    const content = files.map(f => f.csvLine).join('');
-    if (!content) return;
-
-    const prefix = appMode === 'ventas' ? 'VENTAS' : 'COMPRAS';
-    const fileName = `LIBRO_${prefix}_${month}.csv`;
-    const totalAmount = files.reduce((sum, f) => sum + parseFloat(f.data.total), 0);
-    const fileCount = files.length;
-
-    const hash = await computeSHA256(content);
-    await addHistoryEntry({
-      timestamp: Date.now(),
-      mode: appMode,
-      fileName,
-      totalAmount,
-      fileCount,
-      hash,
-    });
-
-    downloadCSV(content, fileName);
+    // Separar archivos por tipo de DTE
+    const contribuyentesFiles = files.filter(f => f.dteType === '03'); // CCF
+    const consumidorFiles = files.filter(f => f.dteType === '01'); // Factura CF
+    
+    // Generar CSV para contribuyentes si hay archivos
+    if (contribuyentesFiles.length > 0) {
+      const contribuyentesContent = contribuyentesFiles.map(f => f.csvLine).join('');
+      if (contribuyentesContent) {
+        const fileName = `LIBRO_VENTAS_CONTRIBUYENTES_${month}.csv`;
+        downloadCSV(contribuyentesContent, fileName);
+        
+        const totalAmount = contribuyentesFiles.reduce((sum, f) => sum + parseFloat(f.data.total), 0);
+        const hash = await computeSHA256(contribuyentesContent);
+        await addHistoryEntry({
+          timestamp: Date.now(),
+          mode: 'ventas',
+          fileName,
+          totalAmount,
+          fileCount: contribuyentesFiles.length,
+          hash,
+        });
+      }
+    }
+    
+    // Generar CSV para consumidor final si hay archivos
+    if (consumidorFiles.length > 0) {
+      const consumidorContent = consumidorFiles.map(f => f.csvLine).join('');
+      if (consumidorContent) {
+        const fileName = `LIBRO_CONSUMIDOR_FINAL_${month}.csv`;
+        downloadCSV(consumidorContent, fileName);
+        
+        const totalAmount = consumidorFiles.reduce((sum, f) => sum + parseFloat(f.data.total), 0);
+        const hash = await computeSHA256(consumidorContent);
+        await addHistoryEntry({
+          timestamp: Date.now(),
+          mode: 'ventas',
+          fileName,
+          totalAmount,
+          fileCount: consumidorFiles.length,
+          hash,
+        });
+      }
+    }
+    
+    if (contribuyentesFiles.length === 0 && consumidorFiles.length === 0) {
+      notify('No hay archivos para exportar', 'warning');
+      return;
+    }
+    
+    const totalFiles = contribuyentesFiles.length + consumidorFiles.length;
+    notify(`Se exportaron ${totalFiles} archivos (${contribuyentesFiles.length} contribuyentes, ${consumidorFiles.length} consumidor final)`, 'success');
   };
 
   const handleBulkDownload = async () => {
