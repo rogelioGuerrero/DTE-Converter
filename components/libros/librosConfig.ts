@@ -403,8 +403,9 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             const tipoIngresoRenta = '1'; // 1 = Profesiones, Artes y Oficios
             const numeroAnexo = '2'; // Anexo 2 para consumidor final
             
-            // Para DTEs individuales, los valores DEL y AL son los mismos
-            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};;${item.ventasExentas.toFixed(2)};;${item.ventasGravadas.toFixed(2)};;;;;;;;${item.ventaTotal.toFixed(2)};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
+            // Para DTEs individuales, las columnas F-I (DEL-AL) van vacías
+            // El código de generación va en la columna J (N° DE MAQUINA REGISTRADORA)
+            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};;;;;${codigoGeneracionSinGuiones};${item.ventasExentas.toFixed(2)};;${item.ventasGravadas.toFixed(2)};;;;;;;;${item.ventaTotal.toFixed(2)};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
           });
           
           return csv;
