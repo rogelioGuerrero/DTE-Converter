@@ -185,7 +185,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
     
     case 'contribuyentes':
       return {
-        titulo: 'LIBRO DE OPERACIONES DE VENTA A CONTRIBUYENTES',
+        titulo: 'LIBRO DE VENTAS A CONTRIBUYENTES',
         columnas: [
           { key: 'correlativo', header: 'CORRELATIVO', width: 'w-16', align: 'center' },
           { key: 'fecha', header: 'FECHA', width: 'w-20', align: 'center' },
