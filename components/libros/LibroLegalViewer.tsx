@@ -194,14 +194,17 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
 
     // Procesamiento especial para libro consumidor
     if (tipoLibro === 'consumidor') {
-      // Cada DTE es una fila individual (sin agrupamiento)
-      const filasIndividuales: any[] = [];
+      // Agrupar DTEs por fecha y consolidar rangos
+      const filasAgrupadas: { [key: string]: any } = {};
       
       monthFiles.forEach((file) => {
         const csvParts = file.csvLine.split(';');
         const numeroControl = file.data.controlNumber || '';
         const codigoGeneracion = csvParts[5] || csvParts[3] || '';
         const ventasExentas = parseFloat(file.data.exentas || '0');
+        const ventasInternasExentas = parseFloat(csvParts[10] || '0');
+        const ventasNoSujetas = parseFloat(csvParts[11] || '0');
+        const ventasGravadas = parseFloat(csvParts[12] || '0');
         const ventaTotal = parseFloat(file.data.total || '0');
         
         // Formatear fecha: DD/MM/YYYY (con ceros)
@@ -211,41 +214,81 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
         const anio = fechaParts[2];
         const fechaFormateada = `${dia}/${mes}/${anio}`;
         
-        // Para cada DTE, las columnas DEL y AL contienen el mismo valor
-        filasIndividuales.push({
-          fecha: fechaFormateada, // Usar fecha formateada
-          codigoGeneracionInicial: codigoGeneracion,
-          codigoGeneracionFinal: codigoGeneracion,
-          numeroControlDel: numeroControl,
-          numeroControlAl: numeroControl,
-          selloRecibido: csvParts[4] || '', // Columna E: NÚMERO DE SERIE
-          ventasExentas: ventasExentas,
-          ventasInternasExentas: parseFloat(csvParts[10] || '0'), // Columna L
-          ventasNoSujetas: parseFloat(csvParts[11] || '0'), // Columna M
-          ventasGravadas: parseFloat(csvParts[12] || '0'), // Columna N
-          exportacionesCentroAmerica: 0, // Columna O
-          exportacionesFueraCentroAmerica: 0, // Columna P
-          exportacionesServicios: 0, // Columna Q
-          ventasZonasFrancas: 0, // Columna R
-          ventasCuentaTerceros: 0, // Columna S
-          ventaTotal: ventaTotal,
+        // Si no existe la fecha, crear nueva entrada
+        if (!filasAgrupadas[fechaFormateada]) {
+          filasAgrupadas[fechaFormateada] = {
+            fecha: fechaFormateada,
+            codigosGeneracion: [],
+            numerosControl: [],
+            selloRecibido: csvParts[4] || '',
+            ventasExentas: 0,
+            ventasInternasExentas: 0,
+            ventasNoSujetas: 0,
+            ventasGravadas: 0,
+            exportacionesCentroAmerica: 0,
+            exportacionesFueraCentroAmerica: 0,
+            exportacionesServicios: 0,
+            ventasZonasFrancas: 0,
+            ventasCuentaTerceros: 0,
+            ventaTotal: 0,
+          };
+        }
+        
+        // Acumular valores para la fecha
+        const fila = filasAgrupadas[fechaFormateada];
+        fila.codigosGeneracion.push(codigoGeneracion);
+        fila.numerosControl.push(numeroControl);
+        fila.ventasExentas += ventasExentas;
+        fila.ventasInternasExentas += ventasInternasExentas;
+        fila.ventasNoSujetas += ventasNoSujetas;
+        fila.ventasGravadas += ventasGravadas;
+        fila.ventaTotal += ventaTotal;
+      });
+      
+      // Convertir a array y establecer rangos
+      const filasFinales = Object.values(filasAgrupadas).map((fila: any) => {
+        // Ordenar códigos de generación numéricamente
+        const codigosOrdenados = [...fila.codigosGeneracion].sort((a, b) => {
+          const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
+          const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
+          return numA - numB;
         });
+        
+        // Ordenar números de control numéricamente
+        const controlesOrdenados = [...fila.numerosControl].sort((a, b) => {
+          const numA = parseInt(a.split('-').pop() || '0', 10);
+          const numB = parseInt(b.split('-').pop() || '0', 10);
+          return numA - numB;
+        });
+        
+        return {
+          fecha: fila.fecha,
+          codigoGeneracionInicial: codigosOrdenados[0] || '',
+          codigoGeneracionFinal: codigosOrdenados[codigosOrdenados.length - 1] || '',
+          numeroControlDel: controlesOrdenados[0] || '',
+          numeroControlAl: controlesOrdenados[controlesOrdenados.length - 1] || '',
+          selloRecibido: fila.selloRecibido,
+          ventasExentas: fila.ventasExentas,
+          ventasInternasExentas: fila.ventasInternasExentas,
+          ventasNoSujetas: fila.ventasNoSujetas,
+          ventasGravadas: fila.ventasGravadas,
+          exportacionesCentroAmerica: fila.exportacionesCentroAmerica,
+          exportacionesFueraCentroAmerica: fila.exportacionesFueraCentroAmerica,
+          exportacionesServicios: fila.exportacionesServicios,
+          ventasZonasFrancas: fila.ventasZonasFrancas,
+          ventasCuentaTerceros: fila.ventasCuentaTerceros,
+          ventaTotal: fila.ventaTotal,
+        };
       });
 
-      // Ordenar las filas por fecha y luego por número de control
-      filasIndividuales.sort((a, b) => {
+      // Ordenar las filas por fecha
+      filasFinales.sort((a, b) => {
         const fechaA = new Date(a.fecha.split('/').reverse().join('-'));
         const fechaB = new Date(b.fecha.split('/').reverse().join('-'));
-        if (fechaA.getTime() !== fechaB.getTime()) {
-          return fechaA.getTime() - fechaB.getTime();
-        }
-        // Si misma fecha, ordenar por número de control
-        const numA = parseInt(a.numeroControlDel.split('-').pop() || '0', 10);
-        const numB = parseInt(b.numeroControlDel.split('-').pop() || '0', 10);
-        return numA - numB;
+        return fechaA.getTime() - fechaB.getTime();
       });
 
-      return filasIndividuales;
+      return filasFinales;
     }
 
     // Para otros tipos de libros (contribuyentes)
@@ -615,7 +658,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
                     key={idx}
                     className={`px-2 py-3 font-bold border-r border-gray-300 ${col.width || ''} ${
                       col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'
-                    }`}
+                    } ${col.class || ''}`}
                   >
                     {col.header.split('\n').map((line, i) => (
                       <React.Fragment key={i}>
@@ -635,7 +678,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
                       key={colIdx}
                       className={`px-2 py-2 border-r border-gray-200 ${
                         col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''
-                      } ${col.format === 'moneda' && Number(config.getValor(item, col.key) || 0) > 0 ? 'font-semibold' : ''}`}
+                      } ${col.format === 'moneda' && Number(config.getValor(item, col.key) || 0) > 0 ? 'font-semibold' : ''} ${col.class || ''}`}
                     >
                       {renderCelda(config.getValor(item, col.key), col.format) || ''}
                     </td>

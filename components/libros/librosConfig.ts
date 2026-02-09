@@ -23,6 +23,7 @@ export interface ColumnaConfig {
   width?: string;
   align?: 'left' | 'center' | 'right';
   format?: 'moneda' | 'codigo';
+  class?: string;
 }
 
 export interface ResumenColumn {
@@ -187,20 +188,20 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
       return {
         titulo: 'LIBRO DE VENTAS A CONTRIBUYENTES',
         columnas: [
-          { key: 'correlativo', header: 'CORRELATIVO', width: 'w-16', align: 'center' },
-          { key: 'fecha', header: 'FECHA', width: 'w-20', align: 'center' },
-          { key: 'codigoGeneracion', header: 'CÓDIGO\nGENERACIÓN', width: 'w-32', align: 'center', format: 'codigo' },
-          { key: 'formUnico', header: 'FORM\nÚNICO', width: 'w-16', align: 'center' },
-          { key: 'cliente', header: 'CLIENTE', width: 'w-48', align: 'left' },
-          { key: 'nrc', header: 'NRC', width: 'w-20', align: 'center' },
-          { key: 'ventasExentas', header: 'VENTAS\nEXENTAS', width: 'w-24', align: 'right', format: 'moneda' },
-          { key: 'exportaciones', header: 'EXPORTACIONES', width: 'w-24', align: 'right', format: 'moneda' },
-          { key: 'ventasGravadas', header: 'VENTAS\nGRAVADAS', width: 'w-24', align: 'right', format: 'moneda' },
-          { key: 'debitoFiscal', header: 'DÉBITO\nFISCAL', width: 'w-20', align: 'right', format: 'moneda' },
-          { key: 'ventaCuentaTerceros', header: 'VENTA\nCUENTA\nDE\nTERCEROS', width: 'w-28', align: 'right', format: 'moneda' },
-          { key: 'debitoFiscalTerceros', header: 'DÉBITO\nFISCAL\nDE\nTERCEROS', width: 'w-32', align: 'right', format: 'moneda' },
-          { key: 'impuestoPercibido', header: 'IMPUESTO\nPERCIBIDO', width: 'w-24', align: 'right', format: 'moneda' },
-          { key: 'ventasTotales', header: 'VENTAS\nTOTALES', width: 'w-20', align: 'right', format: 'moneda' }
+          { key: 'correlativo', header: 'CORRELATIVO', width: 'w-10', align: 'center', class: 'font-mono text-[10px]' },
+          { key: 'fecha', header: 'FECHA', width: 'w-16', align: 'center', class: 'font-mono text-[10px]' },
+          { key: 'codigoGeneracion', header: 'CÓDIGO GENERACIÓN', width: 'w-32', align: 'center', format: 'codigo', class: 'font-mono text-[10px]' },
+          { key: 'formUnico', header: 'FORM ÚNICO', width: 'w-6', align: 'center', class: 'font-mono text-[10px]' },
+          { key: 'cliente', header: 'CLIENTE', width: 'w-72', align: 'left' },
+          { key: 'nrc', header: 'NRC', width: 'w-12', align: 'center', class: 'font-mono text-[10px]' },
+          { key: 'ventasExentas', header: 'VENTAS EXENTAS', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
+          { key: 'exportaciones', header: 'EXPORTACIONES', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
+          { key: 'ventasGravadas', header: 'VENTAS GRAVADAS', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
+          { key: 'debitoFiscal', header: 'DÉBITO FISCAL', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
+          { key: 'ventaCuentaTerceros', header: 'VENTA CUENTA\nDE TERCEROS', width: 'w-24', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
+          { key: 'debitoFiscalTerceros', header: 'DÉBITO FISCAL\nDE TERCEROS', width: 'w-28', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
+          { key: 'impuestoPercibido', header: 'IMPUESTO PERCIBIDO', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
+          { key: 'ventasTotales', header: 'VENTAS TOTALES', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' }
         ],
         resumenTitulo: 'RESUMEN DE OPERACIONES',
         resumenColumnas: [
@@ -345,7 +346,9 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
            { key: 'valor', header: '', width: 'w-32', align: 'right', format: 'moneda' }
         ],
         getResumen: (items) => {
-          const totalVentasGravadas = items.reduce((sum, item) => sum + (item.ventasGravadas || 0), 0);
+          // Para consumidor final, usar ventaTotal como base para el cálculo
+          // ya que incluye el IVA (13%)
+          const totalVentasGravadas = items.reduce((sum, item) => sum + (item.ventaTotal || 0), 0);
           
           // Cálculo inverso: En consumidor final, el monto incluye IVA.
           // Base = Total / 1.13
