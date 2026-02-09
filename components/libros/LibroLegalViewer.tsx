@@ -205,16 +205,30 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
         const ventasGravadas = parseFloat(file.data.total || '0');
         const ventaTotal = parseFloat(file.data.total || '0');
         
+        // Formatear fecha: DD/MM/YYYY (con ceros)
+        const fechaParts = file.data.date.split('/');
+        const dia = parseInt(fechaParts[0], 10).toString().padStart(2, '0');
+        const mes = parseInt(fechaParts[1], 10).toString().padStart(2, '0');
+        const anio = fechaParts[2];
+        const fechaFormateada = `${dia}/${mes}/${anio}`;
+        
         // Para cada DTE, las columnas DEL y AL contienen el mismo valor
         filasIndividuales.push({
-          fecha: file.data.date,
+          fecha: fechaFormateada, // Usar fecha formateada
           codigoGeneracionInicial: codigoGeneracion,
           codigoGeneracionFinal: codigoGeneracion,
           numeroControlDel: numeroControl,
           numeroControlAl: numeroControl,
+          selloRecibido: csvParts[4] || '', // Columna E: NÚMERO DE SERIE
           ventasExentas: ventasExentas,
-          ventasGravadas: ventasGravadas,
-          exportaciones: 0,
+          ventasInternasExentas: parseFloat(csvParts[10] || '0'), // Columna L
+          ventasNoSujetas: parseFloat(csvParts[11] || '0'), // Columna M
+          ventasGravadas: parseFloat(csvParts[12] || '0'), // Columna N
+          exportacionesCentroAmerica: 0, // Columna O
+          exportacionesFueraCentroAmerica: 0, // Columna P
+          exportacionesServicios: 0, // Columna Q
+          ventasZonasFrancas: 0, // Columna R
+          ventasCuentaTerceros: 0, // Columna S
           ventaTotal: ventaTotal,
         });
       });
