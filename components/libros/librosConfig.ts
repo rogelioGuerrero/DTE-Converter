@@ -292,19 +292,17 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           return totales;
         },
         generarCSV: (items, totales) => {
-          let csv = 'FECHA DE EMISIÓN;CLASE DE DOCUMENTO;TIPO DE DOCUMENTO;NÚMERO DE RESOLUCIÓN;NÚMERO DE SERIE DE DOCUMENTO;NÚMERO DE DOCUMENTO;NÚMERO DE CONTROL INTERNO;NIT O NRC DEL CLIENTE;NOMBRE, RAZÓN SOCIAL O DENOMINACIÓN;VENTAS EXENTAS;VENTAS NO SUJETAS;VENTAS GRAVADAS LOCALES;DÉBITO FISCAL;VENTAS A CUENTA DE TERCEROS NO DOMICILIADOS;DÉBITO FISCAL POR VENTA A CUENTA DE TERCEROS;TOTAL VENTAS;DUI DEL CLIENTE;TIPO DE OPERACIÓN (RENTA);TIPO DE INGRESO (RENTA);NÚMERO DE ANEXO\n';
+          let csv = '';
           
           items.forEach(item => {
-            // Formatear fecha: DD/M/YYYY (sin ceros en día/mes si es posible)
+            // Formatear fecha: DD/MM/YYYY (con ceros)
             const fechaParts = item.fecha.split('/');
-            const dia = parseInt(fechaParts[0], 10);
-            const mes = parseInt(fechaParts[1], 10);
+            const dia = parseInt(fechaParts[0], 10).toString().padStart(2, '0');
+            const mes = parseInt(fechaParts[1], 10).toString().padStart(2, '0');
             const anio = fechaParts[2];
             const fechaFormateada = `${dia}/${mes}/${anio}`;
             
             // Extraer información del número de control
-            const numeroControl = item.numeroControlDel || '';
-            const numeroControlSinGuiones = numeroControl.replace(/-/g, '');
             const codigoGeneracion = item.codigoGeneracion || '';
             const codigoGeneracionSinGuiones = codigoGeneracion.replace(/-/g, '');
             
@@ -317,7 +315,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             const tipoIngresoRenta = '2'; // 2 = Arrendamiento (para servicios de arrendamiento)
             // Número de anexo siempre es 1 para contribuyentes
             
-            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};;${item.nrc || ''};${(item.cliente || '').toUpperCase()};${item.ventasExentas.toFixed(2)};${item.ventasNoSujetas.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.debitoFiscal.toFixed(2)};${item.ventaCuentaTerceros.toFixed(2)};${item.debitoFiscalTerceros.toFixed(2)};${item.ventasTotales.toFixed(2)};${item.dui || ''};${tipoOperacionRenta};${tipoIngresoRenta};1\n`;
+            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};;;${codigoGeneracionSinGuiones};;${item.nrc || ''};${(item.cliente || '').toUpperCase()};${item.ventasExentas.toFixed(2)};${item.ventasNoSujetas.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.debitoFiscal.toFixed(2)};${item.ventaCuentaTerceros.toFixed(2)};${item.debitoFiscalTerceros.toFixed(2)};${item.ventasTotales.toFixed(2)};${item.dui || ''};${tipoOperacionRenta};${tipoIngresoRenta};1\n`;
           });
 
           csv += `;;;;;;;;;;;;;;;;;${totales.ventasExentas.toFixed(2)};${totales.ventasNoSujetas.toFixed(2)};${totales.ventasGravadas.toFixed(2)};${totales.debitoFiscal.toFixed(2)};${totales.ventaCuentaTerceros.toFixed(2)};${totales.debitoFiscalTerceros.toFixed(2)};${totales.ventasTotales.toFixed(2)};;1;2;1\n`;
@@ -380,19 +378,17 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           return totales;
         },
         generarCSV: (items, totales) => {
-          let csv = 'FECHA DE EMISIÓN;CLASE DE DOCUMENTO;TIPO DE DOCUMENTO;NÚMERO DE RESOLUCIÓN;SERIE DE DOCUMENTO;NÚMERO DE CONTROL INTERNO (DEL);NÚMERO DE CONTROL INTERNO (AL);NÚMERO DE DOCUMENTO (DEL);NÚMERO DE DOCUMENTO (AL);NÚMERO DE MAQUINA REGISTRADORA;VENTAS EXENTAS;VENTAS INTERNAS EXENTAS NO SUJETAS A PROPORCIONALIDAD;VENTAS NO SUJETAS;VENTAS GRAVADAS LOCALES;EXPORTACIONES DENTRO DEL ÁREA CENTROAMERICANA;EXPORTACIONES FUERA DEL ÁREA CENTROAMERICANA;EXPORTACIONES DE SERVICIOS;VENTAS A ZONAS FRANCAS Y DPA (TASA CERO);VENTAS A CUENTA DE TERCEROS NO DOMICILIADOS;TOTAL VENTAS;TIPO DE OPERACIÓN (RENTA);TIPO DE INGRESO (RENTA);NÚMERO DE ANEXO\n';
+          let csv = '';
           
           items.forEach(item => {
-            // Formatear fecha: DD/M/YYYY (sin ceros en día/mes si es posible)
+            // Formatear fecha: DD/MM/YYYY (con ceros)
             const fechaParts = item.fecha.split('/');
-            const dia = parseInt(fechaParts[0], 10);
-            const mes = parseInt(fechaParts[1], 10);
+            const dia = parseInt(fechaParts[0], 10).toString().padStart(2, '0');
+            const mes = parseInt(fechaParts[1], 10).toString().padStart(2, '0');
             const anio = fechaParts[2];
             const fechaFormateada = `${dia}/${mes}/${anio}`;
             
             // Extraer información del número de control
-            const numeroControl = item.numeroControlDel || '';
-            const numeroControlSinGuiones = numeroControl.replace(/-/g, '');
             const codigoGeneracion = item.codigoGeneracionInicial || '';
             const codigoGeneracionSinGuiones = codigoGeneracion.replace(/-/g, '');
             
@@ -406,7 +402,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             const numeroAnexo = '2'; // Anexo 2 para consumidor final
             
             // Para DTEs individuales, los valores DEL y AL son los mismos
-            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};;${item.ventasExentas.toFixed(2)};;${item.ventasGravadas.toFixed(2)};;;;;;;;${item.ventaTotal.toFixed(2)};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
+            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};;;${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};;${item.ventasExentas.toFixed(2)};;${item.ventasGravadas.toFixed(2)};;;;;;;;${item.ventaTotal.toFixed(2)};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
           });
 
           csv += `;;;;;;;;;;;;;;;;;;;${totales.ventasExentas.toFixed(2)};;${totales.ventasGravadas.toFixed(2)};;;;;;;;${totales.ventaTotal.toFixed(2)};1;1;2\n`;
