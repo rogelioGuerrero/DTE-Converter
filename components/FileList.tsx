@@ -182,6 +182,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
           codigoGeneracionFinal: csvParts[5] || csvParts[3] || '',
           numeroControlDel: file.data.controlNumber,
           numeroControlAl: file.data.controlNumber,
+          selloRecibido: csvParts[4] || '', // Columna E: NÚMERO DE SERIE
           ventasExentas: parseFloat(csvParts[9] || '0'),
           ventasGravadas: parseFloat(csvParts[11] || '0'),
           exportaciones: 0,
