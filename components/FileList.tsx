@@ -109,7 +109,42 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
     
     // Generar CSV para contribuyentes si hay archivos
     if (contribuyentesFiles.length > 0) {
-      const contribuyentesContent = contribuyentesFiles.map(f => f.csvLine).join('');
+      // Usar la misma configuración que Exportar CSV
+      const { getConfigLibro } = await import('./libros/librosConfig');
+      const config = getConfigLibro('contribuyentes');
+      
+      if (!config) {
+        notify('Error de configuración para contribuyentes', 'error');
+        return;
+      }
+      
+      // Procesar archivos como lo hace LibroLegalViewer
+      const processedItems = contribuyentesFiles.map((file, index) => {
+        const csvParts = file.csvLine.split(';');
+        return {
+          correlativo: index + 1,
+          fecha: file.data.date,
+          codigoGeneracion: csvParts[5] || csvParts[3] || '',
+          formUnico: '',
+          cliente: file.data.receiver,
+          nrc: csvParts[7] || '',
+          ventasExentas: parseFloat(csvParts[9] || '0'),
+          ventasNoSujetas: parseFloat(csvParts[10] || '0'),
+          ventasGravadas: parseFloat(csvParts[11] || '0'),
+          debitoFiscal: parseFloat(csvParts[12] || '0'),
+          ventaCuentaTerceros: 0,
+          debitoFiscalTerceros: 0,
+          impuestoPercibido: 0,
+          ventasTotales: parseFloat(file.data.total),
+          dui: csvParts[16] || '',
+          numeroControlDel: file.data.controlNumber,
+          selloRecibido: csvParts[4] || '',
+        };
+      });
+      
+      const totales = config.calcularTotales(processedItems);
+      const contribuyentesContent = config.generarCSV(processedItems, totales);
+      
       if (contribuyentesContent) {
         const fileName = `LIBRO_VENTAS_CONTRIBUYENTES_${month}.csv`;
         downloadCSV(contribuyentesContent, fileName);
