@@ -148,7 +148,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
     }
     
     if (contribuyentesFiles.length === 0 && consumidorFiles.length === 0) {
-      notify('No hay archivos para exportar', 'warning');
+      notify('No hay archivos para exportar', 'info');
       return;
     }
     
