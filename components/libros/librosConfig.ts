@@ -292,7 +292,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           return totales;
         },
         generarCSV: (items, totales) => {
-          let csv = 'No Corr;Fecha de Emisión;Clase de Documento;Tipo de Documento;Número de Resolución;Serie del Documento;Número de Documento Del;Número de Documento Al;Nombre Cliente;NRC;Ventas Exentas;Exportaciones;Ventas Gravadas;Débito Fiscal;Venta Cuenta de Terceros;Débito Fiscal de Terceros;Impuesto Percibido;Ventas Totales;Número de Anexo\n';
+          let csv = 'FECHA DE EMISIÓN;CLASE DE DOCUMENTO;TIPO DE DOCUMENTO;NÚMERO DE RESOLUCIÓN;NÚMERO DE SERIE DE DOCUMENTO;NÚMERO DE DOCUMENTO;NÚMERO DE CONTROL INTERNO;NIT O NRC DEL CLIENTE;NOMBRE, RAZÓN SOCIAL O DENOMINACIÓN;VENTAS EXENTAS;VENTAS NO SUJETAS;VENTAS GRAVADAS LOCALES;DÉBITO FISCAL;VENTAS A CUENTA DE TERCEROS NO DOMICILIADOS;DÉBITO FISCAL POR VENTA A CUENTA DE TERCEROS;TOTAL VENTAS;DUI DEL CLIENTE;TIPO DE OPERACIÓN (RENTA);TIPO DE INGRESO (RENTA);NÚMERO DE ANEXO\n';
           
           items.forEach(item => {
             // Formatear fecha: DD/M/YYYY (sin ceros en día/mes si es posible)
@@ -306,15 +306,21 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             const numeroControl = item.numeroControlDel || '';
             const numeroControlSinGuiones = numeroControl.replace(/-/g, '');
             const codigoGeneracion = item.codigoGeneracion || '';
+            const codigoGeneracionSinGuiones = codigoGeneracion.replace(/-/g, '');
             
-            // Para DTEs
+            // Para DTEs de contribuyentes
             const claseDocumento = '4'; // DTE
             const tipoDocumento = '03'; // CCF para contribuyentes
             
-            csv += `${item.correlativo};${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${codigoGeneracion};${codigoGeneracion};${codigoGeneracion};${(item.cliente || '').toUpperCase()};${item.nrc || ''};${item.ventasExentas.toFixed(2)};${item.exportaciones.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.debitoFiscal.toFixed(2)};${item.ventaCuentaTerceros.toFixed(2)};${item.debitoFiscalTerceros.toFixed(2)};${item.impuestoPercibido.toFixed(2)};${item.ventasTotales.toFixed(2)};1\n`;
+            // Valores fijos según normativa DGII para servicios profesionales
+            const tipoOperacionRenta = '1'; // 1 = Gravada
+            const tipoIngresoRenta = '2'; // 2 = Arrendamiento (para servicios de arrendamiento)
+            const numeroAnexo = '1'; // Anexo 1 para contribuyentes
+            
+            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};;${item.nrc || ''};${(item.cliente || '').toUpperCase()};${item.ventasExentas.toFixed(2)};${item.ventasNoSujetas.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.debitoFiscal.toFixed(2)};${item.ventaCuentaTerceros.toFixed(2)};${item.debitoFiscalTerceros.toFixed(2)};${item.ventasTotales.toFixed(2)};${item.dui || ''};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
           });
 
-          csv += `;;;;;;;;;${totales.ventasExentas.toFixed(2)};${totales.exportaciones.toFixed(2)};${totales.ventasGravadas.toFixed(2)};${totales.debitoFiscal.toFixed(2)};${totales.ventaCuentaTerceros.toFixed(2)};${totales.debitoFiscalTerceros.toFixed(2)};${totales.impuestoPercibido.toFixed(2)};${totales.ventasTotales.toFixed(2)};\n`;
+          csv += `;;;;;;;;;;;;;;;;;${totales.ventasExentas.toFixed(2)};${totales.ventasNoSujetas.toFixed(2)};${totales.ventasGravadas.toFixed(2)};${totales.debitoFiscal.toFixed(2)};${totales.ventaCuentaTerceros.toFixed(2)};${totales.debitoFiscalTerceros.toFixed(2)};${totales.ventasTotales.toFixed(2)};;1;2;1\n`;
           
           return csv;
         },
@@ -374,7 +380,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           return totales;
         },
         generarCSV: (items, totales) => {
-          let csv = 'Fecha de Emisión;Clase de Documento;Tipo de Documento;Número de Resolución;Serie del Documento;Numero de Control Interno Del;Numero de Control Interno Al;Número de Documento (Del);Número de Documento (Al);Número de Maquina Registradora;Ventas Exentas;Ventas Internas Exentas No Sujetas a Proporcionalidad;Ventas No Sujetas;Ventas Gravadas Locales;Exportaciones Dentro del Área de Centroamérica;Exportaciones Fuera del Área de Centroamérica;Exportaciones de Servicio;Ventas a Zonas Francas y DPA (Tasa Cero);Ventas a Cuenta de Terceros No Domiciliados;Total de Ventas;Tipo de Operación (Renta);Tipo de Ingreso (Renta);Número del Anexo\n';
+          let csv = 'FECHA DE EMISIÓN;CLASE DE DOCUMENTO;TIPO DE DOCUMENTO;NÚMERO DE RESOLUCIÓN;SERIE DE DOCUMENTO;NÚMERO DE CONTROL INTERNO (DEL);NÚMERO DE CONTROL INTERNO (AL);NÚMERO DE DOCUMENTO (DEL);NÚMERO DE DOCUMENTO (AL);NÚMERO DE MAQUINA REGISTRADORA;VENTAS EXENTAS;VENTAS INTERNAS EXENTAS NO SUJETAS A PROPORCIONALIDAD;VENTAS NO SUJETAS;VENTAS GRAVADAS LOCALES;EXPORTACIONES DENTRO DEL ÁREA CENTROAMERICANA;EXPORTACIONES FUERA DEL ÁREA CENTROAMERICANA;EXPORTACIONES DE SERVICIOS;VENTAS A ZONAS FRANCAS Y DPA (TASA CERO);VENTAS A CUENTA DE TERCEROS NO DOMICILIADOS;TOTAL VENTAS;TIPO DE OPERACIÓN (RENTA);TIPO DE INGRESO (RENTA);NÚMERO DE ANEXO\n';
           
           items.forEach(item => {
             // Formatear fecha: DD/M/YYYY (sin ceros en día/mes si es posible)
@@ -388,21 +394,22 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             const numeroControl = item.numeroControlDel || '';
             const numeroControlSinGuiones = numeroControl.replace(/-/g, '');
             const codigoGeneracion = item.codigoGeneracionInicial || '';
+            const codigoGeneracionSinGuiones = codigoGeneracion.replace(/-/g, '');
             
             // Para DTEs de consumidor final
             const claseDocumento = '4'; // DTE
             const tipoDocumento = '01'; // Factura consumidor final
             
-            // Para DTEs individuales, los valores DEL y AL son los mismos
-            const controlInternoDel = codigoGeneracion;
-            const controlInternoAl = codigoGeneracion;
-            const numeroDocumentoDel = codigoGeneracion;
-            const numeroDocumentoAl = codigoGeneracion;
+            // Valores fijos según normativa DGII para consumidor final
+            const tipoOperacionRenta = '1'; // 1 = Gravada
+            const tipoIngresoRenta = '1'; // 1 = Profesiones, Artes y Oficios
+            const numeroAnexo = '2'; // Anexo 2 para consumidor final
             
-            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${codigoGeneracion};${controlInternoDel};${controlInternoAl};${numeroDocumentoDel};${numeroDocumentoAl};;${item.ventasExentas.toFixed(2)};;${item.ventasGravadas.toFixed(2)};;;;;;;;${item.ventaTotal.toFixed(2)};01 Gravada;01 Profesiones, Artes y Oficios;2\n`;
+            // Para DTEs individuales, los valores DEL y AL son los mismos
+            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};;${item.ventasExentas.toFixed(2)};;${item.ventasGravadas.toFixed(2)};;;;;;;;${item.ventaTotal.toFixed(2)};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
           });
 
-          csv += `;;;;;;;;;;;;;;;;;;;${totales.ventasExentas.toFixed(2)};;${totales.ventasGravadas.toFixed(2)};;;;;;;;${totales.ventaTotal.toFixed(2)};;;\n`;
+          csv += `;;;;;;;;;;;;;;;;;;;${totales.ventasExentas.toFixed(2)};;${totales.ventasGravadas.toFixed(2)};;;;;;;;${totales.ventaTotal.toFixed(2)};1;1;2\n`;
           
           return csv;
         },
