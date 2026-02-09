@@ -334,12 +334,14 @@ const App: React.FC = () => {
               antes de presentarlos.
             </p>
           </div>
-          <div className="flex items-center space-x-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
-             <CheckCircle className="w-3 h-3" />
-             <span>100% Seguro & Privado</span>
-          </div>
-          <div className="text-xs text-gray-400">
-            v{import.meta.env.VITE_APP_VERSION || '1.0.0'}
+          <div className="flex flex-col space-y-1 items-end">
+            <div className="flex items-center space-x-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+               <CheckCircle className="w-3 h-3" />
+               <span>100% Seguro & Privado</span>
+            </div>
+            <div className="text-xs text-gray-400">
+              v{import.meta.env.VITE_APP_VERSION || '1.0.0'}
+            </div>
           </div>
         </div>
       </footer>
