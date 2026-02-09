@@ -197,7 +197,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
       // Cada DTE es una fila individual (sin agrupamiento)
       const filasIndividuales: any[] = [];
       
-      monthFiles.forEach((file, index) => {
+      monthFiles.forEach((file) => {
         const csvParts = file.csvLine.split(';');
         const numeroControl = file.data.controlNumber || '';
         const codigoGeneracion = csvParts[5] || csvParts[3] || '';
