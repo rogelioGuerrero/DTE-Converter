@@ -132,7 +132,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
   switch (tipoLibro) {
     case 'compras':
       return {
-        titulo: 'LIBRO DE COMPRAS',
+        titulo: 'LIBRO DE OPERACIONES DE COMPRAS',
         columnas: [
           { key: 'correlativo', header: 'CORRELATIVO', width: 'w-16', align: 'center' },
           { key: 'fecha', header: 'FECHA', width: 'w-20', align: 'center' },
