@@ -315,9 +315,9 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             // Valores fijos según normativa DGII para servicios profesionales
             const tipoOperacionRenta = '1'; // 1 = Gravada
             const tipoIngresoRenta = '2'; // 2 = Arrendamiento (para servicios de arrendamiento)
-            const numeroAnexo = '1'; // Anexo 1 para contribuyentes
+            // Número de anexo siempre es 1 para contribuyentes
             
-            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};;${item.nrc || ''};${(item.cliente || '').toUpperCase()};${item.ventasExentas.toFixed(2)};${item.ventasNoSujetas.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.debitoFiscal.toFixed(2)};${item.ventaCuentaTerceros.toFixed(2)};${item.debitoFiscalTerceros.toFixed(2)};${item.ventasTotales.toFixed(2)};${item.dui || ''};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
+            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};;${item.nrc || ''};${(item.cliente || '').toUpperCase()};${item.ventasExentas.toFixed(2)};${item.ventasNoSujetas.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.debitoFiscal.toFixed(2)};${item.ventaCuentaTerceros.toFixed(2)};${item.debitoFiscalTerceros.toFixed(2)};${item.ventasTotales.toFixed(2)};${item.dui || ''};${tipoOperacionRenta};${tipoIngresoRenta};1\n`;
           });
 
           csv += `;;;;;;;;;;;;;;;;;${totales.ventasExentas.toFixed(2)};${totales.ventasNoSujetas.toFixed(2)};${totales.ventasGravadas.toFixed(2)};${totales.debitoFiscal.toFixed(2)};${totales.ventaCuentaTerceros.toFixed(2)};${totales.debitoFiscalTerceros.toFixed(2)};${totales.ventasTotales.toFixed(2)};;1;2;1\n`;
