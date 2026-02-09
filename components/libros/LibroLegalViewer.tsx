@@ -202,7 +202,6 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
         const numeroControl = file.data.controlNumber || '';
         const codigoGeneracion = csvParts[5] || csvParts[3] || '';
         const ventasExentas = parseFloat(file.data.exentas || '0');
-        const ventasGravadas = parseFloat(file.data.total || '0');
         const ventaTotal = parseFloat(file.data.total || '0');
         
         // Formatear fecha: DD/MM/YYYY (con ceros)
