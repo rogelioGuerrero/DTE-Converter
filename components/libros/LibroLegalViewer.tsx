@@ -569,10 +569,16 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
   }
 
   // Renderizar celda según formato
-  const renderCelda = (valor: any, formato?: string, item?: any) => {
+  const renderCelda = (valor: any, formato?: string, item?: any, colKey?: string) => {
     // Determinar si es nota de crédito/débito para formato especial
     const esNotaCredito = item?.esNotaCredito;
     const esNotaDebito = item?.esNotaDebito;
+    
+    // Si es la columna fecha, mostrar solo el día para UI humana
+    if (colKey === 'fecha' && valor) {
+      const dia = valor.split('/')[0];
+      return <span className="text-center">{dia}</span>;
+    }
     
     if (formato === 'moneda') {
       const valorNumerico = Number(valor) || 0;
@@ -762,7 +768,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
                         col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''
                       } ${col.format === 'moneda' && Number(config.getValor(item, col.key) || 0) > 0 ? 'font-semibold' : ''} ${col.class || ''}`}
                     >
-                      {renderCelda(config.getValor(item, col.key), col.format, item)}
+                      {renderCelda(config.getValor(item, col.key), col.format, item, col.key)}
                     </td>
                   ))}
                 </tr>

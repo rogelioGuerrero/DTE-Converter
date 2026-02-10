@@ -339,7 +339,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
       return {
         titulo: 'LIBRO DE OPERACIONES DE VENTA A CONSUMIDOR FINAL',
         columnas: [
-          { key: 'fecha', header: 'FECHA', width: 'w-20', align: 'center' },
+          { key: 'fecha', header: 'DÍA', width: 'w-20', align: 'center' },
           { key: 'codigoGeneracionInicial', header: 'CÓDIGO\nGENERACIÓN\nINICIAL', width: 'w-32', align: 'center', format: 'codigo' },
           { key: 'codigoGeneracionFinal', header: 'CÓDIGO\nGENERACIÓN\nFINAL', width: 'w-32', align: 'center', format: 'codigo' },
           { key: 'numeroControlDel', header: 'NÚMERO\nCONTROL\nDEL', width: 'w-24', align: 'center', format: 'codigo' },
