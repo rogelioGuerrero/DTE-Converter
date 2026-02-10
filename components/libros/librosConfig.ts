@@ -149,6 +149,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           { key: 'comprasSujetoExcluido', header: 'COMPRAS\nSUJETO\nEXCLUIDO', width: 'w-28', align: 'right', format: 'moneda' }
         ],
         getValor: (item, key) => item[key] || '',
+        
         calcularTotales: (items) => {
           const totales = {
             comprasExentas: 0,
@@ -197,8 +198,9 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           { key: 'nrc', header: 'NRC', width: 'w-12', align: 'center', class: 'font-mono text-[10px]' },
           { key: 'ventasExentas', header: 'VENTAS EXENTAS', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
           { key: 'exportaciones', header: 'EXPORTACIONES', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
-          { key: 'ventasGravadas', header: 'VENTAS GRAVADAS', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
-          { key: 'debitoFiscal', header: 'DÉBITO FISCAL', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
+          { key: 'ventasGravadas', header: 'VENTAS GRAVADAS', width: 'w-14', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
+          { key: 'descuentos', header: 'DESCUENTOS', width: 'w-14', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
+          { key: 'debitoFiscal', header: 'DÉBITO FISCAL', width: 'w-14', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
           { key: 'ventaCuentaTerceros', header: 'VENTA CUENTA\nDE TERCEROS', width: 'w-24', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
           { key: 'debitoFiscalTerceros', header: 'DÉBITO FISCAL\nDE TERCEROS', width: 'w-28', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
           { key: 'impuestoPercibido', header: 'IMPUESTO PERCIBIDO', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
@@ -267,12 +269,21 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             }
           ];
         },
-        getValor: (item, key) => item[key] || '',
+        getValor: (item, key) => {
+          if (key === 'descuentos') {
+            const ventasGravadas = Number(item.ventasGravadas) || 0;
+            const ventasTotales = Number(item.ventasTotales) || 0;
+            const debitoFiscal = Number(item.debitoFiscal) || 0;
+            return (ventasGravadas - (ventasTotales - debitoFiscal));
+          }
+          return item[key] || '';
+        },
         calcularTotales: (items) => {
           const totales: Record<string, number> = {
             ventasExentas: 0,
             ventasNoSujetas: 0,
             ventasGravadas: 0,
+            descuentos: 0,
             debitoFiscal: 0,
             ventaCuentaTerceros: 0,
             debitoFiscalTerceros: 0,
@@ -284,6 +295,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             totales.ventasExentas += item.ventasExentas || 0;
             totales.ventasNoSujetas += item.ventasNoSujetas || 0;
             totales.ventasGravadas += item.ventasGravadas || 0;
+            totales.descuentos += item.descuentos || 0;
             totales.debitoFiscal += item.debitoFiscal || 0;
             totales.ventaCuentaTerceros += item.ventaCuentaTerceros || 0;
             totales.debitoFiscalTerceros += item.debitoFiscalTerceros || 0;
@@ -372,6 +384,7 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           ];
         },
         getValor: (item, key) => item[key] || '',
+        
         calcularTotales: (items) => {
           const totales = {
             ventasExentas: 0,

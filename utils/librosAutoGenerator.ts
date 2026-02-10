@@ -97,7 +97,8 @@ const convertirDTEAProcessedFile = (record: DTEHistoryRecord): ProcessedFile => 
       total: record.montoTotal.toString(),
       neto: record.montoGravado.toString(),
       iva: record.montoIva.toString(),
-      exentas: '0.00'
+      exentas: '0.00',
+      descuentos: record.descuentos?.toString() || '0.00'
     },
     taxpayer: owner,
     dteType: record.tipoDte,
@@ -135,7 +136,11 @@ export const generarLibroDesdeDTEs = async (
     });
 
     // Convertir a formato ProcessedFile
-    const processedFiles: ProcessedFile[] = registrosFiltrados.map(convertirDTEAProcessedFile);
+    const processedFiles: ProcessedFile[] = registrosFiltrados.map(record => {
+      // Extraer descuentos del DTE JSON si existen - usar totalDescu para DGII
+      const descuentos = record.dteJson?.resumen?.totalDescu || 0;
+      return convertirDTEAProcessedFile({ ...record, descuentos });
+    });
 
     // Agrupar por mes (solo un mes en este caso)
     const groupedData: GroupedData = {

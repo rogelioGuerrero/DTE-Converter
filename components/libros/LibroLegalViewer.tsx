@@ -225,6 +225,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
         const ventasNoSujetas = 0; // No viene en JSON para consumidor
         const ventasGravadas = parseFloat(file.data.neto || '0') * multiplicador; // Usar neto del JSON
         const ventaTotal = parseFloat(file.data.total || '0') * multiplicador;
+        const descuentos = parseFloat(file.data.descuentos || '0') * multiplicador; // Extraer descuentos para DGII
         
         // Formatear fecha: DD/MM/YYYY (con ceros)
         const fechaParts = file.data.date.split('/');
@@ -244,6 +245,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
             ventasInternasExentas: 0,
             ventasNoSujetas: 0,
             ventasGravadas: 0,
+            descuentos: 0, // Inicializar campo de descuentos para DGII
             exportacionesCentroAmerica: 0,
             exportacionesFueraCentroAmerica: 0,
             exportacionesServicios: 0,
@@ -262,6 +264,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
         fila.ventasInternasExentas += ventasInternasExentas;
         fila.ventasNoSujetas += ventasNoSujetas;
         fila.ventasGravadas += ventasGravadas;
+        fila.descuentos += descuentos; // Acumular descuentos para DGII
         fila.ventaTotal += ventaTotal;
         
         // Marcar si hay notas de crédito/débito

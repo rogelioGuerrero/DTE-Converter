@@ -419,15 +419,15 @@ export const generarHTMLFactura = async (options: PDFGeneratorOptions): Promise<
         </tr>
         <tr>
           <td>Monto global Desc., Rebajas y otros a ventas no sujetas:</td>
-          <td>0.00</td>
+          <td>${(dte.resumen.descuNoSuj || 0).toFixed(2)}</td>
         </tr>
         <tr>
           <td>Monto global Desc., Rebajas y otros a ventas Exentas:</td>
-          <td>0.00</td>
+          <td>${(dte.resumen.descuExenta || 0).toFixed(2)}</td>
         </tr>
         <tr>
           <td>Monto global Desc., Rebajas y otros a ventas gravadas:</td>
-          <td>0.00</td>
+          <td>${(dte.resumen.descuGravada || 0).toFixed(2)}</td>
         </tr>
         <tr>
           <td>Impuesto al Valor Agregado 13%:</td>

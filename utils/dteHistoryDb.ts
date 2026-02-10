@@ -25,6 +25,7 @@ export interface DTEHistoryRecord {
   montoTotal: number;
   montoGravado: number;
   montoIva: number;
+  descuentos?: number;
   
   // Estado
   estado: 'ACEPTADO' | 'RECHAZADO' | 'PENDIENTE' | 'CONTINGENCIA';
