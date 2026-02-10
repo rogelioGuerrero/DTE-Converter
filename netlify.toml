@@ -4,6 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  # Google Analytics ID
+  GOOGLE_ANALYTICS_ID = "G-CJHWVLPBZW"
 
 [functions]
   directory = "netlify/functions"

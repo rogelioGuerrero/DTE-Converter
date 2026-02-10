@@ -27,12 +27,10 @@ import {
 } from '../utils/dteGenerator';
 import { ToastContainer, useToast } from './Toast';
 import { applySalesFromDTE, validateStockForSale } from '../utils/inventoryDb';
-import { EmailField, NitOrDuiField, NrcField, PhoneField, SelectActividad, SelectUbicacion } from './formularios';
+import { inventarioService } from '../utils/inventario/inventarioService';
+import { analyticsEvents } from '../utils/analytics';
+import { validateNIT, validateNRC, validatePhone, validateEmail } from '../utils/validators';
 import {
-  validateNIT,
-  validateNRC,
-  validatePhone,
-  validateEmail,
   getNitOrDuiDigitsRemaining,
   formatTextInput,
   formatMultilineTextInput,
@@ -393,9 +391,20 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
       }, correlativo, '00');
       setGeneratedDTE(dte);
       await applySalesFromDTE(dte);
+      
+      // Seguimiento de Google Analytics - DTE generado exitosamente
+      analyticsEvents.documentGenerated(
+        tiposDocumento.find(t => t.codigo === tipoDoc)?.descripcion || 'Desconocido',
+        dte.identificacion.numeroControl
+      );
+      
       setShowPreview(true);
     } catch (err) {
       console.error('Error generando DTE:', err);
+      
+      // Seguimiento de Google Analytics - Error al generar DTE
+      analyticsEvents.error('mobile_dte_generation', err instanceof Error ? err.message : 'Error desconocido');
+      
       addToast('Error al generar DTE', 'error');
     } finally {
       setIsGenerating(false);

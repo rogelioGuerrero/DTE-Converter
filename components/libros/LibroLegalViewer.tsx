@@ -5,6 +5,7 @@ import { getEmisor, EmisorData } from '../../utils/emisorDb';
 import { consumeExportSlot } from '../../utils/usageLimit';
 import { notify } from '../../utils/notifications';
 import { TipoLibro, getConfigLibro, formatMoneda } from './librosConfig';
+import { analyticsEvents } from '../../utils/analytics';
 
 interface LibroLegalViewerProps {
   groupedData: GroupedData;
@@ -557,6 +558,9 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
     const fileName = isConsolidatedView ? `LIBRO_COMPRAS_CONSOLIDADO.csv` : `${config.nombreArchivo}_${displayMonth}.csv`;
     link.download = fileName;
     link.click();
+    
+    // Seguimiento de Google Analytics - Exportación de libro legal
+    analyticsEvents.userAction('export_libro_legal', 'libros_iva', `${tipoLibro}_${displayMonth}_${items.length}_items`);
   };
 
   if (availableMonths.length === 0) {

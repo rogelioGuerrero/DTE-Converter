@@ -14,6 +14,8 @@ import { consumeExportSlot } from '../utils/usageLimit';
 
 import { addHistoryEntry, computeSHA256 } from '../utils/historyDb';
 
+import { analyticsEvents } from '../utils/analytics';
+
 
 
 import InvoiceDetailModal from './InvoiceDetailModal';
@@ -265,44 +267,40 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
         };
       });
       
-      const totales = config.calcularTotales(processedItems);
-      const contribuyentesContent = config.generarCSV(processedItems, totales);
 
-      
+  const filesInMonth = getDisplayFiles(month);
 
-      if (contribuyentesContent) {
+  const idsInMonth = filesInMonth.map(f => f.id);
 
-        const fileName = `LIBRO_VENTAS_CONTRIBUYENTES_${month}.csv`;
+  const allSelected = idsInMonth.every(id => selectedIds.has(id));
 
-        downloadCSV(contribuyentesContent, fileName);
+  
 
-        
+  const newSet = new Set(selectedIds);
 
-        const totalAmount = contribuyentesFiles.reduce((sum, f) => sum + parseFloat(f.data.total), 0);
+  if (allSelected) {
 
-        const hash = await computeSHA256(contribuyentesContent);
+    idsInMonth.forEach(id => newSet.delete(id));
 
-        await addHistoryEntry({
+  } else {
 
-          timestamp: Date.now(),
+    idsInMonth.forEach(id => newSet.add(id));
 
-          mode: 'ventas',
+  }
 
-          fileName,
+  setSelectedIds(newSet);
 
-          totalAmount,
+};
 
-          fileCount: contribuyentesFiles.length,
 
-          hash,
 
-        });
+const handleSelectRow = (id: string) => {
 
-      }
+  const newSet = new Set(selectedIds);
 
-    }
+  if (newSet.has(id)) {
 
-    
+    newSet.delete(id);
 
     // Generar CSV para consumidor final si hay archivos
 
@@ -371,6 +369,9 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
         const fileName = `LIBRO_CONSUMIDOR_FINAL_${month}.csv`;
 
         downloadCSV(consumidorContent, fileName);
+
+        // Seguimiento de Google Analytics - Exportación libro consumidor final
+        analyticsEvents.userAction('export_libro_consumidor', 'libros_iva', `${month}_${consumidorFiles.length}_files`);
 
         
 

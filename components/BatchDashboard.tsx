@@ -14,6 +14,7 @@ import { loadSettings } from '../utils/settings';
 import { GroupedData, ProcessedFile, FieldConfiguration, AppMode } from '../types';
 import LibroLegalViewer, { TipoLibro } from './libros/LibroLegalViewer';
 import { RefreshCw, Search, Download, Settings2, ShoppingCart, FileSpreadsheet, BookOpen, Table, AlertTriangle } from 'lucide-react';
+import { analyticsEvents } from '../utils/analytics';
 
 const MESES = [
   'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
@@ -285,6 +286,10 @@ const BatchDashboard: React.FC = () => {
     });
 
     downloadCSV(allLines, fileName);
+    
+    // Seguimiento de Google Analytics - Exportación de CSV exitosa
+    analyticsEvents.userAction('export_csv', 'libros_iva', `${appMode}_${exportFileCount}_files`);
+    
     setShowDownloadModal(false);
   };
 
