@@ -148,6 +148,7 @@ export const extractValue = (data: DTEData, field: any, tipoDte?: string): strin
   if (rawValue === undefined || rawValue === null) rawValue = '';
 
   switch (field.transformation) {
+
     case 'date_ddmmyyyy':
       // Expects YYYY-MM-DD
       if (typeof rawValue === 'string' && rawValue.includes('-')) {
@@ -162,18 +163,16 @@ export const extractValue = (data: DTEData, field: any, tipoDte?: string): strin
     case 'currency':
       const num = parseFloat(rawValue);
       const finalNum = isNaN(num) ? 0 : num;
-      // Si es Nota de Crédito (05), aplicar valor negativo
-      const adjustedNum = (tipoDte === '05') ? -Math.abs(finalNum) : finalNum;
-      return adjustedNum.toFixed(2);
+      // En CSV los montos siempre deben ir positivos; el tipo de documento indica la operación
+      return Math.abs(finalNum).toFixed(2);
 
     case 'first_element_currency':
       // Special case for tributos array [0].valor
       if (Array.isArray(rawValue) && rawValue.length > 0) {
          const val = parseFloat(rawValue[0].valor);
          const finalVal = isNaN(val) ? 0 : val;
-         // Si es Nota de Crédito (05), aplicar valor negativo
-         const adjustedVal = (tipoDte === '05') ? -Math.abs(finalVal) : finalVal;
-         return adjustedVal.toFixed(2);
+         // En CSV los montos siempre deben ir positivos; el tipo de documento indica la operación
+         return Math.abs(finalVal).toFixed(2);
       }
       return '0.00';
 

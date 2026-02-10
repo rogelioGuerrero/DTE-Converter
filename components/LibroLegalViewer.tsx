@@ -195,10 +195,11 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, appMod
     let csv = 'No Corr;Fecha;Codigo de Generacion;NRC;Nit Sujeto Excluido;Nombre del Proveedor;Compras exentas;Compras Gravadas Locales;Credito Fiscal;Total Compras;Retencion a Terceros;Compras a Sujeto Excluido\n';
     
     items.forEach(item => {
-      csv += `${item.correlativo};${item.fecha};${item.codigoGeneracion};${item.nrc};${item.nitSujetoExcluido};${item.nombreProveedor};${item.comprasExentas.toFixed(2)};${item.comprasGravadasLocales.toFixed(2)};${item.creditoFiscal.toFixed(2)};${item.totalCompras.toFixed(2)};${item.retencionTerceros.toFixed(2)};${item.comprasSujetoExcluido.toFixed(2)}\n`;
+      // En CSV los montos siempre deben ir positivos; el tipo de documento indica la operación
+      csv += `${item.correlativo};${item.fecha};${item.codigoGeneracion};${item.nrc};${item.nitSujetoExcluido};${item.nombreProveedor};${Math.abs(item.comprasExentas || 0).toFixed(2)};${Math.abs(item.comprasGravadasLocales || 0).toFixed(2)};${Math.abs(item.creditoFiscal || 0).toFixed(2)};${Math.abs(item.totalCompras || 0).toFixed(2)};${Math.abs(item.retencionTerceros || 0).toFixed(2)};${Math.abs(item.comprasSujetoExcluido || 0).toFixed(2)}\n`;
     });
 
-    csv += `;;;;;TOTALES;${totales.comprasExentas.toFixed(2)};${totales.comprasGravadasLocales.toFixed(2)};${totales.creditoFiscal.toFixed(2)};${totales.totalCompras.toFixed(2)};;\n`;
+    csv += `;;;;;TOTALES;${Math.abs(totales.comprasExentas || 0).toFixed(2)};${Math.abs(totales.comprasGravadasLocales || 0).toFixed(2)};${Math.abs(totales.creditoFiscal || 0).toFixed(2)};${Math.abs(totales.totalCompras || 0).toFixed(2)};;\n`;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');

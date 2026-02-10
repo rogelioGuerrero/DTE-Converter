@@ -55,6 +55,11 @@ export interface ProcessedFile {
     tipoDTE?: string; // Tipo de DTE (01, 03, 05, 06)
     codigoGeneracion?: string; // Código de generación
     selloRecibido?: string; // Sello de recepción
+    // Valores para CSV (siempre positivos)
+    csvTotal?: string;
+    csvNeto?: string;
+    csvIva?: string;
+    csvExentas?: string;
   };
   taxpayer?: {
     nombre: string;

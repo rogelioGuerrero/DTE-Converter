@@ -158,26 +158,39 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
       if (!consolidatedItems || consolidatedItems.length === 0) return [];
       
       return consolidatedItems.map((file, index) => {
-        const csvParts = file.csvLine.split(';');
-        const exentas = parseFloat(file.data.exentas || '0');
-        const neto = parseFloat(file.data.neto || '0');
-        const iva = parseFloat(file.data.iva || '0');
-        const total = parseFloat(file.data.total || '0');
-        return {
-          correlativo: index + 1,
-          fecha: file.data.date,
-          codigoGeneracion: csvParts[3] || '',
-          nrc: '',
-          nitSujetoExcluido: '',
-          nombreProveedor: file.data.receiver,
-          comprasExentas: exentas,
-          comprasGravadasLocales: neto,
-          creditoFiscal: iva,
-          totalCompras: total,
-          retencionTerceros: 0,
-          comprasSujetoExcluido: 0,
-        };
-      });
+      const csvParts = file.csvLine.split(';');
+      const tipoDTE = file.data.tipoDTE || '03'; // Obtener tipo de DTE desde JSON
+      
+      // Determinar si es nota de crédito (05) o débito (06)
+      const esNotaCredito = tipoDTE === '05';
+      const esNotaDebito = tipoDTE === '06';
+      const multiplicador = esNotaCredito ? -1 : 1;
+      
+      const exentas = parseFloat(file.data.exentas || '0') * multiplicador;
+      const neto = parseFloat(file.data.neto || '0') * multiplicador;
+      const iva = parseFloat(file.data.iva || '0') * multiplicador;
+      const total = parseFloat(file.data.total || '0') * multiplicador;
+      
+      return {
+        correlativo: index + 1,
+        fecha: file.data.date,
+        codigoGeneracion: csvParts[3] || '',
+        numeroControl: file.data.controlNumber, // Agregar para CSV
+        selloRecibido: file.data.selloRecibido || '', // Agregar para CSV
+        nrc: '',
+        nitSujetoExcluido: '',
+        nombreProveedor: file.data.receiver,
+        comprasExentas: exentas,
+        comprasGravadasLocales: neto,
+        creditoFiscal: iva,
+        totalCompras: total,
+        retencionTerceros: 0,
+        comprasSujetoExcluido: 0,
+        tipoDTE: tipoDTE, // Agregar para visualización y CSV
+        esNotaCredito: esNotaCredito,
+        esNotaDebito: esNotaDebito,
+      };
+    });
     }
     
     // Comportamiento normal para otros casos
@@ -205,7 +218,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
         // Determinar si es nota de crédito (05) o débito (06)
         const esNotaCredito = tipoDTE === '05';
         const esNotaDebito = tipoDTE === '06';
-        const multiplicador = esNotaCredito || esNotaDebito ? -1 : 1;
+        const multiplicador = esNotaCredito ? -1 : 1;
         
         const ventasExentas = parseFloat(file.data.exentas || '0') * multiplicador;
         const ventasInternasExentas = 0; // No viene en JSON para consumidor
@@ -311,7 +324,7 @@ const LibroLegalViewer: React.FC<LibroLegalViewerProps> = ({ groupedData, groupe
       // Determinar si es nota de crédito (05) o débito (06)
       const esNotaCredito = tipoDTE === '05';
       const esNotaDebito = tipoDTE === '06';
-      const multiplicador = esNotaCredito || esNotaDebito ? -1 : 1;
+      const multiplicador = esNotaCredito ? -1 : 1;
       
       // Nota: aquí tipoLibro NO puede ser 'compras' porque esa ruta retorna arriba.
       if (tipoLibro === 'contribuyentes') {

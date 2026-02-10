@@ -174,10 +174,11 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           let csv = 'No Corr;Fecha;Codigo de Generacion;NRC;Nit Sujeto Excluido;Nombre del Proveedor;Compras exentas;Compras Gravadas Locales;Credito Fiscal;Total Compras;Retencion a Terceros;Compras a Sujeto Excluido\n';
           
           items.forEach(item => {
-            csv += `${item.correlativo};${item.fecha};${item.codigoGeneracion};${item.nrc};${item.nitSujetoExcluido};${item.nombreProveedor};${item.comprasExentas.toFixed(2)};${item.comprasGravadasLocales.toFixed(2)};${item.creditoFiscal.toFixed(2)};${item.totalCompras.toFixed(2)};${item.retencionTerceros.toFixed(2)};${item.comprasSujetoExcluido.toFixed(2)}\n`;
+            // Usar valores absolutos para CSV (siempre positivos)
+            csv += `${item.correlativo};${item.fecha};${item.codigoGeneracion};${item.nrc};${item.nitSujetoExcluido};${item.nombreProveedor};${Math.abs(item.comprasExentas || 0).toFixed(2)};${Math.abs(item.comprasGravadasLocales || 0).toFixed(2)};${Math.abs(item.creditoFiscal || 0).toFixed(2)};${Math.abs(item.totalCompras || 0).toFixed(2)};${Math.abs(item.retencionTerceros || 0).toFixed(2)};${Math.abs(item.comprasSujetoExcluido || 0).toFixed(2)}\n`;
           });
 
-          csv += `;;;;;TOTALES;${totales.comprasExentas.toFixed(2)};${totales.comprasGravadasLocales.toFixed(2)};${totales.creditoFiscal.toFixed(2)};${totales.totalCompras.toFixed(2)};;\n`;
+          csv += `;;;;;TOTALES;${Math.abs(totales.comprasExentas).toFixed(2)};${Math.abs(totales.comprasGravadasLocales).toFixed(2)};${Math.abs(totales.creditoFiscal).toFixed(2)};${Math.abs(totales.totalCompras).toFixed(2)};;\n`;
           
           return csv;
         },
@@ -325,7 +326,8 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             const tipoIngresoRenta = '2'; // 2 = Arrendamiento (para servicios de arrendamiento)
             // Número de anexo siempre es 1 para contribuyentes
             
-            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};;${item.nrc || ''};${item.cliente || ''};${item.ventasExentas.toFixed(2)};${item.ventasNoSujetas.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.debitoFiscal.toFixed(2)};${item.ventaCuentaTerceros.toFixed(2)};${item.debitoFiscalTerceros.toFixed(2)};${item.ventasTotales.toFixed(2)};${item.dui || ''};${tipoOperacionRenta};${tipoIngresoRenta};1\n`;
+            // Usar valores absolutos para CSV (siempre positivos)
+            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};;${item.nrc || ''};${item.cliente || ''};${Math.abs(item.ventasExentas || 0).toFixed(2)};${Math.abs(item.ventasNoSujetas || 0).toFixed(2)};${Math.abs(item.ventasGravadas || 0).toFixed(2)};${Math.abs(item.debitoFiscal || 0).toFixed(2)};${Math.abs(item.ventaCuentaTerceros || 0).toFixed(2)};${Math.abs(item.debitoFiscalTerceros || 0).toFixed(2)};${Math.abs(item.ventasTotales || 0).toFixed(2)};${item.dui || ''};${tipoOperacionRenta};${tipoIngresoRenta};1\n`;
           });
           
           return csv;
@@ -433,7 +435,8 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             const numeroAnexo = '2'; // Anexo 2 para consumidor final
             
             // Para DTEs individuales, los valores DEL y AL son los mismos
-            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};;${item.ventasExentas.toFixed(2)};${item.ventasInternasExentas.toFixed(2)};${item.ventasNoSujetas.toFixed(2)};${item.ventasGravadas.toFixed(2)};${item.exportacionesCentroAmerica.toFixed(2)};${item.exportacionesFueraCentroAmerica.toFixed(2)};${item.exportacionesServicios.toFixed(2)};${item.ventasZonasFrancas.toFixed(2)};${item.ventasCuentaTerceros.toFixed(2)};${item.ventaTotal.toFixed(2)};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
+            // Usar valores absolutos para CSV (siempre positivos)
+            csv += `${fechaFormateada};${claseDocumento};${tipoDocumento};${numeroControlSinGuiones};${item.selloRecibido || ''};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};${codigoGeneracionSinGuiones};;${Math.abs(item.ventasExentas || 0).toFixed(2)};${Math.abs(item.ventasInternasExentas || 0).toFixed(2)};${Math.abs(item.ventasNoSujetas || 0).toFixed(2)};${Math.abs(item.ventasGravadas || 0).toFixed(2)};${Math.abs(item.exportacionesCentroAmerica || 0).toFixed(2)};${Math.abs(item.exportacionesFueraCentroAmerica || 0).toFixed(2)};${Math.abs(item.exportacionesServicios || 0).toFixed(2)};${Math.abs(item.ventasZonasFrancas || 0).toFixed(2)};${Math.abs(item.ventasCuentaTerceros || 0).toFixed(2)};${Math.abs(item.ventaTotal || 0).toFixed(2)};${tipoOperacionRenta};${tipoIngresoRenta};${numeroAnexo}\n`;
           });
           
           return csv;
