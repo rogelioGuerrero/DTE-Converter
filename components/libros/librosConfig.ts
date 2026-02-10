@@ -295,7 +295,12 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             totales.ventasExentas += item.ventasExentas || 0;
             totales.ventasNoSujetas += item.ventasNoSujetas || 0;
             totales.ventasGravadas += item.ventasGravadas || 0;
-            totales.descuentos += item.descuentos || 0;
+            // Calcular descuentos dinámicamente como en getValor
+            const ventasGravadas = Number(item.ventasGravadas) || 0;
+            const ventasTotales = Number(item.ventasTotales) || 0;
+            const debitoFiscal = Number(item.debitoFiscal) || 0;
+            const descuentos = ventasGravadas - (ventasTotales - debitoFiscal);
+            totales.descuentos += descuentos;
             totales.debitoFiscal += item.debitoFiscal || 0;
             totales.ventaCuentaTerceros += item.ventaCuentaTerceros || 0;
             totales.debitoFiscalTerceros += item.debitoFiscalTerceros || 0;
