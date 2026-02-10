@@ -125,14 +125,6 @@ export const processJsonContent = (
       : 0)).toFixed(2);
     const displayExentas = (tipoDte === '05' ? -Math.abs(data.resumen?.totalExenta || 0) : (data.resumen?.totalExenta || 0)).toFixed(2);
 
-    // Valores para CSV (siempre positivos, el tipoDTE indica la operación)
-    const csvTotal = Math.abs(data.resumen?.montoTotalOperacion || 0).toFixed(2);
-    const csvNeto = Math.abs(data.resumen?.totalGravada || 0).toFixed(2);
-    const csvIva = Math.abs(data.resumen?.tributos && data.resumen.tributos.length > 0 
-      ? data.resumen.tributos[0].valor 
-      : 0).toFixed(2);
-    const csvExentas = Math.abs(data.resumen?.totalExenta || 0).toFixed(2);
-
     // Dynamic CSV Line Generation
     const csvFields = config
       .filter(field => field.enabled)
@@ -183,10 +175,6 @@ export const processJsonContent = (
         tipoDTE: tipoDte, // Agregar tipo de DTE
         codigoGeneracion: data.identificacion?.codigoGeneracion || '', // Agregar código de generación
         selloRecibido: data.selloRecibido || '', // Agregar sello de recepción
-        csvTotal: csvTotal,
-        csvNeto: csvNeto,
-        csvIva: csvIva,
-        csvExentas: csvExentas,
       },
       taxpayer: taxpayerInfo,
       dteType: tipoDte,
