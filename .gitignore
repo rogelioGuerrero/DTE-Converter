@@ -30,3 +30,7 @@ test-dte.p12
 
 # Local Netlify folder
 .netlify
+
+# Schema folders (local only)
+svfe-api-firmador/
+svfe-json-schemas/
