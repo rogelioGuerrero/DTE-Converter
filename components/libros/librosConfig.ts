@@ -199,7 +199,6 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           { key: 'ventasExentas', header: 'VENTAS EXENTAS', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
           { key: 'exportaciones', header: 'EXPORTACIONES', width: 'w-16', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
           { key: 'ventasGravadas', header: 'VENTAS GRAVADAS', width: 'w-14', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
-          { key: 'descuentos', header: 'DESCUENTOS', width: 'w-14', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
           { key: 'debitoFiscal', header: 'DÉBITO FISCAL', width: 'w-14', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
           { key: 'ventaCuentaTerceros', header: 'VENTA CUENTA\nDE TERCEROS', width: 'w-24', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
           { key: 'debitoFiscalTerceros', header: 'DÉBITO FISCAL\nDE TERCEROS', width: 'w-28', align: 'right', format: 'moneda', class: 'font-mono text-[10px]' },
@@ -220,6 +219,14 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           const totalExportaciones = items.reduce((sum, item) => sum + (item.exportaciones || 0), 0);
           const totalDebitoFiscal = items.reduce((sum, item) => sum + (item.debitoFiscal || 0), 0);
           
+          // Calcular descuentos totales para obtener ventas NETAS gravadas
+          const totalVentasTotales = items.reduce((sum, item) => sum + (item.ventasTotales || 0), 0);
+          const totalDescuentos = totalGravadasContribuyentes - (totalVentasTotales - totalDebitoFiscal);
+          const ventasNetasGravadasContribuyentes = totalGravadasContribuyentes - totalDescuentos;
+          
+          // Verificar débito fiscal (debe ser 13% de ventas netas)
+          const debitoFiscalCalculado = ventasNetasGravadasContribuyentes * 0.13;
+          
           // Asumimos 0 para consumidores si este libro es solo contribuyentes
           const totalGravadasConsumidores = 0;
           const totalExentasConsumidores = 0;
@@ -227,8 +234,8 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           return [
             { 
               label: 'VENTAS NETAS INTERNAS GRAVADAS A CONTRIBUYENTES', 
-              valorNeto: totalGravadasContribuyentes, 
-              debitoFiscal: totalDebitoFiscal, 
+              valorNeto: ventasNetasGravadasContribuyentes, 
+              debitoFiscal: debitoFiscalCalculado, 
               ivaRetenido: 0 
             },
             { 
@@ -239,8 +246,8 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             },
             { 
               label: 'TOTAL OPERACIONES INTERNADAS GRAVADAS', 
-              valorNeto: totalGravadasContribuyentes + totalGravadasConsumidores, 
-              debitoFiscal: totalDebitoFiscal, 
+              valorNeto: ventasNetasGravadasContribuyentes + totalGravadasConsumidores, 
+              debitoFiscal: debitoFiscalCalculado, 
               ivaRetenido: 0 
             },
             { 
@@ -270,12 +277,6 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
           ];
         },
         getValor: (item, key) => {
-          if (key === 'descuentos') {
-            const ventasGravadas = Number(item.ventasGravadas) || 0;
-            const ventasTotales = Number(item.ventasTotales) || 0;
-            const debitoFiscal = Number(item.debitoFiscal) || 0;
-            return (ventasGravadas - (ventasTotales - debitoFiscal));
-          }
           return item[key] || '';
         },
         calcularTotales: (items) => {
@@ -283,7 +284,6 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             ventasExentas: 0,
             ventasNoSujetas: 0,
             ventasGravadas: 0,
-            descuentos: 0,
             debitoFiscal: 0,
             ventaCuentaTerceros: 0,
             debitoFiscalTerceros: 0,
@@ -295,12 +295,6 @@ export function getConfigLibro(tipoLibro: TipoLibro): LibroLegalConfig | null {
             totales.ventasExentas += item.ventasExentas || 0;
             totales.ventasNoSujetas += item.ventasNoSujetas || 0;
             totales.ventasGravadas += item.ventasGravadas || 0;
-            // Calcular descuentos dinámicamente como en getValor
-            const ventasGravadas = Number(item.ventasGravadas) || 0;
-            const ventasTotales = Number(item.ventasTotales) || 0;
-            const debitoFiscal = Number(item.debitoFiscal) || 0;
-            const descuentos = ventasGravadas - (ventasTotales - debitoFiscal);
-            totales.descuentos += descuentos;
             totales.debitoFiscal += item.debitoFiscal || 0;
             totales.ventaCuentaTerceros += item.ventaCuentaTerceros || 0;
             totales.debitoFiscalTerceros += item.debitoFiscalTerceros || 0;

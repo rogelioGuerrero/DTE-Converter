@@ -27,6 +27,7 @@ export interface DTEResumen {
   totalExenta: number;
   totalNoSuj: number;
   totalGravada: number;
+  subTotal: number;
   montoTotalOperacion: number;
   tributos: DTETributo[] | null;
 }

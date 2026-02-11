@@ -117,7 +117,7 @@ export const processJsonContent = (
 
     // Valores para visualización en UI (con signo negativo para notas crédito)
     const displayTotal = (tipoDte === '05' ? -Math.abs(data.resumen?.montoTotalOperacion || 0) : (data.resumen?.montoTotalOperacion || 0)).toFixed(2);
-    const displayNeto = (tipoDte === '05' ? -Math.abs(data.resumen?.totalGravada || 0) : (data.resumen?.totalGravada || 0)).toFixed(2);
+    const displayNeto = (tipoDte === '05' ? -Math.abs(data.resumen?.subTotal || 0) : (data.resumen?.subTotal || 0)).toFixed(2);
     const displayIva = (tipoDte === '05' ? -Math.abs(data.resumen?.tributos && data.resumen.tributos.length > 0 
       ? data.resumen.tributos[0].valor 
       : 0) : (data.resumen?.tributos && data.resumen.tributos.length > 0 
