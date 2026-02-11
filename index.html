@@ -32,6 +32,15 @@
       gtag('js', new Date());
 
       gtag('config', 'G-CJHWVLPBZW');
+      
+      // Debug: Verificar que gtag está disponible
+      console.log('Google Analytics loaded:', typeof gtag !== 'undefined');
+      
+      // Evento de prueba para verificar conexión
+      gtag('event', 'page_view', {
+        page_title: 'DTE Pro - Main Page',
+        page_location: window.location.href
+      });
     </script>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
