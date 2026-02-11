@@ -29,7 +29,6 @@ import {
   getPresentacionesForCodigo as getPresentacionesForCodigoHelper,
   validateStockForInventario as validateStockForInventarioHelper,
 } from '../utils/facturaGeneratorInventoryHelpers';
-import { analyticsEvents } from '../utils/analytics';
 import {
   validateNIT,
   validateNRC,
@@ -623,16 +622,8 @@ const FacturaGenerator: React.FC = () => {
       const dteInventario = buildInventarioDTEFromGenerated({ dte, items });
       await inventarioService.aplicarVentaDesdeDTE(dteInventario as any);
       
-      // Seguimiento de Google Analytics - DTE generado exitosamente
-      analyticsEvents.documentGenerated(
-        tiposDocumento.find(t => t.codigo === tipoDocumento)?.descripcion || 'Desconocido',
-        dte.identificacion.numeroControl
-      );
-      
       addToast('DTE generado correctamente', 'success');
     } catch (error) {
-      // Seguimiento de Google Analytics - Error al generar DTE
-      analyticsEvents.error('dte_generation', error instanceof Error ? error.message : 'Error desconocido');
       addToast('Error al generar DTE', 'error');
     } finally {
       setIsGenerating(false);

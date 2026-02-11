@@ -27,8 +27,14 @@ import {
 } from '../utils/dteGenerator';
 import { ToastContainer, useToast } from './Toast';
 import { applySalesFromDTE, validateStockForSale } from '../utils/inventoryDb';
-import { inventarioService } from '../utils/inventario/inventarioService';
-import { analyticsEvents } from '../utils/analytics';
+import {
+  EmailField,
+  NitOrDuiField,
+  NrcField,
+  PhoneField,
+  SelectActividad,
+  SelectUbicacion,
+} from './formularios';
 import { validateNIT, validateNRC, validatePhone, validateEmail } from '../utils/validators';
 import {
   getNitOrDuiDigitsRemaining,
@@ -392,19 +398,10 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
       setGeneratedDTE(dte);
       await applySalesFromDTE(dte);
       
-      // Seguimiento de Google Analytics - DTE generado exitosamente
-      analyticsEvents.documentGenerated(
-        tiposDocumento.find(t => t.codigo === tipoDoc)?.descripcion || 'Desconocido',
-        dte.identificacion.numeroControl
-      );
-      
       setShowPreview(true);
     } catch (err) {
       console.error('Error generando DTE:', err);
-      
-      // Seguimiento de Google Analytics - Error al generar DTE
-      analyticsEvents.error('mobile_dte_generation', err instanceof Error ? err.message : 'Error desconocido');
-      
+
       addToast('Error al generar DTE', 'error');
     } finally {
       setIsGenerating(false);
@@ -871,7 +868,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                     }
                     labelClassName="block text-xs font-medium text-gray-500 uppercase mb-1"
                     value={newClientForm.nit}
-                    onChange={(nit) => handleNewClientChange('nit', nit)}
+                    onChange={(nit: string) => handleNewClientChange('nit', nit)}
                     placeholder="0000-000000-000-0"
                     disabled={newClientForm.esConsumidorFinal}
                     validation={
@@ -897,7 +894,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                     label="NRC"
                     labelClassName="block text-xs font-medium text-gray-500 uppercase mb-1"
                     value={newClientForm.nrc}
-                    onChange={(nrc) => handleNewClientChange('nrc', nrc)}
+                    onChange={(nrc: string) => handleNewClientChange('nrc', nrc)}
                     placeholder="000000-0"
                     disabled={newClientForm.esConsumidorFinal}
                     validation={
@@ -945,7 +942,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
               <div>
                 <SelectActividad
                   value={newClientForm.actividadEconomica}
-                  onChange={(codigo, descripcion) => {
+                  onChange={(codigo: string, descripcion: string) => {
                     handleNewClientChange('actividadEconomica', codigo);
                     handleNewClientChange('descActividad', descripcion);
                   }}
@@ -960,8 +957,8 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                   <SelectUbicacion
                     departamento={newClientForm.departamento}
                     municipio={newClientForm.municipio}
-                    onDepartamentoChange={(codigo) => handleNewClientChange('departamento', codigo)}
-                    onMunicipioChange={(codigo) => handleNewClientChange('municipio', codigo)}
+                    onDepartamentoChange={(codigo: string) => handleNewClientChange('departamento', codigo)}
+                    onMunicipioChange={(codigo: string) => handleNewClientChange('municipio', codigo)}
                     showLabels
                     layout="vertical"
                     size="md"
@@ -989,7 +986,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                   }
                   labelClassName="block text-xs font-medium text-gray-500 uppercase mb-1"
                   value={newClientForm.telefono}
-                  onChange={(telefono) => handleNewClientChange('telefono', telefono)}
+                  onChange={(telefono: string) => handleNewClientChange('telefono', telefono)}
                   placeholder="70001234"
                   type="tel"
                   disabled={newClientForm.esConsumidorFinal}
@@ -1016,7 +1013,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                   }
                   labelClassName="block text-xs font-medium text-gray-500 uppercase mb-1"
                   value={newClientForm.email}
-                  onChange={(email) => handleNewClientChange('email', email)}
+                  onChange={(email: string) => handleNewClientChange('email', email)}
                   placeholder="correo@ejemplo.com"
                   disabled={newClientForm.esConsumidorFinal}
                   validation={

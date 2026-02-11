@@ -14,8 +14,6 @@ import { consumeExportSlot } from '../utils/usageLimit';
 
 import { addHistoryEntry, computeSHA256 } from '../utils/historyDb';
 
-import { analyticsEvents } from '../utils/analytics';
-
 
 
 import InvoiceDetailModal from './InvoiceDetailModal';
@@ -267,40 +265,44 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
         };
       });
       
+      const totales = config.calcularTotales(processedItems);
+      const contribuyentesContent = config.generarCSV(processedItems, totales);
 
-  const filesInMonth = getDisplayFiles(month);
+      
 
-  const idsInMonth = filesInMonth.map(f => f.id);
+      if (contribuyentesContent) {
 
-  const allSelected = idsInMonth.every(id => selectedIds.has(id));
+        const fileName = `LIBRO_VENTAS_CONTRIBUYENTES_${month}.csv`;
 
-  
+        downloadCSV(contribuyentesContent, fileName);
 
-  const newSet = new Set(selectedIds);
+        
 
-  if (allSelected) {
+        const totalAmount = contribuyentesFiles.reduce((sum, f) => sum + parseFloat(f.data.total), 0);
 
-    idsInMonth.forEach(id => newSet.delete(id));
+        const hash = await computeSHA256(contribuyentesContent);
 
-  } else {
+        await addHistoryEntry({
 
-    idsInMonth.forEach(id => newSet.add(id));
+          timestamp: Date.now(),
 
-  }
+          mode: 'ventas',
 
-  setSelectedIds(newSet);
+          fileName,
 
-};
+          totalAmount,
 
+          fileCount: contribuyentesFiles.length,
 
+          hash,
 
-const handleSelectRow = (id: string) => {
+        });
 
-  const newSet = new Set(selectedIds);
+      }
 
-  if (newSet.has(id)) {
+    }
 
-    newSet.delete(id);
+    
 
     // Generar CSV para consumidor final si hay archivos
 
@@ -369,9 +371,6 @@ const handleSelectRow = (id: string) => {
         const fileName = `LIBRO_CONSUMIDOR_FINAL_${month}.csv`;
 
         downloadCSV(consumidorContent, fileName);
-
-        // Seguimiento de Google Analytics - Exportación libro consumidor final
-        analyticsEvents.userAction('export_libro_consumidor', 'libros_iva', `${month}_${consumidorFiles.length}_files`);
 
         
 

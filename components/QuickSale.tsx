@@ -18,7 +18,6 @@ import { ToastContainer, useToast } from './Toast';
 import Tooltip from './Tooltip';
 import TransmisionModal from './TransmisionModal';
 import { applySalesFromDTE, validateStockForSale } from '../utils/inventoryDb';
-import { analyticsEvents } from '../utils/analytics';
 
 type CartItem = {
   id: string;
@@ -210,18 +209,9 @@ const QuickSale: React.FC = () => {
       setGeneratedDTE(dte);
       await applySalesFromDTE(dte);
       
-      // Seguimiento de Google Analytics - DTE generado exitosamente
-      analyticsEvents.documentGenerated(
-        'Factura Electrónica (FE)',
-        dte.identificacion.numeroControl
-      );
-      
       addToast('DTE generado correctamente', 'success');
       setShowTransmision(true);
     } catch (error) {
-      // Seguimiento de Google Analytics - Error al generar DTE
-      analyticsEvents.error('quick_sale_dte_generation', error instanceof Error ? error.message : 'Error desconocido');
-      
       addToast('Error al generar DTE', 'error');
     } finally {
       setIsGenerating(false);
