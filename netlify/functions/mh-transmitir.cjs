@@ -1,7 +1,7 @@
-const MH_BASE_URL = (process.env.MH_BASE_URL || 'https://api-sandbox.mh.gob.sv').replace(/\/+$/, '');
-const MH_CLIENT_ID = process.env.MH_CLIENT_ID || '';
-const MH_CLIENT_SECRET = process.env.MH_CLIENT_SECRET || '';
-const MH_SCOPE = process.env.MH_SCOPE || 'dte.transmitir dte.consultar';
+const MH_BASE_URL_TEST = (process.env.MH_BASE_URL_TEST || 'https://apitest.dtes.mh.gob.sv').replace(/\/+$/, '');
+const MH_BASE_URL_PROD = (process.env.MH_BASE_URL_PROD || 'https://api.dtes.mh.gob.sv').replace(/\/+$/, '');
+const MH_USER = process.env.MH_USER || '';
+const MH_PWD = process.env.MH_PWD || '';
 
 const { randomUUID } = require('crypto');
 
@@ -47,35 +47,66 @@ const corsHeaders = (event) => {
   };
 };
 
-const obtenerTokenMH = async () => {
+const base64UrlToUtf8 = (value) => {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  const padded = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padLen = (4 - (padded.length % 4)) % 4;
+  const final = padded + '='.repeat(padLen);
+  try {
+    return Buffer.from(final, 'base64').toString('utf8');
+  } catch {
+    return null;
+  }
+};
+
+const parseDteFromJws = (jws) => {
+  if (typeof jws !== 'string') return null;
+  const parts = jws.split('.');
+  if (parts.length < 2) return null;
+  const payloadTxt = base64UrlToUtf8(parts[1]);
+  if (!payloadTxt) return null;
+  try {
+    return JSON.parse(payloadTxt);
+  } catch {
+    return null;
+  }
+};
+
+const obtenerTokenMH = async (baseUrl) => {
   const now = Date.now();
   if (cachedToken && now < cachedToken.expiresAt) return cachedToken.token;
 
-  if (!MH_CLIENT_ID || !MH_CLIENT_SECRET) {
-    throw new Error('Missing MH_CLIENT_ID/MH_CLIENT_SECRET. Configure them in Netlify env vars.');
+  if (!MH_USER || !MH_PWD) {
+    throw new Error('Missing MH_USER/MH_PWD. Configure them in Netlify env vars.');
   }
 
   const body = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_id: MH_CLIENT_ID,
-    client_secret: MH_CLIENT_SECRET,
-    scope: MH_SCOPE,
+    user: MH_USER,
+    pwd: MH_PWD,
   });
 
-  const res = await fetch(`${MH_BASE_URL}/oauth/token`, {
+  const res = await fetch(`${baseUrl}/seguridad/auth`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'DTE-CONVERTER',
+    },
     body,
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data?.access_token) {
+  if (!res.ok || data?.status !== 'OK' || !data?.body?.token) {
     throw new Error(`Auth MH failed: ${res.status} ${JSON.stringify(data)}`);
   }
 
-  const expiresInSec = typeof data.expires_in === 'number' ? data.expires_in : 3600;
+  const tokenValue = data.body.token;
+  if (typeof tokenValue !== 'string' || !tokenValue) {
+    throw new Error(`Auth MH returned invalid token: ${JSON.stringify(data)}`);
+  }
+
+  const expiresInSec = 60 * 60;
   cachedToken = {
-    token: data.access_token,
+    token: tokenValue,
     expiresAt: now + Math.max(30, expiresInSec - 30) * 1000,
   };
 
@@ -113,27 +144,49 @@ exports.handler = async (event) => {
   }
 
   try {
-    const token = await obtenerTokenMH();
+    const baseUrl = ambiente === '01' ? MH_BASE_URL_PROD : MH_BASE_URL_TEST;
+    const token = await obtenerTokenMH(baseUrl);
 
-    const mhRes = await fetch(`${MH_BASE_URL}/dte/v1/transmitir`, {
+    const dteJson = parseDteFromJws(dte);
+    const identificacion = dteJson?.identificacion || {};
+    const version = typeof identificacion.version === 'number' ? identificacion.version : undefined;
+    const tipoDte = typeof identificacion.tipoDte === 'string' ? identificacion.tipoDte : undefined;
+    const codigoGeneracion = typeof identificacion.codigoGeneracion === 'string' ? identificacion.codigoGeneracion : undefined;
+
+    if (!version || !tipoDte || !codigoGeneracion) {
+      return json(
+        400,
+        {
+          error: 'No se pudieron extraer campos requeridos del JWS (identificacion.version, identificacion.tipoDte, identificacion.codigoGeneracion).',
+        },
+        cors
+      );
+    }
+
+    const idEnvio = Date.now();
+
+    const mhRes = await fetch(`${baseUrl}/fesv/recepciondte`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: token,
         'Content-Type': 'application/json',
+        'User-Agent': event.headers?.['user-agent'] || event.headers?.['User-Agent'] || 'DTE-CONVERTER',
         'X-Request-ID': randomUUID(),
-        'X-Ambiente': ambiente,
       },
       body: JSON.stringify({
-        dte,
-        metadata: {
-          origen: 'DTE-CONVERTER',
-          version: '1.0',
-          timestamp: new Date().toISOString(),
-        },
+        ambiente,
+        idEnvio,
+        version,
+        tipoDte,
+        documento: dte,
+        codigoGeneracion,
       }),
     });
 
     const data = await mhRes.json().catch(() => ({}));
+    // Debug: log completo para ver qué devuelve MH
+    console.log('MH response status:', mhRes.status);
+    console.log('MH response body:', JSON.stringify(data, null, 2));
     return json(mhRes.ok ? 200 : mhRes.status, data, cors);
   } catch (err) {
     return json(500, { error: err?.message || 'Internal error' }, cors);
