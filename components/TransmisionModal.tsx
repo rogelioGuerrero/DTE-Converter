@@ -17,13 +17,12 @@ import TemplateSelector from './TemplateSelector';
 import { guardarDTEEnHistorial } from '../utils/dteHistoryDb';
 import { generarLibroDesdeDTEs } from '../utils/librosAutoGenerator';
 import { getCertificate } from '../utils/secureStorage';
-import { leerP12, firmarDTEConP12 } from '../utils/p12Handler';
+import { firmarDocumento, limpiarDteParaFirma, wakeFirmaService } from '../utils/firmaApiClient';
 import { processDTE } from '../utils/mh/process';
 import { getMHMode } from '../utils/mh/config';
 import { transmitirDTESandbox } from '../utils/mh/sandboxClient';
 import { loadSettings } from '../utils/settings';
 import { 
-  transmitirDTEMock, 
   TransmisionResult,
   EstadoTransmision
 } from '../utils/dteSignature';
@@ -80,32 +79,37 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
       }
 
       const stored = await getCertificate();
-      if (!stored) {
-        throw new Error('No se encontró certificado. Completa el onboarding para poder firmar.');
+      const passwordPri = stored?.password
+        ? stored.password
+        : (window.prompt('Ingresa la contraseña/PIN del certificado para firmar (no se guardará):') || '').trim();
+      if (!passwordPri) {
+        throw new Error('No se proporcionó passwordPri para firmar.');
       }
 
-      const p12 = await leerP12(stored.certificate, stored.password);
-      if (!p12.success || !p12.privateKey || !p12.certificatePem) {
-        throw new Error(p12.error || 'No se pudo leer el certificado');
+      await wakeFirmaService({ retries: 3, baseDelayMs: 1000, timeoutMs: 15000 });
+
+      const dteLimpio = limpiarDteParaFirma(processed.dte as unknown as Record<string, unknown>);
+      const nitEmisor = (processed.dte?.emisor?.nit || '').toString().replace(/[\s-]/g, '').trim();
+      if (!nitEmisor) {
+        throw new Error('No se encontró NIT del emisor para firmar.');
       }
 
-      const firma = await firmarDTEConP12(processed.dte, p12.privateKey, p12.certificatePem);
-      if (!firma.success || !firma.jws) {
-        throw new Error(firma.error || 'Error al firmar');
-      }
+      const jwsFirmado = await firmarDocumento({
+        nit: nitEmisor,
+        passwordPri,
+        dteJson: dteLimpio,
+      });
 
-      setJwsFirmado(firma.jws);
+      setJwsFirmado(jwsFirmado);
       setEstado('transmitiendo');
 
       const mode = getMHMode();
       const transmisionResult =
-        mode === 'mock'
-          ? await transmitirDTEMock(firma.jws, ambiente)
-          : mode === 'sandbox'
-            ? await transmitirDTESandbox(firma.jws, ambiente)
-            : (() => {
-                throw new Error('Transmisión en producción aún no implementada.');
-              })();
+        mode === 'sandbox'
+          ? await transmitirDTESandbox(jwsFirmado, ambiente)
+          : (() => {
+              throw new Error('Transmisión en producción aún no implementada.');
+            })();
       
       setResultado(transmisionResult);
       

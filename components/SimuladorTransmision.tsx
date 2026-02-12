@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { 
+import {
   Play, 
   CheckCircle2, 
   FileText,
@@ -10,11 +10,14 @@ import {
   Zap
 } from 'lucide-react';
 import { DTEJSON } from '../utils/dteGenerator';
-import { generarSelloRecepcionFake } from '../utils/dteSignature';
 import { guardarDTEEnHistorial } from '../utils/dteHistoryDb';
 import { generarLibroDesdeDTEs } from '../utils/librosAutoGenerator';
 import { loadSettings } from '../utils/settings';
 import type { TransmisionResult } from '../utils/dteSignature';
+
+const generarSelloRecepcionFake = (): string => {
+  return crypto.randomUUID().toUpperCase();
+};
 
 interface SimuladorTransmisionProps {
   dte: DTEJSON;

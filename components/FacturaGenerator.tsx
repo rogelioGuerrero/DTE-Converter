@@ -6,29 +6,28 @@ import {
   generarDTE, ItemFactura, tiposDocumento, formasPago,
   calcularTotales, redondear, DTEJSON
 } from '../utils/dteGenerator';
-import { requiereStripe } from '../catalogos';
 import { ToastContainer, useToast } from './Toast';
-import MobileFactura from './MobileFactura';
-import MobileEmisorModal from './MobileEmisorModal';
-import { ResolverItem } from './ResolveNoCodeModal';
-import { FacturaHeader } from './FacturaHeader';
+import { useCertificateManager } from '../hooks/useCertificateManager';
 import { FacturaMainContent } from './FacturaMainContent';
 import { FacturaModals } from './FacturaModals';
 import TransmisionModal from './TransmisionModal';
-import SimuladorTransmision from './SimuladorTransmision';
 import QRClientCapture from './QRClientCapture';
+import { FacturaHeader } from './FacturaHeader';
+import MobileFactura from './MobileFactura';
+import MobileEmisorModal from './MobileEmisorModal';
 import { applySalesFromDTE, validateStockForSale } from '../utils/inventoryDb';
 import { revertSalesFromDTE } from '../utils/inventoryDb';
 import { inventarioService } from '../utils/inventario/inventarioService';
 import { getUserModeConfig, hasFeature } from '../utils/userMode';
 import { resolveProductForDescription } from '../utils/facturaGeneratorHelpers';
 import { useStockByCode } from '../hooks/useStockByCode';
-import { useCertificateManager } from '../hooks/useCertificateManager';
+import { requiereStripe } from '../catalogos/pagos';
 import { 
   buildInventarioDTEFromGenerated,
   getPresentacionesForCodigo as getPresentacionesForCodigoHelper,
   validateStockForInventario as validateStockForInventarioHelper,
 } from '../utils/facturaGeneratorInventoryHelpers';
+import type { ResolverItem } from './ResolveNoCodeModal';
 import {
   validateNIT,
   validateNRC,
@@ -73,7 +72,6 @@ const FacturaGenerator: React.FC = () => {
   const [showDTEPreview, setShowDTEPreview] = useState(false);
   const [showStripeConnect, setShowStripeConnect] = useState(false);
   const [showQRPayment, setShowQRPayment] = useState(false);
-  const [showSimulador, setShowSimulador] = useState(false);
   
   const [emisor, setEmisor] = useState<EmisorData | null>(null);
   const [showEmisorConfig, setShowEmisorConfig] = useState(false);
@@ -405,11 +403,6 @@ const FacturaGenerator: React.FC = () => {
         descripcion: i.descripcion,
       }));
 
-    if (goodsOnly.length === 0) {
-      setStockError('');
-      return;
-    }
-
     const invGoods = goodsOnly.filter((g) => {
       const code = (g.codigo || '').trim();
       if (!code) return false;
@@ -514,11 +507,7 @@ const FacturaGenerator: React.FC = () => {
     // Validación para productos que no están en el inventario nuevo
     try {
       const extraCheck = goodsSinInventarioNuevo.length ? await validateStockForSale(goodsSinInventarioNuevo) : ({ ok: true } as const);
-      if (!extraCheck.ok) {
-        addToast(extraCheck.message, 'error');
-        setStockError(extraCheck.message);
-        return;
-      }
+      setStockError(extraCheck.ok ? '' : extraCheck.message);
     } catch {
       addToast('Error validando inventario', 'error');
       return;
@@ -704,14 +693,10 @@ const FacturaGenerator: React.FC = () => {
     }
   };
 
-  const handleSimular = () => {
-    setShowSimulador(true);
-  };
-
   const handleDeleteGeneratedDTE = () => {
     if (!generatedDTE) return;
 
-    if (confirm('¿Eliminar DTE generado? Esto restaurará el inventario.')) {
+    if (confirm('¿Eliminar el DTE generado? Esto revertirá inventario y contadores locales.')) {
       (async () => {
         try {
           // Inventario (IndexedDB)
@@ -807,21 +792,6 @@ const FacturaGenerator: React.FC = () => {
           />
         )}
 
-        {showSimulador && generatedDTE && (
-          <SimuladorTransmision
-            dte={generatedDTE}
-            onClose={() => setShowSimulador(false)}
-            onSuccess={(res) => {
-              setShowSimulador(false);
-              if (res.success && res.selloRecepcion) {
-                addToast(`Simulación OK. Sello: ${res.selloRecepcion.substring(0, 8)}...`, 'success');
-              } else {
-                addToast('Simulación finalizada con errores.', 'error');
-              }
-            }}
-          />
-        )}
-
         {showQRCapture && (
           <QRClientCapture
             onClose={() => setShowQRCapture(false)}
@@ -875,9 +845,6 @@ const FacturaGenerator: React.FC = () => {
         generatedDTE={generatedDTE}
         emisor={emisor}
         setShowTransmision={setShowTransmision}
-        // SimuladorTransmision
-        showSimulador={showSimulador}
-        setShowSimulador={setShowSimulador}
         // DTEPreviewModal
         showDTEPreview={showDTEPreview}
         setShowDTEPreview={setShowDTEPreview}
@@ -983,7 +950,6 @@ const FacturaGenerator: React.FC = () => {
         requiereStripe={requiereStripe}
         onOpenDTEPreview={() => setShowDTEPreview(true)}
         onTransmit={handleTransmitir}
-        onSimulate={handleSimular}
         onDeleteDTE={handleDeleteGeneratedDTE}
       />
     </div>

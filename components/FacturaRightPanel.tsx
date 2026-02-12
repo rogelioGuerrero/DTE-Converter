@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calculator, User, CheckCircle, Eye, Zap, FileText, Trash2 } from 'lucide-react';
+import { Calculator, User, CheckCircle, Eye, FileText, Trash2 } from 'lucide-react';
 import type { ClientData } from '../utils/clientDb';
 import type { DTEJSON } from '../utils/dteGenerator';
 
@@ -19,7 +19,6 @@ interface FacturaRightPanelProps {
   requiereStripe: (formaPago: string) => boolean;
   onOpenDTEPreview: () => void;
   onTransmit: () => void;
-  onSimulate: () => void;
   onDeleteDTE: () => void;
 }
 
@@ -31,7 +30,6 @@ export const FacturaRightPanel: React.FC<FacturaRightPanelProps> = ({
   requiereStripe,
   onOpenDTEPreview,
   onTransmit,
-  onSimulate,
   onDeleteDTE,
 }) => {
   return (
@@ -116,14 +114,6 @@ export const FacturaRightPanel: React.FC<FacturaRightPanelProps> = ({
             >
               <FileText className="w-4 h-4" />
               {requiereStripe(formaPago) ? 'Cobrar con Tarjeta' : 'Transmitir a Hacienda'}
-            </button>
-
-            <button
-              onClick={onSimulate}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium transition-colors"
-            >
-              <Zap className="w-4 h-4" />
-              Simular Transmisión
             </button>
 
             <button

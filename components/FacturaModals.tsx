@@ -5,7 +5,6 @@ import { ProductPickerModal } from './ProductPickerModal';
 import QRPaymentModal from './QRPaymentModal';
 import { StripeConnectModal } from './StripeConnectModal';
 import TransmisionModal from './TransmisionModal';
-import SimuladorTransmision from './SimuladorTransmision';
 import DTEPreviewModal from './DTEPreviewModal';
 import QRClientCapture from './QRClientCapture';
 
@@ -23,9 +22,6 @@ interface FacturaModalsProps {
   generatedDTE: any;
   emisor: any;
   setShowTransmision: (value: boolean) => void;
-  // SimuladorTransmision
-  showSimulador: boolean;
-  setShowSimulador: (value: boolean) => void;
   // DTEPreviewModal
   showDTEPreview: boolean;
   setShowDTEPreview: (value: boolean) => void;
@@ -98,9 +94,6 @@ export const FacturaModals: React.FC<FacturaModalsProps> = ({
   generatedDTE,
   emisor,
   setShowTransmision,
-  // SimuladorTransmision
-  showSimulador,
-  setShowSimulador,
   // DTEPreviewModal
   showDTEPreview,
   setShowDTEPreview,
@@ -183,21 +176,6 @@ export const FacturaModals: React.FC<FacturaModalsProps> = ({
           }}
           ambiente="00"
           logoUrl={emisor?.logo}
-        />
-      )}
-
-      {showSimulador && generatedDTE && (
-        <SimuladorTransmision
-          dte={generatedDTE}
-          onClose={() => setShowSimulador(false)}
-          onSuccess={(res) => {
-            setShowSimulador(false);
-            if (res.success && res.selloRecepcion) {
-              addToast(`Simulación OK. Sello: ${res.selloRecepcion.substring(0, 8)}...`, 'success');
-            } else {
-              addToast('Simulación finalizada con errores.', 'error');
-            }
-          }}
         />
       )}
 

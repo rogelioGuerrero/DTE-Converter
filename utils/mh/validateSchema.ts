@@ -4,7 +4,7 @@ import type { ErrorObject } from 'ajv';
 import { DTE_SCHEMA } from './schema';
 import type { ErrorValidacionMH } from './types';
 
-const ajv = new Ajv({ allErrors: true, strict: false });
+const ajv = new Ajv({ allErrors: true, strict: false, multipleOfPrecision: 8 });
 addFormats(ajv);
 
 const validate = ajv.compile(DTE_SCHEMA);

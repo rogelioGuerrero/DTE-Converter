@@ -62,7 +62,6 @@ interface FacturaMainContentProps {
   requiereStripe: (formaPago: string) => boolean;
   onOpenDTEPreview: () => void;
   onTransmit: () => void;
-  onSimulate: () => void;
   onDeleteDTE: () => void;
 }
 
@@ -109,7 +108,6 @@ export const FacturaMainContent: React.FC<FacturaMainContentProps> = ({
   requiereStripe,
   onOpenDTEPreview,
   onTransmit,
-  onSimulate,
   onDeleteDTE,
 }) => {
   return (
@@ -187,7 +185,6 @@ export const FacturaMainContent: React.FC<FacturaMainContentProps> = ({
         requiereStripe={requiereStripe}
         onOpenDTEPreview={onOpenDTEPreview}
         onTransmit={onTransmit}
-        onSimulate={onSimulate}
         onDeleteDTE={onDeleteDTE}
       />
     </div>

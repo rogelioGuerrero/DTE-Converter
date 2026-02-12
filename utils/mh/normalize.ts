@@ -12,6 +12,13 @@ const trimOrNull = (value: string | null | undefined): string | null => {
   return t.length > 0 ? t : null;
 };
 
+const roundTo = (value: number, decimals: number): number => {
+  if (!Number.isFinite(value)) return value;
+  return Number(value.toFixed(decimals));
+};
+
+const DEFAULT_RECEPTOR_EMAIL = 'consumidor.final@example.com';
+
 export const normalizeDTE = (dte: DTEJSON): DTEJSON => {
   return {
     ...dte,
@@ -37,13 +44,13 @@ export const normalizeDTE = (dte: DTEJSON): DTEJSON => {
     },
     receptor: {
       ...dte.receptor,
-      tipoDocumento: dte.receptor.tipoDocumento ?? null,
+      tipoDocumento: (trimOrNull(dte.receptor.tipoDocumento) as any) ?? null,
       numDocumento: onlyDigits(dte.receptor.numDocumento),
       nrc: onlyDigits(dte.receptor.nrc),
       nombre: dte.receptor.nombre.trim(),
       codActividad: trimOrNull(dte.receptor.codActividad) as any,
       descActividad: trimOrNull(dte.receptor.descActividad) as any,
-      correo: dte.receptor.correo.trim(),
+      correo: (trimOrNull(dte.receptor.correo) || DEFAULT_RECEPTOR_EMAIL) as any,
       telefono: trimOrNull(dte.receptor.telefono) as any,
       direccion: dte.receptor.direccion
         ? {
@@ -57,9 +64,36 @@ export const normalizeDTE = (dte: DTEJSON): DTEJSON => {
       ...i,
       codigo: i.codigo ? i.codigo.trim() : null,
       descripcion: i.descripcion.trim(),
+      cantidad: roundTo(i.cantidad, 8),
+      precioUni: roundTo(i.precioUni, 8),
+      montoDescu: roundTo(i.montoDescu, 8),
+      ventaNoSuj: roundTo(i.ventaNoSuj, 8),
+      ventaExenta: roundTo(i.ventaExenta, 8),
+      ventaGravada: roundTo(i.ventaGravada, 8),
     })),
     resumen: {
       ...dte.resumen,
+      totalNoSuj: roundTo(dte.resumen.totalNoSuj, 2),
+      totalExenta: roundTo(dte.resumen.totalExenta, 2),
+      totalGravada: roundTo(dte.resumen.totalGravada, 2),
+      subTotalVentas: roundTo(dte.resumen.subTotalVentas, 2),
+      descuNoSuj: roundTo(dte.resumen.descuNoSuj, 2),
+      descuExenta: roundTo(dte.resumen.descuExenta, 2),
+      descuGravada: roundTo(dte.resumen.descuGravada, 2),
+      porcentajeDescuento: roundTo(dte.resumen.porcentajeDescuento, 2),
+      totalDescu: roundTo(dte.resumen.totalDescu, 2),
+      subTotal: roundTo(dte.resumen.subTotal, 2),
+      ivaPerci1: roundTo(dte.resumen.ivaPerci1, 2),
+      ivaRete1: roundTo(dte.resumen.ivaRete1, 2),
+      reteRenta: roundTo(dte.resumen.reteRenta, 2),
+      montoTotalOperacion: roundTo(dte.resumen.montoTotalOperacion, 2),
+      totalNoGravado: roundTo(dte.resumen.totalNoGravado, 2),
+      totalPagar: roundTo(dte.resumen.totalPagar, 2),
+      saldoFavor: roundTo(dte.resumen.saldoFavor, 2),
+      tributos: (dte.resumen.tributos || []).map((t) => ({
+        ...t,
+        valor: roundTo(t.valor, 2),
+      })),
       totalLetras: dte.resumen.totalLetras.trim(),
     },
     extension: dte.extension ?? null,

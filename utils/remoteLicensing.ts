@@ -31,6 +31,12 @@ export async function fetchLicensingConfig(): Promise<RemoteLicensingConfig> {
       throw new Error('Error fetching licensing config');
     }
 
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      // Si no es JSON (ej: HTML 404), asumir licenciamiento desactivado
+      return { enabled: false };
+    }
+
     const config = await response.json();
     return config;
   } catch (error) {

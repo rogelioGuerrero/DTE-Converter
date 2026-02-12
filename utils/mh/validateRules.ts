@@ -17,6 +17,17 @@ export const validateDteRules = (dte: DTEJSON): ErrorValidacionMH[] => {
     }
   }
 
+  if (dte.identificacion.tipoDte === '01' && dte.resumen.montoTotalOperacion >= 1095) {
+    if (dte.receptor.tipoDocumento === null || dte.receptor.numDocumento === null) {
+      errores.push({
+        codigo: 'RULE-0001C',
+        campo: 'receptor.numDocumento',
+        descripcion: 'FE >= $1095: se requiere identificación del receptor (tipoDocumento y numDocumento no pueden ser null)',
+        severidad: 'ERROR',
+      });
+    }
+  }
+
   if (dte.receptor.tipoDocumento === null) {
     if (dte.receptor.numDocumento !== null) {
       errores.push({

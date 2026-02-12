@@ -209,7 +209,7 @@ export const DTE_SCHEMA = {
           type: 'object',
           required: ['nombre'],
           properties: {
-            tipoDocumento: { type: ['string', 'null'], enum: ['13', '36', '37'] },
+            tipoDocumento: { type: ['string', 'null'], enum: ['13', '36', '37', null] },
             numDocumento: { type: ['string', 'null'], maxLength: 30 },
             nombre: { type: 'string', maxLength: 250 },
             nrc: { type: ['string', 'null'], pattern: '^\\d{2,8}$' },

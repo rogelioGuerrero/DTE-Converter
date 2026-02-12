@@ -464,6 +464,7 @@ class InventarioService {
   findProductoByCodigo(codigo: string): Producto | null {
     const code = (codigo || '').toString().trim().toLowerCase();
     if (!code) return null;
+    if (!this.productos || !Array.isArray(this.productos)) return null;
     return (
       this.productos.find((p) => (p.codigoPrincipal || '').toString().trim().toLowerCase() === code) ||
       this.productos.find((p) => (p.codigo || '').toString().trim().toLowerCase() === code) ||
