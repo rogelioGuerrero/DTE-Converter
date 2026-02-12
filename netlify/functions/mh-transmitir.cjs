@@ -136,15 +136,48 @@ exports.handler = async (event) => {
     return json(400, { error: 'Invalid JSON body' }, cors);
   }
 
-  const dte = payload?.dte;
   const ambiente = payload?.ambiente === '01' ? '01' : '00';
+  const baseUrl = ambiente === '01' ? MH_BASE_URL_PROD : MH_BASE_URL_TEST;
+
+  if (payload?.authOnly === true) {
+    try {
+      const token = await obtenerTokenMH(baseUrl);
+      return json(200, { status: 'OK' }, cors);
+    } catch (err) {
+      const msg = err?.message || '';
+      let mhPayload;
+      try {
+        const idx = msg.indexOf('{');
+        if (idx >= 0) mhPayload = JSON.parse(msg.slice(idx));
+      } catch {
+        mhPayload = undefined;
+      }
+
+      if (mhPayload?.body) {
+        const body = mhPayload.body;
+        return json(
+          200,
+          {
+            status: mhPayload.status || 'ERROR',
+            codigoMsg: body.codigoMsg,
+            descripcionMsg: body.descripcionMsg,
+            clasificaMsg: body.clasificaMsg,
+          },
+          cors
+        );
+      }
+
+      return json(200, { status: 'ERROR', message: err?.message || 'Auth error' }, cors);
+    }
+  }
+
+  const dte = payload?.dte;
 
   if (!dte || typeof dte !== 'string') {
     return json(400, { error: 'Body must include { dte: string }' }, cors);
   }
 
   try {
-    const baseUrl = ambiente === '01' ? MH_BASE_URL_PROD : MH_BASE_URL_TEST;
     const token = await obtenerTokenMH(baseUrl);
 
     const dteJson = parseDteFromJws(dte);
