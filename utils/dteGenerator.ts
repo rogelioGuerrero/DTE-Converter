@@ -156,12 +156,16 @@ export const generarUUID = (): string => {
 };
 
 // Generar número de control según formato DTE
-export const generarNumeroControl = (tipoDte: string, correlativo: number, seed: string): string => {
+export const generarNumeroControl = (tipoDte: string, correlativo: number, codEstableMH: string | null, codPuntoVentaMH: string | null): string => {
   const tipoDoc = tipoDte.padStart(2, '0');
   const corr = correlativo.toString().padStart(15, '0');
-  // Use only hexadecimal characters (0-9, A-F) to match MH pattern
-  const s = (seed || '').replace(/[^0-9A-F]/gi, '').toUpperCase().padEnd(8, '0').slice(0, 8);
-  return `DTE-${tipoDoc}-${s}-${corr}`;
+  
+  // Usar códigos MH si existen, sino fallback a valores por defecto
+  const establecimiento = (codEstableMH || 'M001').padEnd(4, '0').slice(0, 4);
+  const puntoVenta = (codPuntoVentaMH || 'P001').padEnd(4, '0').slice(0, 4);
+  const segmentoMedio = `${establecimiento}${puntoVenta}`;
+  
+  return `DTE-${tipoDoc}-${segmentoMedio}-${corr}`;
 };
 
 // Redondeo según especificación AT (8 decimales para cantidades/precios)
@@ -258,8 +262,7 @@ export const calcularTotales = (items: ItemFactura[]) => {
 // Generar estructura JSON del DTE
 export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: string = '00'): DTEJSON => {
   const uuid = generarUUID();
-  const seed = uuid.replace(/-/g, '').slice(0, 8);
-  const numeroControl = generarNumeroControl(datos.tipoDocumento, correlativo, seed);
+  const numeroControl = generarNumeroControl(datos.tipoDocumento, correlativo, datos.emisor.codEstableMH, datos.emisor.codPuntoVentaMH);
   const totales = calcularTotales(datos.items);
 
   const receptorIdDigits = (datos.receptor.nit || '').replace(/[\s-]/g, '').trim();
@@ -334,14 +337,13 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
     otrosDocumentos: null,
     ventaTercero: null,
     cuerpoDocumento: datos.items.map((item, index) => {
-      const tributos = item.ventaGravada > 0 ? ['20'] : [];
       const ivaItem = item.ventaGravada > 0 ? redondear(item.ventaGravada * 0.13, 2) : 0;
       return {
         ...item,
         numItem: index + 1,
-        tributos,
+        tributos: item.ventaGravada > 0 ? ['20'] : null,
         numeroDocumento: item.numeroDocumento ?? null,
-        codTributo: item.codTributo ?? (tributos[0] ?? null),
+        codTributo: null,
         psv: item.psv ?? 0,
         noGravado: item.noGravado ?? 0,
         ivaItem: item.ivaItem ?? ivaItem,
@@ -362,7 +364,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
         codigo: '20',
         descripcion: 'IVA',
         valor: totales.iva,
-      }] : [],
+      }] : null,
       subTotal: totales.subTotalVentas,
       ivaRete1: 0,
       reteRenta: 0,
