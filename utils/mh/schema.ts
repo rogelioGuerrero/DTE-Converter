@@ -53,7 +53,7 @@ export const DTE_SCHEMA = {
           ventaExenta: { type: 'number', multipleOf: 0.00000001, minimum: 0 },
           ventaGravada: { type: 'number', multipleOf: 0.00000001, minimum: 0 },
           tributos: {
-            type: 'array',
+            type: ['array', 'null'],
             items: { type: 'string', pattern: '^(20)$' },
           },
           numeroDocumento: { type: ['string', 'null'], maxLength: 30 },
@@ -102,7 +102,7 @@ export const DTE_SCHEMA = {
         totalDescu: { type: 'number', multipleOf: 0.01, minimum: 0 },
         totalIva: { type: 'number', multipleOf: 0.01, minimum: 0 },
         tributos: {
-          type: 'array',
+          type: ['array', 'null'],
           items: {
             type: 'object',
             required: ['codigo', 'descripcion', 'valor'],
