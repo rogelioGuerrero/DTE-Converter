@@ -116,7 +116,7 @@ export const validateDteRules = (dte: DTEJSON): ErrorValidacionMH[] => {
     });
   }
 
-  const ivaTributo = dte.resumen.tributos.find((t) => t.codigo === '20');
+  const ivaTributo = dte.resumen.tributos?.find((t) => t.codigo === '20');
   if (ivaTributo) {
     const ivaCalculado = dte.resumen.totalGravada * 0.13;
     if (!near(ivaTributo.valor, ivaCalculado, 0.02)) {
