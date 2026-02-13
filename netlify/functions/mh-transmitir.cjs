@@ -66,7 +66,35 @@ const parseDteFromJws = (jws) => {
   try {
     return JSON.parse(payloadTxt);
   } catch {
-    return null;
+    // Algunos JWS vienen con payload "parecido a JSON" pero no estrictamente parseable (por saltos de línea, etc.).
+    // Para transmisión a MH solo necesitamos ciertos campos de identificacion; extraerlos por regex.
+    const getStr = (re) => {
+      const m = payloadTxt.match(re);
+      return m && typeof m[1] === 'string' ? m[1] : undefined;
+    };
+
+    const getNum = (re) => {
+      const m = payloadTxt.match(re);
+      if (!m || typeof m[1] !== 'string') return undefined;
+      const n = Number(m[1]);
+      return Number.isFinite(n) ? n : undefined;
+    };
+
+    const version = getNum(/"version"\s*:\s*(\d+)/);
+    const tipoDte = getStr(/"tipoDte"\s*:\s*"([^"]+)"/);
+    const codigoGeneracion = getStr(/"codigoGeneracion"\s*:\s*"([^"]+)"/);
+    const ambiente = getStr(/"ambiente"\s*:\s*"(00|01)"/);
+
+    if (!version && !tipoDte && !codigoGeneracion) return null;
+
+    return {
+      identificacion: {
+        version,
+        tipoDte,
+        codigoGeneracion,
+        ambiente,
+      },
+    };
   }
 };
 
