@@ -267,7 +267,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
     ventaNoSuj: 0,
     ventaExenta: item.esExento ? redondear(item.cantidad * item.precioUni, 2) : 0,
     ventaGravada: item.esExento ? 0 : redondear(item.cantidad * item.precioUni, 2),
-    tributos: item.esExento ? [] : ['20'],
+    tributos: null, // Siempre null como en JSON aceptado
     numeroDocumento: null,
     codTributo: item.esExento ? null : '20',
     psv: 0,
