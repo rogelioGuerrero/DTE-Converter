@@ -13,7 +13,7 @@ export interface ItemFactura {
   ventaNoSuj: number;
   ventaExenta: number;
   ventaGravada: number;
-  tributos: string[];
+  tributos: string[] | null;
   numeroDocumento?: string | null;
   codTributo?: string | null;
   psv?: number;
@@ -101,7 +101,7 @@ export interface DTEJSON {
       codigo: string;
       descripcion: string;
       valor: number;
-    }>;
+    }> | null;
     subTotal: number;
     ivaRete1: number;
     reteRenta: number;
