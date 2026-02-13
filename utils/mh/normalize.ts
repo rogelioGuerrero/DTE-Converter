@@ -78,7 +78,7 @@ export const normalizeDTE = (dte: DTEJSON): DTEJSON => {
       codTributo: trimOrNull(i.codTributo) as any,
       psv: roundTo(i.psv ?? 0, 2),
       noGravado: roundTo(i.noGravado ?? 0, 2),
-      ivaItem: roundTo(i.ivaItem ?? 0, 2),
+      // ivaItem: roundTo(i.ivaItem ?? 0, 2), // Eliminado - no existe en MH schema
     })),
     resumen: {
       ...dte.resumen,
@@ -91,7 +91,7 @@ export const normalizeDTE = (dte: DTEJSON): DTEJSON => {
       descuGravada: roundTo(dte.resumen.descuGravada, 2),
       porcentajeDescuento: roundTo(dte.resumen.porcentajeDescuento, 2),
       totalDescu: roundTo(dte.resumen.totalDescu, 2),
-      totalIva: roundTo(dte.resumen.totalIva, 2),
+      totalIva: roundTo(dte.resumen.totalIva ?? 0, 2),
       subTotal: roundTo(dte.resumen.subTotal, 2),
       ivaRete1: roundTo(dte.resumen.ivaRete1, 2),
       reteRenta: roundTo(dte.resumen.reteRenta, 2),
