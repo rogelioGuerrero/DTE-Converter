@@ -18,7 +18,6 @@ export interface ItemFactura {
   codTributo?: string | null;
   psv?: number;
   noGravado?: number;
-  ivaItem?: number;
 }
 
 export interface DatosFactura {
@@ -96,7 +95,7 @@ export interface DTEJSON {
     descuGravada: number;
     porcentajeDescuento: number;
     totalDescu: number;
-    totalIva: number;
+    totalIva?: number;
     tributos: Array<{
       codigo: string;
       descripcion: string;
@@ -337,7 +336,6 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
     otrosDocumentos: null,
     ventaTercero: null,
     cuerpoDocumento: datos.items.map((item, index) => {
-      const ivaItem = item.ventaGravada > 0 ? redondear(item.ventaGravada * 0.13, 2) : 0;
       return {
         ...item,
         numItem: index + 1,
@@ -346,7 +344,6 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
         codTributo: null,
         psv: item.psv ?? 0,
         noGravado: item.noGravado ?? 0,
-        ivaItem: item.ivaItem ?? ivaItem,
       };
     }),
     resumen: {
@@ -359,10 +356,10 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       descuGravada: totales.totalDescu,
       porcentajeDescuento: 0,
       totalDescu: totales.totalDescu,
-      totalIva: totales.iva,
+      // totalIva: totales.iva, // Eliminado - no existe en esquema MH
       tributos: totales.totalGravada > 0 ? [{
         codigo: '20',
-        descripcion: 'IVA',
+        descripcion: 'Impuesto al Valor Agregado 13%',
         valor: totales.iva,
       }] : null,
       subTotal: totales.subTotalVentas,
