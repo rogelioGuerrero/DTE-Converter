@@ -147,8 +147,8 @@ const isCodMunicipio = (value: string | null | undefined): boolean => {
 };
 
 // Constantes para códigos de tributos - FÁCIL DE CAMBIAR
-const TRIBUTO_IVA_CODIGO = '001'; // Cambiado de '20' - MH rechaza '20'
-const TRIBUTO_IVA_DESCRIPCION = 'IVA'; // Cambiar si MH requiere otra descripción
+const TRIBUTO_IVA_CODIGO = '20'; // Volver a '20' según especificaciones
+const TRIBUTO_IVA_DESCRIPCION = 'Impuesto al Valor Agregado 13%'; // Descripción exacta del catálogo
 
 // Generar UUID v4
 export const generarUUID = (): string => {
