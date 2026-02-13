@@ -63,6 +63,7 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
 
     try {
       const processed = processDTE(dte);
+      const ambienteFinal = (processed.dte?.identificacion?.ambiente === '01' ? '01' : '00') as '00' | '01';
       if (processed.errores.length > 0) {
         const rechazo: TransmisionResult = {
           success: false,
@@ -90,8 +91,8 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
 
       const dteLimpio = limpiarDteParaFirma(processed.dte as unknown as Record<string, unknown>);
       const nitEmisor = (processed.dte?.emisor?.nit || '').toString().replace(/[\s-]/g, '').trim();
-      if (!nitEmisor) {
-        throw new Error('No se encontró NIT del emisor para firmar.');
+      if (!nitEmisor || nitEmisor.length < 9 || nitEmisor === '00000000000000') {
+        throw new Error('NIT del emisor inválido o no configurado. Revisa la configuración del emisor.');
       }
 
       const jwsFirmado = await firmarDocumento({
@@ -106,10 +107,13 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
       const mode = getMHMode();
       const transmisionResult =
         mode === 'sandbox'
-          ? await transmitirDTESandbox(jwsFirmado, ambiente)
+          ? await transmitirDTESandbox(jwsFirmado, ambienteFinal)
           : (() => {
               throw new Error('Transmisión en producción aún no implementada.');
             })();
+      
+      // Debug: log completo para ver errores MH
+      console.log('TransmisionResult completo:', JSON.stringify(transmisionResult, null, 2));
       
       setResultado(transmisionResult);
       
@@ -118,7 +122,7 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
         
         // Guardar en historial local
         try {
-          await guardarDTEEnHistorial(processed.dte, transmisionResult, ambiente);
+          await guardarDTEEnHistorial(processed.dte, transmisionResult, ambienteFinal);
 
           try {
             const settings = loadSettings();
@@ -151,6 +155,8 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
         
         if (transmisionResult.selloRecepcion) {
           onSuccess(transmisionResult.selloRecepcion, transmisionResult);
+        } else {
+          onSuccess('', transmisionResult);
         }
       } else {
         setEstado('rechazado');

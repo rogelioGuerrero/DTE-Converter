@@ -4,10 +4,15 @@ interface TransmitirResponse {
   estado?: string;
   codigoGeneracion?: string;
   selloRecepcion?: string;
+  selloRecibido?: string;
   fechaHoraRecepcion?: string;
   fechaHoraProcesamiento?: string;
+  fhProcesamiento?: string;
   numeroControl?: string;
   mensaje?: string;
+  descripcionMsg?: string;
+  codigoMsg?: string;
+  observaciones?: string[];
   enlaceConsulta?: string;
   advertencias?: Array<{ codigo: string; campo?: string; descripcion: string; severidad?: 'BAJA' | 'MEDIA' | 'ALTA' }>;
   errores?: Array<{ codigo: string; campo?: string; descripcion: string; severidad?: string; valorEsperado?: string; valorActual?: string }>;
@@ -82,18 +87,30 @@ export const transmitirDTESandbox = async (jws: string, ambiente: '00' | '01' = 
   const estadoRaw = (data.estado || '').toUpperCase();
   const estado = (estadoRaw as TransmisionResult['estado']) || 'RECHAZADO';
 
+  const selloRecepcion = (data.selloRecibido || data.selloRecepcion) as string | undefined;
+  const fechaHoraProcesamiento = (data.fechaHoraProcesamiento || data.fhProcesamiento) as string | undefined;
+  const mensaje = (data.mensaje || data.descripcionMsg) as string | undefined;
+
+  const obsErrores: ErrorValidacionMH[] | undefined = data.observaciones?.length
+    ? data.observaciones.map((o) => ({
+        codigo: data.codigoMsg || 'MH-OBS',
+        descripcion: o,
+        severidad: 'ERROR',
+      }))
+    : undefined;
+
   const result: TransmisionResult = {
-    success: estado === 'ACEPTADO' || estado === 'ACEPTADO_CON_ADVERTENCIAS',
+    success: estado === 'PROCESADO' || estado === 'ACEPTADO' || estado === 'ACEPTADO_CON_ADVERTENCIAS',
     estado,
     codigoGeneracion: data.codigoGeneracion,
-    selloRecepcion: data.selloRecepcion,
+    selloRecepcion,
     numeroControl: data.numeroControl,
     fechaHoraRecepcion: data.fechaHoraRecepcion,
-    fechaHoraProcesamiento: data.fechaHoraProcesamiento,
-    mensaje: data.mensaje,
+    fechaHoraProcesamiento,
+    mensaje,
     enlaceConsulta: data.enlaceConsulta,
     advertencias: mapAdvertencias(data.advertencias),
-    errores: mapErrores(data.errores),
+    errores: obsErrores || mapErrores(data.errores),
   };
 
   if (!res.ok) {

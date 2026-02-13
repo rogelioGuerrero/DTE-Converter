@@ -16,7 +16,7 @@ export interface AdvertenciaMH {
 
 export interface TransmisionResult {
   success: boolean;
-  estado: 'ACEPTADO' | 'ACEPTADO_CON_ADVERTENCIAS' | 'RECHAZADO' | 'PROCESANDO' | 'CONTINGENCIA';
+  estado: 'ACEPTADO' | 'ACEPTADO_CON_ADVERTENCIAS' | 'RECHAZADO' | 'PROCESANDO' | 'CONTINGENCIA' | 'PROCESADO';
   codigoGeneracion?: string;
   selloRecepcion?: string;
   numeroControl?: string;
