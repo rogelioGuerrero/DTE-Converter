@@ -159,7 +159,8 @@ export const generarUUID = (): string => {
 export const generarNumeroControl = (tipoDte: string, correlativo: number, seed: string): string => {
   const tipoDoc = tipoDte.padStart(2, '0');
   const corr = correlativo.toString().padStart(15, '0');
-  const s = (seed || '').replace(/[^A-Z0-9]/gi, '').toUpperCase().padEnd(8, '0').slice(0, 8);
+  // Use only hexadecimal characters (0-9, A-F) to match MH pattern
+  const s = (seed || '').replace(/[^0-9A-F]/gi, '').toUpperCase().padEnd(8, '0').slice(0, 8);
   return `DTE-${tipoDoc}-${s}-${corr}`;
 };
 
