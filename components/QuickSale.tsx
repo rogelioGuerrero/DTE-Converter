@@ -98,7 +98,7 @@ const QuickSale: React.FC = () => {
       ventaNoSuj: 0,
       ventaExenta: item.esExento ? redondear(item.cantidad * item.precioUni, 2) : 0,
       ventaGravada: item.esExento ? 0 : redondear(item.cantidad * item.precioUni, 2),
-      tributos: null, // Siempre null como en JSON aceptado
+      tributos: item.ventaGravada > 0 ? ['20'] : null, // Array con 20 si hay gravada
       numeroDocumento: null,
       codTributo: item.esExento ? null : '20',
       psv: 0,

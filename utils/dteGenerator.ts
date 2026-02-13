@@ -341,7 +341,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       return {
         ...item,
         numItem: index + 1,
-        tributos: null, // Siempre null como en JSON aceptado
+        tributos: item.ventaGravada > 0 ? ['20'] : null, // Array con 20 si hay gravada
         numeroDocumento: item.numeroDocumento ?? null,
         codTributo: null,
         psv: item.psv ?? 0,
@@ -360,7 +360,11 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       porcentajeDescuento: 0,
       totalDescu: totales.totalDescu,
       totalIva: totales.iva, // Restaurado - existe en JSON aceptado
-      tributos: null, // Siempre null como en JSON aceptado
+      tributos: totales.totalGravada > 0 ? [{
+        codigo: '20',
+        descripcion: 'IVA',
+        valor: totales.iva,
+      }] : null, // Array de objetos si hay gravada
       subTotal: totales.subTotalVentas,
       ivaRete1: 0,
       reteRenta: 0,
