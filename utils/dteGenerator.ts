@@ -141,6 +141,11 @@ const isCodDepartamento = (value: string | null | undefined): boolean => {
   return /^(0[1-9]|1[0-4])$/.test(value.trim());
 };
 
+const isCodMunicipio = (value: string | null | undefined): boolean => {
+  if (!value) return false;
+  return /^(0[1-9]|[1-5]\d|6[0-8])$/.test(value.trim());
+};
+
 // Constantes para códigos de tributos - FÁCIL DE CAMBIAR
 const TRIBUTO_IVA_CODIGO = '001'; // Cambiado de '20' - MH rechaza '20'
 const TRIBUTO_IVA_DESCRIPCION = 'IVA'; // Cambiar si MH requiere otra descripción
