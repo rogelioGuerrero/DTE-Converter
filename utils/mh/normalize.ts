@@ -78,7 +78,7 @@ export const normalizeDTE = (dte: DTEJSON): DTEJSON => {
       codTributo: trimOrNull(i.codTributo) as any,
       psv: roundTo(i.psv ?? 0, 2),
       noGravado: roundTo(i.noGravado ?? 0, 2),
-      // ivaItem: roundTo(i.ivaItem ?? 0, 2), // Eliminado - no existe en MH schema
+      ivaItem: roundTo(i.ivaItem ?? 0, 2),
     })),
     resumen: {
       ...dte.resumen,

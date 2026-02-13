@@ -231,7 +231,7 @@ const FacturaGenerator: React.FC = () => {
       codTributo: item.esExento ? null : '20',
       psv: 0,
       noGravado: 0,
-      // ivaItem eliminado - no existe en esquema MH
+      ivaItem: item.esExento ? 0 : redondear(item.cantidad * item.precioUni * 0.13, 2),
     }));
 
   const totales = calcularTotales(itemsParaCalculo);

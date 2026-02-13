@@ -18,6 +18,7 @@ export interface ItemFactura {
   codTributo?: string | null;
   psv?: number;
   noGravado?: number;
+  ivaItem?: number;
 }
 
 export interface DatosFactura {
@@ -336,6 +337,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
     otrosDocumentos: null,
     ventaTercero: null,
     cuerpoDocumento: datos.items.map((item, index) => {
+      const ivaItem = item.ventaGravada > 0 ? redondear(item.ventaGravada * 0.13, 2) : 0;
       return {
         ...item,
         numItem: index + 1,
@@ -344,6 +346,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
         codTributo: null,
         psv: item.psv ?? 0,
         noGravado: item.noGravado ?? 0,
+        ivaItem: item.ivaItem ?? ivaItem,
       };
     }),
     resumen: {
