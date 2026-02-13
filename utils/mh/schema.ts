@@ -71,9 +71,9 @@ export const DTE_SCHEMA = {
         'descuGravada',
         'porcentajeDescuento',
         'totalDescu',
+        'totalIva',
         'tributos',
         'subTotal',
-        'ivaPerci1',
         'ivaRete1',
         'reteRenta',
         'montoTotalOperacion',
@@ -95,6 +95,7 @@ export const DTE_SCHEMA = {
         descuGravada: { type: 'number', multipleOf: 0.01, minimum: 0 },
         porcentajeDescuento: { type: 'number', multipleOf: 0.01, minimum: 0 },
         totalDescu: { type: 'number', multipleOf: 0.01, minimum: 0 },
+        totalIva: { type: 'number', multipleOf: 0.01, minimum: 0 },
         tributos: {
           type: 'array',
           items: {
@@ -108,7 +109,6 @@ export const DTE_SCHEMA = {
           },
         },
         subTotal: { type: 'number', multipleOf: 0.01 },
-        ivaPerci1: { type: 'number', multipleOf: 0.01, minimum: 0 },
         ivaRete1: { type: 'number', multipleOf: 0.01, minimum: 0 },
         reteRenta: { type: 'number', multipleOf: 0.01, minimum: 0 },
         montoTotalOperacion: { type: 'number', multipleOf: 0.01, minimum: 0 },
@@ -181,7 +181,7 @@ export const DTE_SCHEMA = {
         documentoRelacionado: { type: ['object', 'null'] },
         emisor: {
           type: 'object',
-          required: ['nit', 'nrc', 'nombre', 'codActividad', 'descActividad', 'tipoEstablecimiento', 'direccion', 'telefono', 'correo'],
+          required: ['nit', 'nrc', 'nombre', 'codActividad', 'descActividad', 'tipoEstablecimiento', 'codEstable', 'codPuntoVenta', 'direccion', 'telefono', 'correo'],
           properties: {
             nit: { $ref: '#/definitions/NIT' },
             nrc: { $ref: '#/definitions/NRC' },
@@ -190,6 +190,8 @@ export const DTE_SCHEMA = {
             descActividad: { type: 'string', maxLength: 150 },
             nombreComercial: { type: ['string', 'null'], maxLength: 150 },
             tipoEstablecimiento: { type: 'string', enum: ['01', '02', '03', '04', '05'] },
+            codEstable: { type: ['string', 'null'], maxLength: 10 },
+            codPuntoVenta: { type: ['string', 'null'], maxLength: 15 },
             direccion: {
               type: 'object',
               required: ['departamento', 'municipio', 'complemento'],

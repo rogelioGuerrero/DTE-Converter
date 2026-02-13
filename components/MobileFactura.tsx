@@ -268,6 +268,11 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
     ventaExenta: item.esExento ? redondear(item.cantidad * item.precioUni, 2) : 0,
     ventaGravada: item.esExento ? 0 : redondear(item.cantidad * item.precioUni, 2),
     tributos: item.esExento ? [] : ['20'],
+    numeroDocumento: null,
+    codTributo: item.esExento ? null : '20',
+    psv: 0,
+    noGravado: 0,
+    ivaItem: item.esExento ? 0 : redondear(item.cantidad * item.precioUni * 0.13, 2),
   }));
 
   const totales = calcularTotales(itemsParaCalculo);

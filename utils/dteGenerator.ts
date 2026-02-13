@@ -14,6 +14,11 @@ export interface ItemFactura {
   ventaExenta: number;
   ventaGravada: number;
   tributos: string[];
+  numeroDocumento?: string | null;
+  codTributo?: string | null;
+  psv?: number;
+  noGravado?: number;
+  ivaItem?: number;
 }
 
 export interface DatosFactura {
@@ -51,6 +56,8 @@ export interface DTEJSON {
     descActividad: string;
     nombreComercial: string | null;
     tipoEstablecimiento: string;
+    codEstable: string | null;
+    codPuntoVenta: string | null;
     direccion: {
       departamento: string;
       municipio: string;
@@ -89,13 +96,13 @@ export interface DTEJSON {
     descuGravada: number;
     porcentajeDescuento: number;
     totalDescu: number;
+    totalIva: number;
     tributos: Array<{
       codigo: string;
       descripcion: string;
       valor: number;
     }>;
     subTotal: number;
-    ivaPerci1: number;
     ivaRete1: number;
     reteRenta: number;
     montoTotalOperacion: number;
@@ -149,10 +156,11 @@ export const generarUUID = (): string => {
 };
 
 // Generar número de control según formato DTE
-export const generarNumeroControl = (tipoDte: string, correlativo: number): string => {
+export const generarNumeroControl = (tipoDte: string, correlativo: number, seed: string): string => {
   const tipoDoc = tipoDte.padStart(2, '0');
   const corr = correlativo.toString().padStart(15, '0');
-  return `DTE-${tipoDoc}-00000000-${corr}`;
+  const s = (seed || '').replace(/[^A-Z0-9]/gi, '').toUpperCase().padEnd(8, '0').slice(0, 8);
+  return `DTE-${tipoDoc}-${s}-${corr}`;
 };
 
 // Redondeo según especificación AT (8 decimales para cantidades/precios)
@@ -249,7 +257,8 @@ export const calcularTotales = (items: ItemFactura[]) => {
 // Generar estructura JSON del DTE
 export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: string = '00'): DTEJSON => {
   const uuid = generarUUID();
-  const numeroControl = generarNumeroControl(datos.tipoDocumento, correlativo);
+  const seed = uuid.replace(/-/g, '').slice(0, 8);
+  const numeroControl = generarNumeroControl(datos.tipoDocumento, correlativo, seed);
   const totales = calcularTotales(datos.items);
 
   const receptorIdDigits = (datos.receptor.nit || '').replace(/[\s-]/g, '').trim();
@@ -298,6 +307,8 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       descActividad: datos.emisor.descActividad || '',
       nombreComercial: datos.emisor.nombreComercial || null,
       tipoEstablecimiento: datos.emisor.tipoEstablecimiento || '01',
+      codEstable: datos.emisor.codEstableMH || null,
+      codPuntoVenta: datos.emisor.codPuntoVentaMH || null,
       direccion: {
         departamento: datos.emisor.departamento,
         municipio: datos.emisor.municipio,
@@ -321,7 +332,20 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
     },
     otrosDocumentos: null,
     ventaTercero: null,
-    cuerpoDocumento: datos.items,
+    cuerpoDocumento: datos.items.map((item, index) => {
+      const tributos = item.ventaGravada > 0 ? ['20'] : [];
+      const ivaItem = item.ventaGravada > 0 ? redondear(item.ventaGravada * 0.13, 2) : 0;
+      return {
+        ...item,
+        numItem: index + 1,
+        tributos,
+        numeroDocumento: item.numeroDocumento ?? null,
+        codTributo: item.codTributo ?? (tributos[0] ?? null),
+        psv: item.psv ?? 0,
+        noGravado: item.noGravado ?? 0,
+        ivaItem: item.ivaItem ?? ivaItem,
+      };
+    }),
     resumen: {
       totalNoSuj: totales.totalNoSuj,
       totalExenta: totales.totalExenta,
@@ -332,13 +356,13 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       descuGravada: totales.totalDescu,
       porcentajeDescuento: 0,
       totalDescu: totales.totalDescu,
+      totalIva: totales.iva,
       tributos: totales.totalGravada > 0 ? [{
         codigo: '20',
-        descripcion: 'Impuesto al Valor Agregado 13%',
+        descripcion: 'IVA',
         valor: totales.iva,
       }] : [],
       subTotal: totales.subTotalVentas,
-      ivaPerci1: 0,
       ivaRete1: 0,
       reteRenta: 0,
       montoTotalOperacion: totales.montoTotal,

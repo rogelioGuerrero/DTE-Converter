@@ -143,8 +143,27 @@ const obtenerTokenMH = async (baseUrl) => {
 };
 
 exports.handler = async (event) => {
+  const origin = event.headers?.origin || event.headers?.Origin;
+  const allowedRaw = process.env.ALLOWED_ORIGINS;
+  const allowedList =
+    typeof allowedRaw === 'string' && allowedRaw.trim().length > 0
+      ? allowedRaw
+      : 'http://localhost:8888,http://127.0.0.1:8888,http://localhost:5173,http://127.0.0.1:5173';
+  const allowed = allowedList
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  // Debug logging para identificar el problema
+  console.log('Request origin:', origin);
+  console.log('ALLOWED_ORIGINS env var:', allowedRaw);
+  console.log('Parsed allowed origins:', allowed);
+
   const cors = corsHeaders(event);
-  if (!cors) return json(403, { error: 'CORS denied' });
+  if (!cors) {
+    console.log('CORS denied for origin:', origin);
+    return json(403, { error: 'CORS denied', origin, allowed });
+  }
 
   if (event.httpMethod === 'OPTIONS') {
     return {
