@@ -341,7 +341,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       return {
         ...item,
         numItem: index + 1,
-        tributos: item.ventaGravada > 0 ? ['20'] : null,
+        tributos: null, // Temporalmente null para probar
         numeroDocumento: item.numeroDocumento ?? null,
         codTributo: null,
         psv: item.psv ?? 0,
@@ -360,11 +360,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       porcentajeDescuento: 0,
       totalDescu: totales.totalDescu,
       totalIva: totales.iva,
-      tributos: totales.totalGravada > 0 ? [{
-        codigo: '20',
-        descripcion: 'IVA',
-        valor: totales.iva,
-      }] : null,
+      tributos: null, // Temporalmente null para probar
       subTotal: totales.subTotalVentas,
       ivaRete1: 0,
       reteRenta: 0,
