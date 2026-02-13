@@ -141,10 +141,9 @@ const isCodDepartamento = (value: string | null | undefined): boolean => {
   return /^(0[1-9]|1[0-4])$/.test(value.trim());
 };
 
-const isCodMunicipio = (value: string | null | undefined): boolean => {
-  if (!value) return false;
-  return /^(0[1-9]|[1-5]\d|6[0-8])$/.test(value.trim());
-};
+// Constantes para códigos de tributos - FÁCIL DE CAMBIAR
+const TRIBUTO_IVA_CODIGO = '001'; // Cambiado de '20' - MH rechaza '20'
+const TRIBUTO_IVA_DESCRIPCION = 'IVA'; // Cambiar si MH requiere otra descripción
 
 // Generar UUID v4
 export const generarUUID = (): string => {
@@ -341,7 +340,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       return {
         ...item,
         numItem: index + 1,
-        tributos: item.ventaGravada > 0 ? ['20'] : null, // Array con 20 si hay gravada
+        tributos: item.ventaGravada > 0 ? [TRIBUTO_IVA_CODIGO] : null, // Usar constante
         numeroDocumento: item.numeroDocumento ?? null,
         codTributo: null,
         psv: item.psv ?? 0,
@@ -361,8 +360,8 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       totalDescu: totales.totalDescu,
       totalIva: totales.iva, // Restaurado - existe en JSON aceptado
       tributos: totales.totalGravada > 0 ? [{
-        codigo: '20',
-        descripcion: 'IVA',
+        codigo: TRIBUTO_IVA_CODIGO,
+        descripcion: TRIBUTO_IVA_DESCRIPCION,
         valor: totales.iva,
       }] : null, // Array de objetos si hay gravada
       subTotal: totales.subTotalVentas,
