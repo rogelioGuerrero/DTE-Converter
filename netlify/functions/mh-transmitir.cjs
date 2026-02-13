@@ -1,7 +1,5 @@
 const MH_BASE_URL_TEST = (process.env.MH_BASE_URL_TEST || 'https://apitest.dtes.mh.gob.sv').replace(/\/+$/, '');
 const MH_BASE_URL_PROD = (process.env.MH_BASE_URL_PROD || 'https://api.dtes.mh.gob.sv').replace(/\/+$/, '');
-const MH_USER = process.env.MH_USER || '';
-const MH_PWD = process.env.MH_PWD || '';
 
 const { randomUUID } = require('crypto');
 
@@ -76,6 +74,9 @@ const obtenerTokenMH = async (baseUrl) => {
   const now = Date.now();
   if (cachedToken && now < cachedToken.expiresAt) return cachedToken.token;
 
+  const MH_USER = process.env.MH_USER || '';
+  const MH_PWD = process.env.MH_PWD || '';
+
   if (!MH_USER || !MH_PWD) {
     throw new Error('Missing MH_USER/MH_PWD. Configure them in Netlify env vars.');
   }
@@ -141,8 +142,10 @@ exports.handler = async (event) => {
 
   if (payload?.authOnly === true) {
     try {
+      const hasUser = Boolean(process.env.MH_USER);
+      const hasPwd = Boolean(process.env.MH_PWD);
       const token = await obtenerTokenMH(baseUrl);
-      return json(200, { status: 'OK' }, cors);
+      return json(200, { status: 'OK', hasUser, hasPwd }, cors);
     } catch (err) {
       const msg = err?.message || '';
       let mhPayload;
@@ -167,7 +170,16 @@ exports.handler = async (event) => {
         );
       }
 
-      return json(200, { status: 'ERROR', message: err?.message || 'Auth error' }, cors);
+      return json(
+        200,
+        {
+          status: 'ERROR',
+          message: err?.message || 'Auth error',
+          hasUser: Boolean(process.env.MH_USER),
+          hasPwd: Boolean(process.env.MH_PWD),
+        },
+        cors
+      );
     }
   }
 
