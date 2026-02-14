@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { DTEJSON } from '../utils/dteGenerator';
 import TemplateSelector from './TemplateSelector';
-import { guardarDTEEnHistorial } from '../utils/dteHistoryDb';
+import { construirDTEArchivado, guardarDTEEnHistorial } from '../utils/dteHistoryDb';
 import { generarLibroDesdeDTEs } from '../utils/librosAutoGenerator';
 import { getCertificate } from '../utils/secureStorage';
 import { firmarDocumento, limpiarDteParaFirma, wakeFirmaService } from '../utils/firmaApiClient';
@@ -53,7 +53,8 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [estado, setEstado] = useState<EstadoTransmision>('pendiente');
   const [resultado, setResultado] = useState<TransmisionResult | null>(null);
-  const [, setJwsFirmado] = useState<string | null>(null);
+  const [jwsFirmado, setJwsFirmado] = useState<string | null>(null);
+  const [dteTransmitido, setDteTransmitido] = useState<DTEJSON | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const iniciarTransmision = async () => {
@@ -63,6 +64,7 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
 
     try {
       const processed = processDTE(dte);
+      setDteTransmitido(processed.dte);
       const ambienteFinal = (processed.dte?.identificacion?.ambiente === '01' ? '01' : '00') as '00' | '01';
       if (processed.errores.length > 0) {
         const rechazo: TransmisionResult = {
@@ -122,7 +124,7 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
         
         // Guardar en historial local
         try {
-          await guardarDTEEnHistorial(processed.dte, transmisionResult, ambienteFinal);
+          await guardarDTEEnHistorial(processed.dte, transmisionResult, ambienteFinal, jwsFirmado);
 
           try {
             const settings = loadSettings();
@@ -328,7 +330,8 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
         <div className="flex gap-2">
           <button
             onClick={() => {
-              const json = JSON.stringify({ dte, respuestaMH: resultado }, null, 2);
+              const dteArchivado = construirDTEArchivado(dteTransmitido || dte, resultado || undefined, jwsFirmado || undefined);
+              const json = JSON.stringify(dteArchivado, null, 2);
               const blob = new Blob([json], { type: 'application/json' });
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');

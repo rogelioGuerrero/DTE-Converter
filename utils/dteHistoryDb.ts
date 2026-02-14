@@ -5,6 +5,26 @@ import { openDB, IDBPDatabase } from 'idb';
 import { DTEJSON } from './dteGenerator';
 import { TransmisionResult } from './dteSignature';
 
+export type DTEArchivado = DTEJSON & {
+  firmaElectronica?: string;
+  selloRecepcion?: string;
+  fechaHoraProcesamiento?: string;
+};
+
+export const construirDTEArchivado = (
+  dte: DTEJSON,
+  respuestaMH?: TransmisionResult,
+  firmaElectronica?: string
+): DTEArchivado => {
+  const base = dte as DTEArchivado;
+  return {
+    ...base,
+    firmaElectronica: firmaElectronica ?? base.firmaElectronica,
+    selloRecepcion: respuestaMH?.selloRecepcion ?? base.selloRecepcion,
+    fechaHoraProcesamiento: respuestaMH?.fechaHoraProcesamiento ?? base.fechaHoraProcesamiento,
+  };
+};
+
 export interface DTEHistoryRecord {
   id?: number;
   codigoGeneracion: string;
@@ -32,7 +52,7 @@ export interface DTEHistoryRecord {
   selloRecepcion?: string;
   
   // Datos completos
-  dteJson: DTEJSON;
+  dteJson: DTEArchivado;
   respuestaMH?: TransmisionResult;
   
   // Metadatos
@@ -133,7 +153,8 @@ export const openHistoryDb = async (): Promise<IDBPDatabase> => {
 export const guardarDTEEnHistorial = async (
   dte: DTEJSON,
   respuestaMH: TransmisionResult,
-  ambiente: '00' | '01' = '00'
+  ambiente: '00' | '01' = '00',
+  firmaElectronica?: string
 ): Promise<void> => {
   const db = await openHistoryDb();
   
@@ -164,7 +185,7 @@ export const guardarDTEEnHistorial = async (
     estado: respuestaMH.success ? 'ACEPTADO' : 'RECHAZADO',
     selloRecepcion: respuestaMH.selloRecepcion,
     
-    dteJson: dte,
+    dteJson: construirDTEArchivado(dte, respuestaMH, firmaElectronica),
     respuestaMH,
     
     fechaTransmision: new Date().toISOString(),
