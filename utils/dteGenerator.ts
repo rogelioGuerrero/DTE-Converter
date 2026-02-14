@@ -314,6 +314,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
   const totalPagar = montoTotalOperacion;
   const cuerpoDocumento: ItemFactura[] = datos.items.map((item, index) => {
     const ivaItemPorUnidad = item.ventaGravada > 0 ? redondear(item.precioUni * 0.13, 2) : 0;
+    const ivaItem = item.ventaGravada > 0 ? redondear(ivaItemPorUnidad * item.cantidad, 2) : 0;
     return {
       ...item,
       numItem: index + 1,
@@ -322,12 +323,12 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       codTributo: null,
       psv: item.psv ?? 0,
       noGravado: item.noGravado ?? 0,
-      ivaItem: ivaItemPorUnidad,
+      ivaItem,
     };
   });
   const totalIva =
     datos.tipoDocumento === '01'
-      ? redondear(cuerpoDocumento.reduce((sum, item) => sum + ((item.ivaItem || 0) * item.cantidad), 0), 2)
+      ? redondear(cuerpoDocumento.reduce((sum, item) => sum + (item.ivaItem || 0), 0), 2)
       : totales.iva;
   
   const dteJSON: DTEJSON = {
