@@ -229,12 +229,23 @@ export const numeroALetras = (num: number): string => {
 
 // Obtener fecha actual en formato ISO
 export const obtenerFechaActual = (): string => {
-  return new Date().toISOString().split('T')[0];
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/El_Salvador',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 };
 
 // Obtener hora actual en formato HH:mm:ss
 export const obtenerHoraActual = (): string => {
-  return new Date().toTimeString().split(' ')[0];
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/El_Salvador',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(new Date());
 };
 
 // Calcular totales de items
