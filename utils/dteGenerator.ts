@@ -146,9 +146,6 @@ const isCodMunicipio = (value: string | null | undefined): boolean => {
   return /^(0[1-9]|[1-5]\d|6[0-8])$/.test(value.trim());
 };
 
-// Constantes internas para mapear campos JSON oficiales: tributos[] y resumen.tributos[].codigo
-const CODIGO_IVA_13 = '20';
-const DESCRIPCION_IVA_13 = 'Impuesto al Valor Agregado 13%';
 
 // Generar UUID v4
 export const generarUUID = (): string => {
@@ -345,7 +342,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       return {
         ...item,
         numItem: index + 1,
-        tributos: item.ventaGravada > 0 ? [CODIGO_IVA_13] : null,
+        tributos: null, // Factura tipo 01 no permite tributos (código 20) en cuerpoDocumento
         numeroDocumento: item.numeroDocumento ?? null,
         codTributo: null,
         psv: item.psv ?? 0,
@@ -364,11 +361,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       porcentajeDescuento: 0,
       totalDescu: totales.totalDescu,
       totalIva: totales.iva, // Restaurado - existe en JSON aceptado
-      tributos: totales.totalGravada > 0 ? [{
-        codigo: CODIGO_IVA_13,
-        descripcion: DESCRIPCION_IVA_13,
-        valor: totales.iva,
-      }] : null,
+      tributos: null, // Factura tipo 01 no permite tributos (código 20) en resumen
       subTotal: totales.subTotalVentas,
       ivaRete1: 0,
       reteRenta: 0,
