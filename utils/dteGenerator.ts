@@ -312,6 +312,24 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       ? redondear(totales.subTotalVentas - totales.totalDescu, 2)
       : totales.montoTotal;
   const totalPagar = montoTotalOperacion;
+  const cuerpoDocumento: ItemFactura[] = datos.items.map((item, index) => {
+    const ivaItemPorUnidad = item.ventaGravada > 0 ? redondear(item.precioUni * 0.13, 2) : 0;
+    const ivaItem = item.ventaGravada > 0 ? redondear(ivaItemPorUnidad * item.cantidad, 2) : 0;
+    return {
+      ...item,
+      numItem: index + 1,
+      tributos: null, // Factura tipo 01 no permite tributos (código 20) en cuerpoDocumento
+      numeroDocumento: item.numeroDocumento ?? null,
+      codTributo: null,
+      psv: item.psv ?? 0,
+      noGravado: item.noGravado ?? 0,
+      ivaItem,
+    };
+  });
+  const totalIva =
+    datos.tipoDocumento === '01'
+      ? redondear(cuerpoDocumento.reduce((sum, item) => sum + (item.ivaItem || 0), 0), 2)
+      : totales.iva;
   
   const dteJSON: DTEJSON = {
     identificacion: {
@@ -362,20 +380,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
     },
     otrosDocumentos: null,
     ventaTercero: null,
-    cuerpoDocumento: datos.items.map((item, index) => {
-      const ivaItemPorUnidad = item.ventaGravada > 0 ? redondear(item.precioUni * 0.13, 2) : 0;
-      const ivaItem = item.ventaGravada > 0 ? redondear(ivaItemPorUnidad * item.cantidad, 2) : 0;
-      return {
-        ...item,
-        numItem: index + 1,
-        tributos: null, // Factura tipo 01 no permite tributos (código 20) en cuerpoDocumento
-        numeroDocumento: item.numeroDocumento ?? null,
-        codTributo: null,
-        psv: item.psv ?? 0,
-        noGravado: item.noGravado ?? 0,
-        ivaItem: item.ivaItem ?? ivaItem,
-      };
-    }),
+    cuerpoDocumento,
     resumen: {
       totalNoSuj: totales.totalNoSuj,
       totalExenta: totales.totalExenta,
@@ -386,7 +391,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       descuGravada: totales.totalDescu,
       porcentajeDescuento: 0,
       totalDescu: totales.totalDescu,
-      totalIva: totales.iva, // Restaurado - existe en JSON aceptado
+      totalIva,
       tributos: null, // Factura tipo 01 no permite tributos (código 20) en resumen
       subTotal: totales.subTotalVentas,
       ivaRete1: 0,
