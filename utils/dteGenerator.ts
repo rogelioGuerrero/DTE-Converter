@@ -307,6 +307,11 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
 
   const emisorCodActividad = normalizeEmisorCodActividad(datos.emisor.actividadEconomica);
   const emisorDescActividad = (datos.emisor.descActividad || '').trim();
+  const montoTotalOperacion =
+    datos.tipoDocumento === '01'
+      ? redondear(totales.subTotalVentas - totales.totalDescu, 2)
+      : totales.montoTotal;
+  const totalPagar = montoTotalOperacion;
   
   const dteJSON: DTEJSON = {
     identificacion: {
@@ -385,15 +390,15 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       subTotal: totales.subTotalVentas,
       ivaRete1: 0,
       reteRenta: 0,
-      montoTotalOperacion: totales.montoTotal,
+      montoTotalOperacion,
       totalNoGravado: 0,
-      totalPagar: totales.totalPagar,
-      totalLetras: numeroALetras(totales.totalPagar),
+      totalPagar,
+      totalLetras: numeroALetras(totalPagar),
       saldoFavor: 0,
       condicionOperacion: datos.condicionOperacion,
       pagos: datos.condicionOperacion === 1 ? [{
         codigo: datos.formaPago,
-        montoPago: totales.totalPagar,
+        montoPago: totalPagar,
         referencia: null,
         plazo: null,
         periodo: null,
