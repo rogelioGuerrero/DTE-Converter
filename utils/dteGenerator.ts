@@ -363,7 +363,7 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
     otrosDocumentos: null,
     ventaTercero: null,
     cuerpoDocumento: datos.items.map((item, index) => {
-      const ivaItem = item.ventaGravada > 0 ? redondear(item.ventaGravada * 0.13, 2) : 0;
+      const ivaItem = item.ventaGravada > 0 ? redondear(item.precioUni * 0.13, 2) : 0;
       return {
         ...item,
         numItem: index + 1,
