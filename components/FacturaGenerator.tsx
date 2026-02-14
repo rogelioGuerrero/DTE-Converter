@@ -62,7 +62,7 @@ const emptyItem: ItemForm = {
   esExento: false,
 };
 
-const TRIBUTO_IVA_CODIGO = '20';
+const CODIGO_IVA_13 = '20';
 
 const FacturaGenerator: React.FC = () => {
   const isModoProfesional = getUserModeConfig().mode === 'profesional';
@@ -228,7 +228,7 @@ const FacturaGenerator: React.FC = () => {
       ventaNoSuj: 0,
       ventaExenta: item.esExento ? redondear(item.cantidad * item.precioUni, 2) : 0,
       ventaGravada: item.esExento ? 0 : redondear(item.cantidad * item.precioUni, 2),
-      tributos: !item.esExento ? [TRIBUTO_IVA_CODIGO] : null, // Array con código si NO es exento
+      tributos: !item.esExento ? [CODIGO_IVA_13] : null, // Array con código si NO es exento
       numeroDocumento: null,
       codTributo: item.esExento ? null : '20',
       psv: 0,
