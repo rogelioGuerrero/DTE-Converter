@@ -73,7 +73,10 @@ export const normalizeDTE = (dte: DTEJSON): DTEJSON => {
       ventaNoSuj: roundTo(i.ventaNoSuj, 8),
       ventaExenta: roundTo(i.ventaExenta, 8),
       ventaGravada: roundTo(i.ventaGravada, 8),
-      tributos: (i.tributos || []).map((t) => String(t).trim()).filter(Boolean) as any,
+      tributos:
+        i.tributos === null
+          ? null
+          : (i.tributos ?? []).map((t) => String(t).trim()).filter(Boolean) as any,
       numeroDocumento: trimOrNull(i.numeroDocumento) as any,
       codTributo: trimOrNull(i.codTributo) as any,
       psv: roundTo(i.psv ?? 0, 2),
@@ -99,10 +102,13 @@ export const normalizeDTE = (dte: DTEJSON): DTEJSON => {
       totalNoGravado: roundTo(dte.resumen.totalNoGravado, 2),
       totalPagar: roundTo(dte.resumen.totalPagar, 2),
       saldoFavor: roundTo(dte.resumen.saldoFavor, 2),
-      tributos: (dte.resumen.tributos || []).map((t) => ({
-        ...t,
-        valor: roundTo(t.valor, 2),
-      })),
+      tributos:
+        dte.resumen.tributos === null
+          ? null
+          : (dte.resumen.tributos ?? []).map((t) => ({
+              ...t,
+              valor: roundTo(t.valor, 2),
+            })),
       totalLetras: dte.resumen.totalLetras.trim(),
     },
     extension: dte.extension ?? null,
