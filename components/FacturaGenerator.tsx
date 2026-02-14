@@ -62,6 +62,8 @@ const emptyItem: ItemForm = {
   esExento: false,
 };
 
+const TRIBUTO_IVA_CODIGO = '20';
+
 const FacturaGenerator: React.FC = () => {
   const isModoProfesional = getUserModeConfig().mode === 'profesional';
   const defaultItem: ItemForm = isModoProfesional ? { ...emptyItem, tipoItem: 2 } : { ...emptyItem };
