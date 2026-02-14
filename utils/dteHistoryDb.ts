@@ -7,7 +7,7 @@ import { TransmisionResult } from './dteSignature';
 
 export type DTEArchivado = DTEJSON & {
   firmaElectronica?: string;
-  selloRecepcion?: string;
+  selloRecibido?: string;
   fechaHoraProcesamiento?: string;
 };
 
@@ -20,7 +20,7 @@ export const construirDTEArchivado = (
   return {
     ...base,
     firmaElectronica: firmaElectronica ?? base.firmaElectronica,
-    selloRecepcion: respuestaMH?.selloRecepcion ?? base.selloRecepcion,
+    selloRecibido: respuestaMH?.selloRecepcion ?? base.selloRecibido,
     fechaHoraProcesamiento: respuestaMH?.fechaHoraProcesamiento ?? base.fechaHoraProcesamiento,
   };
 };
