@@ -5,6 +5,12 @@ const { randomUUID } = require('crypto');
 
 let cachedToken = null;
 
+const buildAuthorizationHeader = (token) => {
+  const raw = typeof token === 'string' ? token.trim() : '';
+  if (!raw) return '';
+  return /^Bearer\s+/i.test(raw) ? raw : `Bearer ${raw}`;
+};
+
 const json = (statusCode, body, extraHeaders = {}) => ({
   statusCode,
   headers: {
@@ -240,7 +246,7 @@ exports.handler = async (event) => {
     const token = await obtenerTokenMH(baseUrl);
 
     const dteJson = parseDteFromJws(dte);
-    const identificacion = dteJson?.identificacion || {};
+    const identificacion = dteJson?.identificacion || payload?.identificacion || {};
     const version = typeof identificacion.version === 'number' ? identificacion.version : undefined;
     const tipoDte = typeof identificacion.tipoDte === 'string' ? identificacion.tipoDte : undefined;
     const codigoGeneracion = typeof identificacion.codigoGeneracion === 'string' ? identificacion.codigoGeneracion : undefined;
@@ -260,10 +266,11 @@ exports.handler = async (event) => {
     const mhRes = await fetch(`${baseUrl}/fesv/recepciondte`, {
       method: 'POST',
       headers: {
-        Authorization: token,
+        Authorization: buildAuthorizationHeader(token),
         'Content-Type': 'application/json',
         'User-Agent': event.headers?.['user-agent'] || event.headers?.['User-Agent'] || 'DTE-CONVERTER',
         'X-Request-ID': randomUUID(),
+        'X-Ambiente': ambiente,
       },
       body: JSON.stringify({
         ambiente,
