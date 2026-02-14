@@ -316,7 +316,7 @@ export const actividadesEconomicas: ActividadEconomica[] = [
   { codigo: "96011", descripcion: "Lavado y limpieza de productos textiles y de piel" },
   { codigo: "96012", descripcion: "Peluquería y otros tratamientos de belleza" },
   { codigo: "96013", descripcion: "Pompas fúnebres y actividades relacionadas" },
-  { codigo: "96099", descripcion: "Otras actividades de servicios personales n.c.p." },
+  { codigo: "96090", descripcion: "Otras actividades de servicios no clasificadas previamente" },
   { codigo: "97000", descripcion: "Actividades de los hogares como empleadores de personal doméstico" },
   { codigo: "99000", descripcion: "Actividades de organizaciones y organismos extraterritoriales" },
 ];

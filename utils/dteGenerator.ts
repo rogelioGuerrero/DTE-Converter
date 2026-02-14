@@ -146,6 +146,12 @@ const isCodMunicipio = (value: string | null | undefined): boolean => {
   return /^(0[1-9]|[1-5]\d|6[0-8])$/.test(value.trim());
 };
 
+const normalizeEmisorCodActividad = (value: string | null | undefined): string => {
+  const digits = (value || '').replace(/\D/g, '');
+  if (digits === '96099') return '96090';
+  return digits;
+};
+
 
 // Generar UUID v4
 export const generarUUID = (): string => {
@@ -298,6 +304,9 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
           complemento: datos.receptor.direccion || '',
         }
       : null;
+
+  const emisorCodActividad = normalizeEmisorCodActividad(datos.emisor.actividadEconomica);
+  const emisorDescActividad = (datos.emisor.descActividad || '').trim();
   
   const dteJSON: DTEJSON = {
     identificacion: {
@@ -319,8 +328,8 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       nit: datos.emisor.nit,
       nrc: datos.emisor.nrc,
       nombre: datos.emisor.nombre,
-      codActividad: datos.emisor.actividadEconomica,
-      descActividad: datos.emisor.descActividad || '',
+      codActividad: emisorCodActividad,
+      descActividad: emisorDescActividad,
       nombreComercial: datos.emisor.nombreComercial || null,
       tipoEstablecimiento: datos.emisor.tipoEstablecimiento || '01',
       codEstable: datos.emisor.codEstableMH || null,
