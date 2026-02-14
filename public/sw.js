@@ -1,5 +1,5 @@
 // Service Worker para DTE Pro PWA
-const CACHE_VERSION = '1.0.0'; // Cambiar en cada deploy
+const CACHE_VERSION = '1.0.1'; // Cambiar en cada deploy
 const CACHE_NAME = `dte-pro-v${CACHE_VERSION}`;
 const STATIC_ASSETS = [
   '/',
