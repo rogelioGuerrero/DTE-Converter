@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useEffect } from 'react';
 import { licenseValidator } from '../utils/licenseValidator';
 import { notify } from '../utils/notifications';
 

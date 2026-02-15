@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, Shield, Key, Mail, Download, Zap } from 'lucide-react';
+import { Copy, Check, Key, Mail, Download, Zap } from 'lucide-react';
 import { deviceFingerprint } from '../utils/deviceFingerprint';
 
 interface DeviceLicenseRequestProps {
