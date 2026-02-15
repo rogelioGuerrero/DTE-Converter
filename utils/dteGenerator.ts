@@ -421,7 +421,13 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       porcentajeDescuento: 0,
       totalDescu: totales.totalDescu,
       totalIva,
-      tributos: null, // Factura tipo 01 no permite tributos (código 20) en resumen
+      tributos: datos.tipoDocumento === '01' ? null : [
+        {
+          codigo: '20',
+          descripcion: 'Impuesto al Valor Agregado 13%',
+          valor: totales.iva
+        }
+      ],
       subTotal: totales.subTotalVentas,
       ivaRete1: 0,
       reteRenta: 0,

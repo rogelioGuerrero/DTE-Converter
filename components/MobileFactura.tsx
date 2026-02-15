@@ -96,6 +96,18 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
 }) => {
   const [clients, setClients] = useState<ClientData[]>([]);
   const [products, setProducts] = useState<ProductData[]>([]);
+  const productSuggestions = useMemo<ProductData[]>(() => {
+    const term = (newItem.descripcion || '').trim().toLowerCase();
+    if (term.length < 2) return [];
+
+    const matches = products.filter((p) => {
+      const cod = (p.codigo || '').toLowerCase();
+      const desc = (p.descripcion || '').toLowerCase();
+      return cod.includes(term) || desc.includes(term);
+    });
+
+    return matches.slice(0, 6);
+  }, [newItem.descripcion, products]);
   const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
   const [showClientDrawer, setShowClientDrawer] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
@@ -104,6 +116,45 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
   const [newItem, setNewItem] = useState({ codigo: '', descripcion: '', precioUni: 0, cantidad: 1, tipoItem: 1 });
   const [tipoDoc, setTipoDoc] = useState('01');
   const [formaPago, setFormaPago] = useState('01');
+
+  // Recalcular precios al cambiar tipo de documento (Móvil)
+  const handleSetTipoDoc = (nuevoTipo: string) => {
+    const tipoAnterior = tipoDoc;
+    setTipoDoc(nuevoTipo);
+
+    if (tipoAnterior === nuevoTipo) return;
+    if (items.length === 0) return;
+
+    const newItems = items.map(item => {
+      // Si es exento, no se toca
+      if (item.esExento) return item;
+
+      let nuevoPrecio = item.precioUni;
+
+      // De Sin IVA (03) a Con IVA (01) -> Sumar IVA
+      if (tipoAnterior !== '01' && nuevoTipo === '01') {
+        nuevoPrecio = redondear(item.precioUni * 1.13, 2);
+      }
+      // De Con IVA (01) a Sin IVA (03) -> Restar IVA
+      else if (tipoAnterior === '01' && nuevoTipo !== '01') {
+        nuevoPrecio = redondear(item.precioUni / 1.13, 2);
+      }
+
+      return {
+        ...item,
+        precioUni: nuevoPrecio
+      };
+    });
+
+    setItems(newItems);
+    addToast(
+      nuevoTipo === '01' 
+        ? 'Precios actualizados a IVA incluido' 
+        : 'Precios actualizados a Sin IVA',
+      'info'
+    );
+  };
+
   const [condicionOperacion, setCondicionOperacion] = useState(1);
   const [observaciones, setObservaciones] = useState('');
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
@@ -139,14 +190,14 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
     if (selectedClient) {
       // Si es consumidor final y el tipo actual no es permitido, cambiar a 01
       if (clienteEsConsumidorFinal && !['01', '02', '10', '11'].includes(tipoDoc)) {
-        setTipoDoc('01');
+        handleSetTipoDoc('01');
       }
       // Si es cliente con NIT y el tipo actual es 02 o 10, cambiar a 01
       else if (!clienteEsConsumidorFinal && ['02', '10'].includes(tipoDoc)) {
-        setTipoDoc('01');
+        handleSetTipoDoc('01');
       }
     }
-  }, [selectedClient, clienteEsConsumidorFinal, tipoDoc]);
+  }, [selectedClient, clienteEsConsumidorFinal]); // Removed tipoDoc dependency to avoid loop with new handler
 
   useEffect(() => {
     const load = async () => {
@@ -186,27 +237,20 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
     const found = resolveProductForDescription(newItem.descripcion);
     if (!found) return;
 
+    // Al seleccionar del catálogo, si es Tipo 01 (Factura), sumamos IVA al precio sugerido (que es neto)
+    let precioSugerido = found.precioUni;
+    if (tipoDoc === '01') {
+      precioSugerido = redondear(found.precioUni * 1.13, 2);
+    }
+
     setNewItem({
       ...newItem,
       codigo: found.codigo,
       descripcion: found.descripcion,
-      precioUni: found.precioUni,
+      precioUni: precioSugerido,
       tipoItem: typeof found.tipoItem === 'number' ? found.tipoItem : 1,
     });
   };
-
-  const productSuggestions = useMemo<ProductData[]>(() => {
-    const term = (newItem.descripcion || '').trim().toLowerCase();
-    if (term.length < 2) return [];
-
-    const matches = products.filter((p) => {
-      const cod = (p.codigo || '').toLowerCase();
-      const desc = (p.descripcion || '').toLowerCase();
-      return cod.includes(term) || desc.includes(term);
-    });
-
-    return matches.slice(0, 6);
-  }, [newItem.descripcion, products]);
 
   const addItem = async () => {
     if (!newItem.descripcion || newItem.precioUni <= 0) return;
@@ -214,6 +258,18 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
     const found = resolveProductForDescription(newItem.descripcion);
     const resolvedTipoItem = typeof newItem.tipoItem === 'number' ? newItem.tipoItem : (typeof found?.tipoItem === 'number' ? found!.tipoItem : 1);
     const codigo = (newItem.codigo || found?.codigo || '').trim();
+    
+    // Ajustar precio según tipo de documento (Catálogo es neto)
+    let precioFinal = newItem.precioUni;
+    if (found && Math.abs(found.precioUni - newItem.precioUni) < 0.01) {
+      // Si el precio coincide con el catálogo, aplicamos la lógica de IVA
+      if (tipoDoc === '01') {
+        precioFinal = redondear(found.precioUni * 1.13, 2);
+      } else {
+        precioFinal = found.precioUni;
+      }
+    }
+
     if (resolvedTipoItem === 1) {
       if (!codigo) {
         addToast('Hay items sin código. Asigna un código en el catálogo.', 'error');
@@ -234,7 +290,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
       codigo,
       descripcion: newItem.descripcion,
       cantidad: newItem.cantidad,
-      precioUni: newItem.precioUni,
+      precioUni: precioFinal,
       tipoItem: resolvedTipoItem,
       esExento: false,
     };
@@ -480,7 +536,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
           <label className="text-xs text-gray-500 uppercase font-medium">Tipo</label>
           <select
             value={tipoDoc}
-            onChange={(e) => setTipoDoc(e.target.value)}
+            onChange={(e) => handleSetTipoDoc(e.target.value)}
             className="w-full mt-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
           >
             {tiposDocumentoFiltrados.map((t) => (
@@ -561,7 +617,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{item.descripcion}</p>
                       <p className="text-sm text-gray-500">
-                        ${item.precioUni.toFixed(2)} c/u
+                        ${Number.isInteger(item.precioUni * 100) ? item.precioUni.toFixed(2) : parseFloat(item.precioUni.toFixed(6)).toString()} c/u
                       </p>
                     </div>
                     <button

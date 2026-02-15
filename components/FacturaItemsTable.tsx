@@ -130,7 +130,7 @@ export const FacturaItemsTable: React.FC<FacturaItemsTableProps> = ({
                   <input
                     type="text"
                     inputMode="decimal"
-                    value={item.precioUniRaw ?? Number(item.precioUni || 0).toFixed(2)}
+                    value={item.precioUniRaw ?? (Number.isInteger(item.precioUni * 100) ? item.precioUni.toFixed(2) : parseFloat(item.precioUni.toFixed(6)).toString())}
                     onChange={(e) => onPrecioUniChange(idx, e.target.value)}
                     onBlur={() => onPrecioUniBlur(idx)}
                     className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right focus:ring-1 focus:ring-blue-500 outline-none"

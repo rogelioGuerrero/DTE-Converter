@@ -295,7 +295,7 @@ const generarPlantillaClasica = (dte: DTEJSON, resultado?: TransmisionResult, co
     <div class="totals">
       <table>
         <tr><td>Suma de Ventas:</td><td>$${dte.resumen.subTotalVentas.toFixed(2)}</td></tr>
-        <tr><td>IVA 13%:</td><td>$${dte.resumen.tributos?.[0]?.valor?.toFixed(2) || '0.00'}</td></tr>
+        ${dte.identificacion.tipoDte !== '01' ? `<tr><td>IVA 13%:</td><td>$${dte.resumen.tributos?.[0]?.valor?.toFixed(2) || '0.00'}</td></tr>` : ''}
         <tr><td>Sub-Total:</td><td>$${dte.resumen.subTotal.toFixed(2)}</td></tr>
         <tr><td>IVA Retenido:</td><td>$${(dte.resumen.ivaRete1 || 0).toFixed(2)}</td></tr>
         <tr class="total-row"><td>TOTAL A PAGAR:</td><td>$${dte.resumen.totalPagar.toFixed(2)}</td></tr>
@@ -468,7 +468,7 @@ const generarPlantillaModerna = (dte: DTEJSON, resultado?: TransmisionResult, co
     <div class="summary-section">
       <div class="summary-card">
         <div class="summary-row"><span class="label">Subtotal Ventas</span><span class="value">$${dte.resumen.subTotalVentas.toFixed(2)}</span></div>
-        <div class="summary-row"><span class="label">IVA (13%)</span><span class="value">$${dte.resumen.tributos?.[0]?.valor?.toFixed(2) || '0.00'}</span></div>
+        ${dte.identificacion.tipoDte !== '01' ? `<div class="summary-row"><span class="label">IVA (13%)</span><span class="value">$${dte.resumen.tributos?.[0]?.valor?.toFixed(2) || '0.00'}</span></div>` : ''}
         <div class="summary-row"><span class="label">Subtotal</span><span class="value">$${dte.resumen.subTotal.toFixed(2)}</span></div>
         ${dte.resumen.ivaRete1 ? `<div class="summary-row"><span class="label">IVA Retenido</span><span class="value">-$${dte.resumen.ivaRete1.toFixed(2)}</span></div>` : ''}
         <div class="summary-row total"><span class="label">TOTAL</span><span class="value">$${dte.resumen.totalPagar.toFixed(2)}</span></div>
@@ -609,7 +609,7 @@ const generarPlantillaMinimalista = (dte: DTEJSON, resultado?: TransmisionResult
     <div class="totals">
       <div class="totals-inner">
         <div class="total-row"><span class="label">Subtotal</span><span class="value">$${dte.resumen.subTotalVentas.toFixed(2)}</span></div>
-        <div class="total-row"><span class="label">IVA 13%</span><span class="value">$${dte.resumen.tributos?.[0]?.valor?.toFixed(2) || '0.00'}</span></div>
+        ${dte.identificacion.tipoDte !== '01' ? `<div class="total-row"><span class="label">IVA 13%</span><span class="value">$${dte.resumen.tributos?.[0]?.valor?.toFixed(2) || '0.00'}</span></div>` : ''}
         <div class="total-row final"><span class="label">Total</span><span class="value">$${dte.resumen.totalPagar.toFixed(2)}</span></div>
       </div>
     </div>

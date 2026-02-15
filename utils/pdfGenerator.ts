@@ -429,10 +429,12 @@ export const generarHTMLFactura = async (options: PDFGeneratorOptions): Promise<
           <td>Monto global Desc., Rebajas y otros a ventas gravadas:</td>
           <td>${(dte.resumen.descuGravada || 0).toFixed(2)}</td>
         </tr>
+        ${dte.identificacion.tipoDte !== '01' ? `
         <tr>
           <td>Impuesto al Valor Agregado 13%:</td>
           <td>${dte.resumen.tributos?.[0]?.valor?.toFixed(2) || '0.00'}</td>
         </tr>
+        ` : ''}
         <tr>
           <td>Sub-Total:</td>
           <td>${dte.resumen.subTotal.toFixed(2)}</td>
