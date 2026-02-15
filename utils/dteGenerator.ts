@@ -177,7 +177,8 @@ export const generarNumeroControl = (tipoDte: string, correlativo: number, codEs
 
 // Redondeo según especificación AT (8 decimales para cantidades/precios)
 export const redondear = (valor: number, decimales: number = 2): number => {
-  return Math.round(valor * Math.pow(10, decimales)) / Math.pow(10, decimales);
+  const factor = Math.pow(10, decimales);
+  return Math.round((valor + Number.EPSILON) * factor) / factor;
 };
 
 // Convertir número a letras (simplificado)
@@ -339,15 +340,21 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       }
     } else {
       // Para CCF (03) y otros, los montos son sin IVA.
-      // El IVA se calcula sobre el precio unitario
-      const ivaItemPorUnidad = item.ventaGravada > 0 ? redondear(item.precioUni * 0.13, 2) : 0;
-      ivaItem = item.ventaGravada > 0 ? redondear(ivaItemPorUnidad * item.cantidad, 2) : 0;
+      // El IVA se calcula sobre la venta gravada total de la línea
+      ivaItem = item.ventaGravada > 0 ? redondear(item.ventaGravada * 0.13, 2) : 0;
     }
+
+    const tributos = datos.tipoDocumento === '03' && item.ventaGravada > 0 ? ['20'] : null;
 
     return {
       ...item,
       numItem: index + 1,
-      tributos: null, // Factura tipo 01 no permite tributos (código 20) en cuerpoDocumento
+      cantidad: redondear(item.cantidad, 8),
+      precioUni: redondear(item.precioUni, 8),
+      ventaNoSuj: redondear(item.ventaNoSuj, 8),
+      ventaExenta: redondear(item.ventaExenta, 8),
+      ventaGravada: redondear(item.ventaGravada, 8),
+      tributos: tributos, 
       numeroDocumento: item.numeroDocumento ?? null,
       codTributo: null,
       psv: item.psv ?? 0,

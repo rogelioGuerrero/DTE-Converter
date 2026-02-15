@@ -134,11 +134,11 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
 
       // De Sin IVA (03) a Con IVA (01) -> Sumar IVA
       if (tipoAnterior !== '01' && nuevoTipo === '01') {
-        nuevoPrecio = redondear(item.precioUni * 1.13, 2);
+        nuevoPrecio = redondear(item.precioUni * 1.13, 8);
       }
       // De Con IVA (01) a Sin IVA (03) -> Restar IVA
       else if (tipoAnterior === '01' && nuevoTipo !== '01') {
-        nuevoPrecio = redondear(item.precioUni / 1.13, 2);
+        nuevoPrecio = redondear(item.precioUni / 1.13, 8);
       }
 
       return {
@@ -241,7 +241,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
     // Al seleccionar del catálogo, si es Tipo 01 (Factura), sumamos IVA al precio sugerido (que es neto)
     let precioSugerido = found.precioUni;
     if (tipoDoc === '01') {
-      precioSugerido = redondear(found.precioUni * 1.13, 2);
+      precioSugerido = redondear(found.precioUni * 1.13, 8);
     }
 
     setNewItem({
@@ -265,7 +265,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
     if (found && Math.abs(found.precioUni - newItem.precioUni) < 0.01) {
       // Si el precio coincide con el catálogo, aplicamos la lógica de IVA
       if (tipoDoc === '01') {
-        precioFinal = redondear(found.precioUni * 1.13, 2);
+        precioFinal = redondear(found.precioUni * 1.13, 8);
       } else {
         precioFinal = found.precioUni;
       }
@@ -315,7 +315,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
   const itemsParaCalculo: ItemFactura[] = items.map((item, idx) => {
     const cantidad = Number(item.cantidad) || 0;
     const precio = Number(item.precioUni) || 0;
-    const totalLinea = redondear(cantidad * precio, 2);
+    const totalLinea = redondear(cantidad * precio, 8);
     
     let ventaGravada = 0;
     let ivaItem = 0;

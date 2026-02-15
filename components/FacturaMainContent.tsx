@@ -42,7 +42,7 @@ interface FacturaMainContentProps {
   onPrecioUniChange: (index: number, value: string) => void;
   onPrecioUniBlur: (index: number) => void;
   getPresentacionesForCodigo: (codigo: string) => any[];
-  getStockDisplayForCodigo: (codigo: string) => number | null;
+  getStockDisplayForCodigo: (codigo: string) => string;
   redondear: (value: number, decimales: number) => number;
   formaPago: string;
   setFormaPago: React.Dispatch<React.SetStateAction<string>>;

@@ -28,7 +28,7 @@ interface FacturaItemsTableProps {
   onPrecioUniChange: (idx: number, value: string) => void;
   onPrecioUniBlur: (idx: number) => void;
   getPresentacionesForCodigo: (codigo: string) => Presentacion[];
-  getStockDisplayForCodigo: (codigo: string) => number | null;
+  getStockDisplayForCodigo: (codigo: string) => string;
   redondear: (value: number, decimals: number) => number;
 }
 
@@ -130,7 +130,7 @@ export const FacturaItemsTable: React.FC<FacturaItemsTableProps> = ({
                   <input
                     type="text"
                     inputMode="decimal"
-                    value={item.precioUniRaw ?? (Number.isInteger(item.precioUni * 100) ? item.precioUni.toFixed(2) : parseFloat(item.precioUni.toFixed(6)).toString())}
+                    value={item.precioUniRaw ?? (Number.isInteger(item.precioUni * 100) ? item.precioUni.toFixed(2) : parseFloat(item.precioUni.toFixed(8)).toString())}
                     onChange={(e) => onPrecioUniChange(idx, e.target.value)}
                     onBlur={() => onPrecioUniBlur(idx)}
                     className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right focus:ring-1 focus:ring-blue-500 outline-none"
@@ -139,10 +139,9 @@ export const FacturaItemsTable: React.FC<FacturaItemsTableProps> = ({
                     const code = (item.codigo || '').trim();
                     if (!code) return null;
                     const stock = getStockDisplayForCodigo(code);
-                    if (stock === null) return null;
                     return (
                       <p className="mt-1 text-[10px] text-gray-400 text-center">
-                        Stock: {Number(stock).toFixed(2)}
+                        Stock: {stock}
                       </p>
                     );
                   })()}

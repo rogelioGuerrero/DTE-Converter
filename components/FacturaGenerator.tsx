@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getClients, ClientData } from '../utils/clientDb';
-import { ProductData } from '../utils/productDb';
+import { ProductData, getProducts } from '../utils/productDb';
 import { getEmisor, saveEmisor, EmisorData } from '../utils/emisorDb';
 import { 
   generarDTE, ItemFactura, tiposDocumento, formasPago,
@@ -22,10 +22,9 @@ import { getUserModeConfig, hasFeature } from '../utils/userMode';
 import { resolveProductForDescription } from '../utils/facturaGeneratorHelpers';
 import { useStockByCode } from '../hooks/useStockByCode';
 import { requiereStripe } from '../catalogos/pagos';
+import { useMobile } from '../hooks/useMobile';
 import { 
-  buildInventarioDTEFromGenerated,
   getPresentacionesForCodigo as getPresentacionesForCodigoHelper,
-  validateStockForInventario as validateStockForInventarioHelper,
 } from '../utils/facturaGeneratorInventoryHelpers';
 import type { ResolverItem } from './ResolveNoCodeModal';
 import {
@@ -67,6 +66,8 @@ const FacturaGenerator: React.FC = () => {
   const isModoProfesional = getUserModeConfig().mode === 'profesional';
   const defaultItem: ItemForm = isModoProfesional ? { ...emptyItem, tipoItem: 2 } : { ...emptyItem };
   const canUseCatalogoProductos = hasFeature('productos');
+  const isMobile = useMobile();
+  const { toasts, addToast, removeToast } = useToast();
 
   const [showTransmision, setShowTransmision] = useState(false);
   const [showQRCapture, setShowQRCapture] = useState(false);
@@ -76,6 +77,7 @@ const FacturaGenerator: React.FC = () => {
   
   const [emisor, setEmisor] = useState<EmisorData | null>(null);
   const [showEmisorConfig, setShowEmisorConfig] = useState(false);
+  const [isSavingEmisor, setIsSavingEmisor] = useState(false);
   const [emisorForm, setEmisorForm] = useState<Omit<EmisorData, 'id'>>({
     nit: '',
     nrc: '',
@@ -108,6 +110,91 @@ const FacturaGenerator: React.FC = () => {
   const [items, setItems] = useState<ItemForm[]>([{ ...defaultItem }]);
   const [tipoDocumento, setTipoDocumento] = useState('03');
   const [formaPago, setFormaPago] = useState('01');
+  const [condicionOperacion, setCondicionOperacion] = useState(1);
+  const [observaciones, setObservaciones] = useState('');
+
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedDTE, setGeneratedDTE] = useState<DTEJSON | null>(null);
+
+  // Resolve Modal State
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [resolverItems, setResolverItems] = useState<ResolverItem[]>([]);
+
+  // Certificate Manager
+  const {
+    hasCert,
+    certificateFile,
+    certificatePassword,
+    showCertPassword,
+    certificateInfo,
+    certificateError,
+    isValidatingCert,
+    isSavingCert,
+    fileInputRef,
+    setCertificatePassword,
+    setShowCertPassword,
+    setCertificateInfo,
+    setCertificateError,
+    handleCertFileSelect,
+    handleValidateCertificate,
+    handleSaveCertificate,
+    refreshCertificateStatus,
+  } = useCertificateManager({
+    onToast: (msg, type) => addToast(msg, type),
+  });
+
+  const { stockByCode } = useStockByCode();
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    const [loadedClients, loadedProducts, loadedEmisor] = await Promise.all([
+      getClients(),
+      getProducts(),
+      getEmisor()
+    ]);
+    setClients(loadedClients);
+    setProducts(loadedProducts);
+    setEmisor(loadedEmisor);
+    if (loadedEmisor) {
+      const { id, ...rest } = loadedEmisor;
+      setEmisorForm(rest);
+    }
+    await refreshCertificateStatus();
+  };
+
+  const receptorEsConsumidorFinal = selectedReceptor ? !selectedReceptor.nit.trim() : false;
+
+  const filteredClients = useMemo(() => {
+    if (!clientSearch) return clients.slice(0, 10);
+    const lower = clientSearch.toLowerCase();
+    return clients.filter(c => 
+      c.name.toLowerCase().includes(lower) || 
+      c.nit.includes(clientSearch) ||
+      (c.nombreComercial && c.nombreComercial.toLowerCase().includes(lower))
+    ).slice(0, 10);
+  }, [clients, clientSearch]);
+
+  const tiposDocumentoFiltrados = useMemo(() => {
+    return tiposDocumento.filter(t => {
+      if (receptorEsConsumidorFinal) {
+        return ['01', '02', '10', '11'].includes(t.codigo);
+      } else {
+        return !['02', '10'].includes(t.codigo);
+      }
+    });
+  }, [receptorEsConsumidorFinal]);
+
+  const filteredProductsForPicker = useMemo(() => {
+    if (!productSearch) return products.slice(0, 20);
+    const lower = productSearch.toLowerCase();
+    return products.filter(p => 
+      p.descripcion.toLowerCase().includes(lower) || 
+      (p.codigo && p.codigo.toLowerCase().includes(lower))
+    ).slice(0, 20);
+  }, [products, productSearch]);
 
   // Recalcular precios al cambiar tipo de documento
   const handleSetTipoDocumento = (nuevoTipo: string) => {
@@ -127,11 +214,11 @@ const FacturaGenerator: React.FC = () => {
 
       // De Sin IVA (03) a Con IVA (01) -> Sumar IVA
       if (tipoAnterior !== '01' && nuevoTipo === '01') {
-        nuevoPrecio = redondear(item.precioUni * 1.13, 2);
+        nuevoPrecio = redondear(item.precioUni * 1.13, 8);
       }
       // De Con IVA (01) a Sin IVA (03) -> Restar IVA
       else if (tipoAnterior === '01' && nuevoTipo !== '01') {
-        nuevoPrecio = redondear(item.precioUni / 1.13, 2);
+        nuevoPrecio = redondear(item.precioUni / 1.13, 8);
       }
 
       return {
@@ -160,7 +247,21 @@ const FacturaGenerator: React.FC = () => {
     }
   };
 
-  // ... (rest of the code)
+  const handleSaveEmisor = async () => {
+    setIsSavingEmisor(true);
+    try {
+      await saveEmisor(emisorForm);
+      const saved = await getEmisor(); // Reload to get ID and ensure consistency
+      setEmisor(saved);
+      addToast('Datos del emisor guardados', 'success');
+      setShowEmisorConfig(false);
+    } catch (error) {
+      console.error(error);
+      addToast('Error guardando emisor', 'error');
+    } finally {
+      setIsSavingEmisor(false);
+    }
+  };
 
   // Resetear tipo de documento cuando cambia el receptor (Auto-selección)
   useEffect(() => {
@@ -174,9 +275,25 @@ const FacturaGenerator: React.FC = () => {
         handleSetTipoDocumento('01');
       }
     }
-  }, [selectedReceptor, receptorEsConsumidorFinal]); // Removed tipoDocumento dependency to avoid loops with the new handler logic
+  }, [selectedReceptor, receptorEsConsumidorFinal]);
 
-  // ...
+  const handleAddItem = () => {
+    setItems([...items, { ...defaultItem }]);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    if (items.length === 1) {
+      setItems([{ ...defaultItem }]);
+    } else {
+      setItems(items.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleItemChange = (index: number, field: keyof ItemForm, value: any) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setItems(newItems);
+  };
 
   const applyProductToItem = (index: number, p: ProductData) => {
     const newItems = [...items];
@@ -184,7 +301,7 @@ const FacturaGenerator: React.FC = () => {
     
     // Si estamos en Factura (01), asumimos que el precio del catálogo es Neto y le agregamos IVA
     // Si estamos en CCF (03), usamos el precio del catálogo tal cual (Neto)
-    const precioAplicar = tipoDocumento === '01' ? p.precioUni * 1.13 : p.precioUni;
+    const precioAplicar = tipoDocumento === '01' ? redondear(p.precioUni * 1.13, 8) : p.precioUni;
 
     newItems[index] = {
       ...newItems[index],
@@ -200,7 +317,11 @@ const FacturaGenerator: React.FC = () => {
     setStockError('');
   };
 
-  // ...
+  const openProductPicker = (index: number) => {
+    setProductPickerIndex(index);
+    setProductSearch('');
+    setShowProductPicker(true);
+  };
 
   const handleItemDescriptionBlur = (index: number) => {
     const current = items[index];
@@ -210,7 +331,7 @@ const FacturaGenerator: React.FC = () => {
     if (!found) return;
 
     const newItems = [...items];
-    const precioAplicar = tipoDocumento === '01' ? redondear(found.precioUni * 1.13, 2) : found.precioUni;
+    const precioAplicar = tipoDocumento === '01' ? redondear(found.precioUni * 1.13, 8) : found.precioUni;
 
     newItems[index] = {
       ...newItems[index],
@@ -223,6 +344,258 @@ const FacturaGenerator: React.FC = () => {
     setItems(newItems);
     setStockError('');
   };
+
+  const handlePrecioUniChange = (index: number, val: string) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], precioUniRaw: val };
+    setItems(newItems);
+  };
+
+  const handlePrecioUniBlur = (index: number) => {
+    const newItems = [...items];
+    const val = newItems[index].precioUniRaw;
+    if (val !== undefined && val !== '') {
+      const num = parseFloat(val);
+      if (!isNaN(num)) {
+        newItems[index].precioUni = num;
+      }
+    }
+    delete newItems[index].precioUniRaw;
+    setItems(newItems);
+  };
+
+  const getPresentacionesForCodigo = (codigo: string) => {
+    return getPresentacionesForCodigoHelper({ codigo, findProductoByCodigo: (c) => products.find(p => p.codigo === c) });
+  };
+
+  const getStockDisplayForCodigo = (codigo: string) => {
+    const stock = stockByCode[codigo];
+    if (!stock) return '0';
+    return stock.onHand.toString();
+  };
+
+  const handleGenerateDTE = async () => {
+    if (!emisor || !selectedReceptor) {
+      addToast('Faltan datos de emisor o receptor', 'error');
+      return;
+    }
+
+    // Validar items
+    const validItems = items.filter(i => i.descripcion && i.cantidad > 0 && i.precioUni >= 0);
+    if (validItems.length === 0) {
+      addToast('Debe agregar al menos un ítem válido', 'error');
+      return;
+    }
+
+    // Validar stock (si hay integración de inventario)
+    const goodsOnly = validItems
+      .filter(i => i.tipoItem === 1 && i.codigo)
+      .map(i => ({
+        codigo: i.codigo,
+        cantidad: i.cantidad * i.factorConversion, // Convertir a unidades base para validación
+        descripcion: i.descripcion
+      }));
+
+    if (goodsOnly.length > 0) {
+      const stockCheck = await validateStockForSale(goodsOnly);
+      if (!stockCheck.ok) {
+        setStockError(stockCheck.message);
+        addToast(stockCheck.message, 'error');
+        return;
+      }
+    }
+
+    setIsGenerating(true);
+    setStockError('');
+
+    try {
+      const correlativo = Date.now() % 100000;
+      
+      const itemsParaCalculo: ItemFactura[] = validItems.map((item, idx) => {
+        const totalLinea = redondear(item.cantidad * item.precioUni, 8);
+        let ventaGravada = 0;
+
+        if (item.esExento) {
+          ventaGravada = 0;
+        } else {
+          ventaGravada = totalLinea;
+        }
+
+        return {
+          numItem: idx + 1,
+          tipoItem: item.tipoItem,
+          cantidad: item.cantidad,
+          codigo: item.codigo || null,
+          uniMedida: item.uniMedida,
+          descripcion: item.descripcion,
+          precioUni: item.precioUni,
+          montoDescu: 0,
+          ventaNoSuj: 0,
+          ventaExenta: item.esExento ? totalLinea : 0,
+          ventaGravada: item.esExento ? 0 : ventaGravada,
+          tributos: null,
+          numeroDocumento: null,
+          codTributo: null,
+          psv: 0,
+          noGravado: 0,
+          ivaItem: 0 // Se calculará dentro de generarDTE
+        };
+      });
+
+      const dte = generarDTE({
+        tipoDocumento,
+        tipoTransmision: 1,
+        emisor: {
+          ...emisor,
+          tipoEstablecimiento: emisor.tipoEstablecimiento || '01',
+        },
+        receptor: {
+          id: selectedReceptor.id,
+          nit: selectedReceptor.nit || '',
+          name: selectedReceptor.name || '',
+          nrc: selectedReceptor.nrc || '',
+          nombreComercial: selectedReceptor.nombreComercial || '',
+          actividadEconomica: selectedReceptor.actividadEconomica || '',
+          descActividad: selectedReceptor.descActividad || '',
+          departamento: selectedReceptor.departamento || '',
+          municipio: selectedReceptor.municipio || '',
+          direccion: selectedReceptor.direccion || '',
+          telefono: selectedReceptor.telefono || '',
+          email: selectedReceptor.email || '',
+          timestamp: selectedReceptor.timestamp || Date.now(),
+        },
+        items: itemsParaCalculo,
+        condicionOperacion,
+        formaPago,
+        observaciones,
+      }, correlativo, '00');
+
+      setGeneratedDTE(dte);
+      
+      // Aplicar descuentos de inventario si corresponde
+      await applySalesFromDTE(dte);
+      
+      // Mostrar preview
+      setShowDTEPreview(true);
+
+    } catch (error) {
+      console.error('Error generando DTE:', error);
+      addToast('Error al generar DTE', 'error');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleNuevaFactura = () => {
+    setItems([{ ...defaultItem }]);
+    setGeneratedDTE(null);
+    setSelectedReceptor(null);
+    setTipoDocumento('03');
+    setFormaPago('01');
+    setCondicionOperacion(1);
+    setObservaciones('');
+    setShowDTEPreview(false);
+    setShowTransmision(false);
+  };
+
+  const handleTransmitir = () => {
+    if (!generatedDTE) return;
+    setShowDTEPreview(false);
+    setShowTransmision(true);
+  };
+
+  const handleDeleteGeneratedDTE = async () => {
+    if (generatedDTE) {
+      await revertSalesFromDTE(generatedDTE);
+      setGeneratedDTE(null);
+      addToast('DTE descartado y stock revertido', 'info');
+      setShowDTEPreview(false);
+    }
+  };
+
+  const handleCopyJSON = () => {
+    if (generatedDTE) {
+      navigator.clipboard.writeText(JSON.stringify(generatedDTE, null, 2));
+      addToast('JSON copiado al portapapeles', 'success');
+    }
+  };
+
+  const handleDownloadJSON = () => {
+    if (generatedDTE) {
+      const blob = new Blob([JSON.stringify(generatedDTE, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `DTE-${generatedDTE.identificacion.codigoGeneracion}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const handleStripeConnectSuccess = () => {
+    addToast('Conexión con Stripe exitosa', 'success');
+    setShowStripeConnect(false);
+  };
+
+  const confirmarResolucion = async () => {
+    // Implementación simplificada para resolver items sin código
+    // Aquí deberías actualizar el inventario o crear productos
+    // const resolved = resolverItems; // Accedemos al estado directamente si es necesario
+    setShowResolveModal(false);
+    addToast('Items resueltos (Simulado)', 'success');
+  };
+
+  // Validación de NIT, NRC, etc. (helpers)
+  const nitValidation = (val: string) => {
+    const res = validateNIT(val);
+    return res.valid ? '' : res.message;
+  };
+  const nrcValidation = (val: string) => {
+    const res = validateNRC(val);
+    return res.valid ? '' : res.message;
+  };
+  const telefonoValidation = (val: string) => {
+    const res = validatePhone(val);
+    return res.valid ? '' : res.message;
+  };
+  const correoValidation = (val: string) => {
+    const res = validateEmail(val);
+    return res.valid ? '' : res.message;
+  };
+
+  // Calcular totales para la UI
+  const itemsParaCalculoUI: ItemFactura[] = items.map((item, idx) => {
+    const totalLinea = redondear(item.cantidad * item.precioUni, 8);
+    let ventaGravada = 0;
+    
+    if (item.esExento) {
+      ventaGravada = 0;
+    } else {
+      ventaGravada = totalLinea;
+    }
+
+    return {
+      numItem: idx + 1,
+      tipoItem: item.tipoItem,
+      cantidad: item.cantidad,
+      codigo: item.codigo || null,
+      uniMedida: item.uniMedida,
+      descripcion: item.descripcion,
+      precioUni: item.precioUni,
+      montoDescu: 0,
+      ventaNoSuj: 0,
+      ventaExenta: item.esExento ? totalLinea : 0,
+      ventaGravada: item.esExento ? 0 : ventaGravada,
+      tributos: null,
+      numeroDocumento: null,
+      codTributo: null,
+      psv: 0,
+      noGravado: 0,
+      ivaItem: 0
+    };
+  });
+
+  const totales = calcularTotales(itemsParaCalculoUI, tipoDocumento);
 
   if (isMobile) {
     return (
