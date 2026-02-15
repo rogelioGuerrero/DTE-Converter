@@ -53,7 +53,8 @@ export const formatEmailInput = (value: string): string => {
 };
 
 export const formatTextInput = (value: string): string => {
-  return (value || '').replace(/\s+/g, ' ').trim();
+  // Only normalize multiple spaces to single space, preserve single spaces
+  return (value || '').replace(/\s{2,}/g, ' ').trim();
 };
 
 export const formatMultilineTextInput = (value: string): string => {
