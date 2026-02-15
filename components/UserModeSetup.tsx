@@ -19,8 +19,8 @@ export const UserModeSetup: React.FC<UserModeSetupProps> = ({ onComplete }) => {
       setLicensingEnabled(config.enabled);
       
       if (!config.enabled) {
-        // Si no está activado, usar modo negocio por defecto y continuar
-        setUserMode('negocio');
+        // Si no está activado, usar modo profesional por defecto y continuar
+        setUserMode('profesional');
         onComplete();
       }
     };
