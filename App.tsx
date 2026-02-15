@@ -14,7 +14,7 @@ import { UserModeSetup } from './components/UserModeSetup';
 import { shouldShowUserModeSelection } from './utils/remoteLicensing';
 import { licenseValidator } from './utils/licenseValidator';
 import { NavigationTabs } from './components/NavigationTabs';
-import { LayoutDashboard, CheckCircle, Download } from 'lucide-react';
+import { LayoutDashboard, CheckCircle, Download, Lock } from 'lucide-react';
 import { downloadBackup, restoreBackupFromText } from './utils/backup';
 import { notify } from './utils/notifications';
 import ForceUpdateModal from './components/ForceUpdateModal';
@@ -50,8 +50,6 @@ const App: React.FC = () => {
   const [forceUpdateInfo, setForceUpdateInfo] = useState<{ minVersion: string; message?: string } | null>(null);
   // TODO: Implementar modal de restauración
   // const [showRestoreModal, setShowRestoreModal] = useState(false);
-  const clickCountRef = useRef(0);
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoreFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const readForceUpdateInfo = () => {
@@ -131,18 +129,6 @@ const App: React.FC = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showBackupMenu]);
-
-  const handleLogoClick = () => {
-    clickCountRef.current += 1;
-    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
-    clickTimerRef.current = setTimeout(() => {
-      clickCountRef.current = 0;
-    }, 1500);
-    if (clickCountRef.current >= 5) {
-      clickCountRef.current = 0;
-      setShowAdminModal(true);
-    }
-  };
 
   const handleSetupComplete = () => {
     localStorage.setItem('dte_setup_completed', 'true');
@@ -248,6 +234,15 @@ const App: React.FC = () => {
           
           {/* Right Actions */}
           <div className="flex items-center gap-2">
+            {/* Admin Access */}
+            <button
+              onClick={() => setShowAdminModal(true)}
+              className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+              title="Configuración Avanzada"
+            >
+              <Lock className="w-4 h-4" />
+            </button>
+
             {/* Backup Button */}
             <div className="relative backup-dropdown">
               <input
