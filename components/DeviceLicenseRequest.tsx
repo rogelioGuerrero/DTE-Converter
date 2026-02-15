@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, Shield, Key, Mail, Download } from 'lucide-react';
+import { Copy, Check, Shield, Key, Mail, Download, Zap } from 'lucide-react';
 import { deviceFingerprint } from '../utils/deviceFingerprint';
 
 interface DeviceLicenseRequestProps {
@@ -10,6 +10,8 @@ export const DeviceLicenseRequest: React.FC<DeviceLicenseRequestProps> = ({ onLi
   const [fingerprint, setFingerprint] = useState('');
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [licenseCode, setLicenseCode] = useState('');
+  const [activating, setActivating] = useState(false);
 
   useEffect(() => {
     generateFingerprint();
@@ -49,7 +51,7 @@ Solicito mi licencia para DTE App.
 Mi código de dispositivo es:
 ${fingerprint}
 
-Por favor, envíenme mi licencia a este correo.
+Por favor, envíenme mi código de activación.
 
 Gracias.
     `.trim());
@@ -75,6 +77,42 @@ Gracias.
     }
   };
 
+  const processLicenseData = async (licenseData: any) => {
+    try {
+      // Validar estructura básica
+      if (!licenseData.data || !licenseData.signature) {
+        throw new Error('Formato de licencia inválido');
+      }
+      
+      // Intentar guardar (la validación real ocurre en el componente padre o Validator)
+      // Aquí simulamos guardado para que el padre lo valide
+      localStorage.setItem('dte-license', JSON.stringify(licenseData));
+      
+      if (onLicenseUploaded) {
+        onLicenseUploaded();
+      }
+    } catch (error) {
+      alert('Licencia inválida: ' + (error as Error).message);
+      localStorage.removeItem('dte-license');
+    }
+  };
+
+  const handleActivateCode = async () => {
+    if (!licenseCode.trim()) return;
+    
+    setActivating(true);
+    try {
+      // Decodificar Base64
+      const jsonStr = atob(licenseCode.trim());
+      const license = JSON.parse(jsonStr);
+      await processLicenseData(license);
+    } catch (error) {
+      alert('Código de activación inválido. Verifica que lo hayas copiado completo.');
+    } finally {
+      setActivating(false);
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === 'application/json') {
@@ -82,18 +120,7 @@ Gracias.
       reader.onload = async (event) => {
         try {
           const license = JSON.parse(event.target?.result as string);
-          
-          // Validar que sea una licencia válida
-          if (!license.data || !license.signature) {
-            throw new Error('Formato de licencia inválido');
-          }
-          
-          // Aquí iría la validación completa con licenseValidator.verifyLicense(license)
-          // Por ahora, asumimos que es válida
-          
-          if (onLicenseUploaded) {
-            onLicenseUploaded();
-          }
+          await processLicenseData(license);
         } catch (error) {
           alert('Archivo de licencia inválido: ' + (error as Error).message);
         }
@@ -130,11 +157,11 @@ Gracias.
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-4">
         {/* Fingerprint Display */}
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
           <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xs font-medium text-gray-700">Código de tu Dispositivo:</h4>
+            <h4 className="text-xs font-medium text-gray-700">Paso 1: Copia tu Código de Dispositivo</h4>
             <button
               onClick={handleCopy}
               className="flex items-center gap-1 px-2 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
@@ -157,40 +184,52 @@ Gracias.
           </div>
         </div>
 
-        {/* Instructions */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <div className="flex items-start gap-2">
-            <Shield className="w-4 h-4 text-blue-600 mt-0.5" />
-            <div className="text-xs text-blue-800">
-              <p className="font-medium mb-1">Pasos para activar:</p>
-              <ol className="list-decimal list-inside space-y-0.5 text-blue-700">
-                <li>Copia tu código (botón amarillo)</li>
-                <li>Envíalo por correo electrónico</li>
-                <li>Recibirás tu archivo .json</li>
-                <li>Arrastra el archivo aquí</li>
-              </ol>
-            </div>
-          </div>
-        </div>
-
         {/* Send Options */}
         <button
           onClick={handleSendEmail}
-          className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+          className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors text-sm"
         >
           <Mail className="w-4 h-4" />
-          <span>Enviar por Correo</span>
+          <span>Paso 2: Enviar código por Correo</span>
         </button>
 
+        <div className="relative flex py-1 items-center">
+            <div className="flex-grow border-t border-gray-200"></div>
+            <span className="flex-shrink-0 mx-4 text-gray-400 text-xs">Paso 3: Activar</span>
+            <div className="flex-grow border-t border-gray-200"></div>
+        </div>
+
+        {/* Activate Code Area */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-gray-700 block">
+            Opción A: Pegar Código de Activación
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={licenseCode}
+              onChange={(e) => setLicenseCode(e.target.value)}
+              placeholder="Pega aquí el código que recibiste..."
+              className="flex-1 text-xs border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+            <button
+              onClick={handleActivateCode}
+              disabled={!licenseCode || activating}
+              className={`px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-medium flex items-center gap-1 ${(!licenseCode || activating) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <Zap className="w-3 h-3" />
+              {activating ? '...' : 'Activar'}
+            </button>
+          </div>
+        </div>
+
         {/* Upload Area */}
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-          <Download className="w-6 h-6 text-gray-400 mx-auto mb-1" />
-          <p className="text-xs text-gray-600 mb-2">
-            ¿Ya tienes tu licencia?
-          </p>
-          <label className="cursor-pointer">
-            <span className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors inline-block text-xs">
-              Subir Archivo .json
+        <div className="text-center">
+          <p className="text-xs text-gray-500 mb-2">- o -</p>
+          <label className="cursor-pointer inline-flex flex-col items-center">
+            <span className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors text-xs border border-gray-200">
+              <Download className="w-3 h-3" />
+              Opción B: Subir Archivo .json
             </span>
             <input
               type="file"
@@ -202,9 +241,8 @@ Gracias.
         </div>
 
         {/* Note */}
-        <div className="text-xs text-gray-500 text-center space-y-0.5">
-          <p>Esta licencia solo funcionará en este dispositivo</p>
-          <p>No podrá ser transferida</p>
+        <div className="text-[10px] text-gray-400 text-center pt-2">
+          Esta licencia es única e intransferible para este dispositivo.
         </div>
       </div>
     </div>

@@ -125,8 +125,16 @@ function generateLicense(options = {}) {
 
   // Guardar archivo de licencia
   const filename = `license-${userId}-${Date.now()}.json`;
-  fs.writeFileSync(filename, JSON.stringify(license, null, 2));
+  const licenseJsonStr = JSON.stringify(license, null, 2);
+  fs.writeFileSync(filename, licenseJsonStr);
   
+  // Generar código Base64
+  const licenseBase64 = Buffer.from(JSON.stringify(license)).toString('base64');
+  
+  // Generar URL mágica (ajustar dominio según necesidad, por defecto localhost o ejemplo)
+  const baseUrl = 'https://factura.mishacienda.sv'; // O el dominio que use el cliente
+  const magicLink = `${baseUrl}/?license=${licenseBase64}`;
+
   console.log(`✅ Licencia generada: ${filename}`);
   console.log(`📧 Usuario: ${email || userId}`);
   console.log(`⏰ Expira: ${licenseData.expiresAt}`);
@@ -134,6 +142,15 @@ function generateLicense(options = {}) {
   if (deviceFingerprint) {
     console.log(`🖥️  Fingerprint: ${deviceFingerprint.substring(0, 16)}...`);
   }
+  
+  console.log('\n📋 CÓDIGO DE ACTIVACIÓN (Copiar y enviar):');
+  console.log('----------------------------------------');
+  console.log(licenseBase64);
+  console.log('----------------------------------------');
+
+  console.log('\n🔗 LINK MÁGICO (Opcional):');
+  console.log(magicLink);
+  console.log('');
   
   return filename;
 }

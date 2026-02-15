@@ -41,3 +41,9 @@
   from = "/api/licensing/config"
   to = "/.netlify/functions/licensing-config"
   status = 200
+
+# Redirección SPA para /admin y /cliente
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

@@ -4,6 +4,110 @@ Este documento explica cómo funciona y cómo configurar el sistema de licencias
 
 ## 🎯 Concepto
 
+El sistema utiliza **criptografía asimétrica** para generar licencias sin necesidad de una base de datos centralizada. Las licencias se firman digitalmente con una llave privada que solo tú tienes, y la aplicación las valida usando una llave pública incrustada.
+
+## 🔄 Flujo de Activación (Para Clientes)
+
+1.  **Límite Gratuito:** El usuario puede emitir **5 DTEs por día** sin licencia.
+2.  **Solicitud de Licencia:** Al alcanzar el límite, la app muestra un **Código de Dispositivo** único.
+3.  **Envío del Código:** El cliente te envía ese código por WhatsApp/Email.
+4.  **Generación de Licencia:** Tú generas la licencia usando la interfaz web (`/admin`) o el script local.
+5.  **Activación:** El cliente activa la licencia usando:
+    *   **Opción A (Recomendada):** Un **Link Mágico** que activa la app al abrirlo.
+    *   **Opción B:** Un **Código de Texto** que pega en la app.
+    *   **Opción C:** Subiendo un archivo `.json` (método antiguo).
+
+## 🛠️ Configuración Inicial (Administrador)
+
+### Paso 1: Generar Llaves (Solo una vez)
+Si no tienes las llaves, ejecuta:
+```bash
+cd scripts
+node generate-license.mjs generate-keys
+```
+Esto creará:
+- `scripts/private-key.pem` (¡NUNCA COMPARTIR!)
+- `scripts/public-key.pem` (Pública, ya está en la app)
+
+### Paso 2: Configurar Variables de Entorno en Netlify
+Ve a tu panel de Netlify > Site configuration > Environment variables y agrega:
+
+#### Variables de Licenciamiento
+- `LICENSING_ENABLED` = `true` (Activa el sistema de límites)
+- `DAILY_EXPORT_LIMIT` = `5` (Límite gratuito por día)
+- `ADMIN_PASSWORD` = `TuContraseñaSegura123` (Para acceder a `/admin`)
+
+#### Variables de la Interfaz Web
+- `LICENSE_PRIVATE_KEY` = (Contenido completo del archivo `scripts/private-key.pem`)
+- `URL` = `https://tudominio.com` (Para generar los links mágicos)
+
+### Paso 3: Acceder al Panel de Administración
+1.  Despliega los cambios a Netlify.
+2.  Entra a `https://tudominio.com/admin`
+3.  Ingresa la contraseña que configuraste en `ADMIN_PASSWORD`.
+
+## 🎛️ Uso del Panel de Administración
+
+El panel `/admin` te permite generar licencias de forma sencilla:
+
+1.  **Email del Cliente:** Opcional, para tu control.
+2.  **Nombre/Empresa:** Opcional.
+3.  **Fingerprint (ID Dispositivo):** **Obligatorio**. Pega el código que te envió el cliente.
+4.  **Días de Validez:** Cuántos días dura la licencia (365 por defecto).
+5.  **Límite Diario:** Cuántos DTEs puede emitir por día (-1 = ilimitado).
+
+Al generar, obtendrás:
+- **Link Mágico:** Ideal para enviar por WhatsApp.
+- **Código de Texto:** Como respaldo si el link falla.
+
+## 📱 Flujo para el Usuario Final
+
+### Cuando el usuario necesita licencia:
+1.  Va a la app y ve el mensaje "Límite alcanzado".
+2.  Toca "Activar Licencia" y copia su **Código de Dispositivo**.
+3.  Te envía ese código por WhatsApp.
+
+### Cuando tú le respondes:
+1.  Entras a `https://tudominio.com/admin`.
+2.  Pegas su código en "Fingerprint".
+3.  Configuras validez y límites según el plan que compró.
+4.  Le das "Generar Licencia".
+5.  Le envías el **Link Mágico** por WhatsApp.
+
+### Cuando el cliente recibe tu respuesta:
+1.  Toca el link que le enviaste.
+2.  La app se abre automáticamente y muestra "¡Licencia Activada!".
+3.  Ya puede emitir DTEs sin límites.
+
+## 🔐 Seguridad
+
+- La **llave privada** nunca sale de tu servidor Netlify.
+- Las licencias están **atadas al dispositivo** (no funcionan en otro teléfono).
+- Las licencias **expiran** según la fecha que configures.
+- No hay base de datos, todo funciona con criptografía matemática.
+
+## 📋 Comandos de Emergencia (Si la UI falla)
+
+Si por alguna razón no puedes usar la interfaz web, puedes generar licencias manualmente:
+
+```bash
+# Modo interactivo (recomendado)
+cd scripts
+node generate-license.mjs generate
+
+# Modo avanzado (con flags)
+node generate-license.mjs generate --email cliente@ejemplo.com --days 365 --exports 100 --device "ID-DEL-DISPOSITIVO"
+```
+
+## 🚀 Activación del Sistema
+
+Para activar el sistema de límites:
+1.  Configura las variables de entorno en Netlify.
+2.  Cambia `LICENSING_ENABLED` a `true`.
+3.  Redespliega el sitio.
+
+Para desactivarlo temporalmente (mantenimiento), cambia `LICENSING_ENABLED` a `false`.
+
 El sistema utiliza **criptografía asimétrica** para validar licencias offline:
 - **Llave Privada**: Solo tú la tienes. Firma las licencias.
 - **Llave Pública**: Está en la app. Verifica que las licencias sean auténticas.

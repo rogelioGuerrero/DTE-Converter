@@ -9,6 +9,8 @@ import PWAInstallPrompt from './components/PWAInstallPrompt';
 import ClientFormPage from './components/ClientFormPage';
 import GlobalToastHost from './components/GlobalToastHost';
 import { LicenseManager } from './components/LicenseManager';
+import { MagicLicenseActivator } from './components/MagicLicenseActivator';
+import { AdminLicenseGenerator } from './components/AdminLicenseGenerator';
 import { LicenseStatus } from './components/LicenseStatus';
 import { UserModeSetup } from './components/UserModeSetup';
 import { shouldShowUserModeSelection } from './utils/remoteLicensing';
@@ -26,12 +28,27 @@ const isClientFormPage = (): boolean => {
   return window.location.pathname === '/cliente';
 };
 
+// Detectar si estamos en el panel de administración
+const isAdminPage = (): boolean => {
+  return window.location.pathname === '/admin';
+};
+
 const getVendorIdFromUrl = (): string | undefined => {
   const params = new URLSearchParams(window.location.search);
   return params.get('v') || undefined;
 };
 
 const App: React.FC = () => {
+  // Si estamos en /admin, mostrar generador de licencias
+  if (isAdminPage()) {
+    return (
+      <>
+        <AdminLicenseGenerator />
+        <GlobalToastHost />
+      </>
+    );
+  }
+
   // Si estamos en /cliente, mostrar solo el formulario publico
   if (isClientFormPage()) {
     return (
@@ -355,6 +372,7 @@ const App: React.FC = () => {
           }}
         />
       )}
+      <MagicLicenseActivator />
       <PWAInstallPrompt />
       <GlobalToastHost />
     </div>
