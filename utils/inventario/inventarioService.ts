@@ -257,7 +257,18 @@ class InventarioService {
 
       // Productos
       if (Array.isArray(parsed?.productos)) {
-        this.productos = parsed.productos;
+        this.productos = parsed.productos.map((p: any) => ({
+          ...p,
+          fechaUltimaCompra: p.fechaUltimaCompra ? new Date(p.fechaUltimaCompra) : new Date(),
+          fechaUltimaVenta: p.fechaUltimaVenta ? new Date(p.fechaUltimaVenta) : undefined,
+          lotes: Array.isArray(p.lotes)
+            ? p.lotes.map((l: any) => ({
+                ...l,
+                fechaEntrada: l.fechaEntrada ? new Date(l.fechaEntrada) : new Date(),
+              }))
+            : [],
+        }));
+
         // Defaults / migración
         for (const p of this.productos) {
           if (typeof (p as any).activo !== 'boolean') {
