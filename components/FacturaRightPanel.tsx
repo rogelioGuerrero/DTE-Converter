@@ -16,6 +16,7 @@ interface FacturaRightPanelProps {
   selectedReceptor: ClientData | null;
   generatedDTE: DTEJSON | null;
   formaPago: string;
+  tipoDocumento?: string;
   requiereStripe: (formaPago: string) => boolean;
   onOpenDTEPreview: () => void;
   onTransmit: () => void;
@@ -27,11 +28,14 @@ export const FacturaRightPanel: React.FC<FacturaRightPanelProps> = ({
   selectedReceptor,
   generatedDTE,
   formaPago,
+  tipoDocumento = '01',
   requiereStripe,
   onOpenDTEPreview,
   onTransmit,
   onDeleteDTE,
 }) => {
+  const isFactura = tipoDocumento === '01';
+
   return (
     <div className="col-span-4 flex flex-col gap-4">
       <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -51,10 +55,15 @@ export const FacturaRightPanel: React.FC<FacturaRightPanelProps> = ({
             <span className="text-gray-500">Subtotal:</span>
             <span className="font-mono">${totales.subTotalVentas.toFixed(2)}</span>
           </div>
-          <div className="flex justify-between text-blue-600">
-            <span>IVA 13%:</span>
-            <span className="font-mono">${totales.iva.toFixed(2)}</span>
-          </div>
+          
+          {/* En Factura (01) el IVA ya va incluido, no se detalla en el resumen de cobro */}
+          {!isFactura && (
+            <div className="flex justify-between text-blue-600">
+              <span>IVA 13%:</span>
+              <span className="font-mono">${totales.iva.toFixed(2)}</span>
+            </div>
+          )}
+          
           <div className="border-t border-gray-200 pt-2 flex justify-between text-lg font-bold">
             <span>Total:</span>
             <span className="font-mono text-green-600">${totales.totalPagar.toFixed(2)}</span>

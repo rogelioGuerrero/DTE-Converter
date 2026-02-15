@@ -255,15 +255,31 @@ export const obtenerHoraActual = (): string => {
 };
 
 // Calcular totales de items
-export const calcularTotales = (items: ItemFactura[]) => {
+export const calcularTotales = (items: ItemFactura[], tipoDocumento: string = '01') => {
   const totalGravada = items.reduce((sum, item) => sum + item.ventaGravada, 0);
   const totalExenta = items.reduce((sum, item) => sum + item.ventaExenta, 0);
   const totalNoSuj = items.reduce((sum, item) => sum + item.ventaNoSuj, 0);
   const totalDescu = items.reduce((sum, item) => sum + item.montoDescu, 0);
   
   const subTotalVentas = totalGravada + totalExenta + totalNoSuj;
-  const iva = redondear(totalGravada * 0.13, 2);
-  const montoTotal = redondear(subTotalVentas + iva - totalDescu, 2);
+  
+  let iva = 0;
+  let montoTotal = 0;
+
+  if (tipoDocumento === '01') {
+    // Factura (01): Precios incluyen IVA.
+    // El IVA total es la suma de los IVAs calculados por ítem (informativo)
+    // O se calcula del totalGravada? La guía sugiere sumar los IVAs de los items para consistencia.
+    // Pero para el resumen ejecutivo, el Total a Pagar es el SubTotalVentas (menos descuentos).
+    iva = items.reduce((sum, item) => sum + (item.ivaItem || 0), 0);
+    // En Factura, el IVA ya está en el subTotalVentas
+    montoTotal = redondear(subTotalVentas - totalDescu, 2);
+  } else {
+    // CCF (03) y otros: Precios sin IVA.
+    // El IVA se calcula sobre el total gravado
+    iva = redondear(totalGravada * 0.13, 2);
+    montoTotal = redondear(subTotalVentas + iva - totalDescu, 2);
+  }
   
   return {
     totalNoSuj: redondear(totalNoSuj, 2),
@@ -271,7 +287,7 @@ export const calcularTotales = (items: ItemFactura[]) => {
     totalGravada: redondear(totalGravada, 2),
     subTotalVentas: redondear(subTotalVentas, 2),
     totalDescu: redondear(totalDescu, 2),
-    iva,
+    iva: redondear(iva, 2),
     montoTotal,
     totalPagar: montoTotal,
   };
@@ -281,7 +297,7 @@ export const calcularTotales = (items: ItemFactura[]) => {
 export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: string = '00'): DTEJSON => {
   const uuid = generarUUID();
   const numeroControl = generarNumeroControl(datos.tipoDocumento, correlativo, datos.emisor.codEstableMH, datos.emisor.codPuntoVentaMH);
-  const totales = calcularTotales(datos.items);
+  const totales = calcularTotales(datos.items, datos.tipoDocumento);
 
   const receptorIdDigits = (datos.receptor.nit || '').replace(/[\s-]/g, '').trim();
   const receptorSinDocumento = receptorIdDigits.length === 0;
@@ -313,8 +329,21 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
       : totales.montoTotal;
   const totalPagar = montoTotalOperacion;
   const cuerpoDocumento: ItemFactura[] = datos.items.map((item, index) => {
-    const ivaItemPorUnidad = item.ventaGravada > 0 ? redondear(item.precioUni * 0.13, 2) : 0;
-    const ivaItem = item.ventaGravada > 0 ? redondear(ivaItemPorUnidad * item.cantidad, 2) : 0;
+    let ivaItem = 0;
+    
+    if (datos.tipoDocumento === '01') {
+      // Para Factura (01), los montos son IVA incluido.
+      // El IVA se calcula hacia atrás: Total - (Total / 1.13)
+      if (item.ventaGravada > 0) {
+        ivaItem = redondear(item.ventaGravada - (item.ventaGravada / 1.13), 2);
+      }
+    } else {
+      // Para CCF (03) y otros, los montos son sin IVA.
+      // El IVA se calcula sobre el precio unitario
+      const ivaItemPorUnidad = item.ventaGravada > 0 ? redondear(item.precioUni * 0.13, 2) : 0;
+      ivaItem = item.ventaGravada > 0 ? redondear(ivaItemPorUnidad * item.cantidad, 2) : 0;
+    }
+
     return {
       ...item,
       numItem: index + 1,

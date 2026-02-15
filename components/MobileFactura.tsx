@@ -255,27 +255,60 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
     );
   };
 
-  const itemsParaCalculo: ItemFactura[] = items.map((item, idx) => ({
-    numItem: idx + 1,
-    tipoItem: item.tipoItem,
-    cantidad: item.cantidad,
-    codigo: item.codigo?.trim() ? item.codigo.trim() : null,
-    uniMedida: 99,
-    descripcion: item.descripcion,
-    precioUni: item.precioUni,
-    montoDescu: 0,
-    ventaNoSuj: 0,
-    ventaExenta: item.esExento ? redondear(item.cantidad * item.precioUni, 2) : 0,
-    ventaGravada: item.esExento ? 0 : redondear(item.cantidad * item.precioUni, 2),
-    tributos: !item.esExento ? ['20'] : null, // Array con 20 si NO es exento
-    numeroDocumento: null,
-    codTributo: item.esExento ? null : '20',
-    psv: 0,
-    noGravado: 0,
-    ivaItem: item.esExento ? 0 : redondear(item.cantidad * item.precioUni * 0.13, 2),
-  }));
+  const itemsParaCalculo: ItemFactura[] = items.map((item, idx) => {
+    const cantidad = Number(item.cantidad) || 0;
+    const precio = Number(item.precioUni) || 0;
+    const totalLinea = redondear(cantidad * precio, 2);
+    
+    let ventaGravada = 0;
+    let ivaItem = 0;
+    let codTributo: string | null = null;
 
-  const totales = calcularTotales(itemsParaCalculo);
+    if (item.esExento) {
+      ventaGravada = 0;
+      ivaItem = 0;
+      codTributo = null;
+    } else {
+      ventaGravada = totalLinea;
+      if (tipoDoc === '01') {
+        // Factura: El precio YA incluye IVA.
+        // IVA = Total - (Total / 1.13)
+        ivaItem = redondear(ventaGravada - (ventaGravada / 1.13), 2);
+        codTributo = null;
+      } else if (tipoDoc === '03') {
+        // CCF: El precio NO incluye IVA.
+        // IVA = Total * 0.13
+        ivaItem = redondear(ventaGravada * 0.13, 2);
+        codTributo = '20';
+      } else {
+        // Otros tipos de documentos
+        ivaItem = 0;
+        codTributo = null;
+      }
+    }
+
+    return {
+      numItem: idx + 1,
+      tipoItem: item.tipoItem,
+      cantidad: cantidad,
+      codigo: item.codigo?.trim() ? item.codigo.trim() : null,
+      uniMedida: 99,
+      descripcion: item.descripcion,
+      precioUni: precio,
+      montoDescu: 0,
+      ventaNoSuj: 0,
+      ventaExenta: item.esExento ? totalLinea : 0,
+      ventaGravada: item.esExento ? 0 : ventaGravada,
+      tributos: null,
+      numeroDocumento: null,
+      codTributo: codTributo,
+      psv: 0,
+      noGravado: 0,
+      ivaItem: ivaItem,
+    };
+  });
+
+  const totales = calcularTotales(itemsParaCalculo, tipoDoc);
 
   const handleNewClientChange = (field: keyof NewClientForm, value: string) => {
     let processedValue = value;
@@ -636,7 +669,6 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
                 className="w-full px-3 py-2 bg-gray-100 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
-
             <button
               onClick={() => setShowPaymentOptions(false)}
               className="w-full py-3 bg-gray-900 text-white rounded-xl font-medium"
@@ -665,10 +697,12 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
             <p className="text-xs text-gray-500">Subtotal</p>
             <p className="text-sm text-gray-600">${totales.subTotalVentas.toFixed(2)}</p>
           </div>
-          <div>
-            <p className="text-xs text-gray-500">IVA 13%</p>
-            <p className="text-sm text-gray-600">${totales.iva.toFixed(2)}</p>
-          </div>
+          {tipoDoc !== '01' && (
+            <div>
+              <p className="text-xs text-gray-500">IVA 13%</p>
+              <p className="text-sm text-gray-600">${totales.iva.toFixed(2)}</p>
+            </div>
+          )}
           <div className="text-right">
             <p className="text-xs text-gray-500">Total</p>
             <p className="text-xl font-bold text-green-600">${totales.totalPagar.toFixed(2)}</p>

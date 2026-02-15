@@ -215,28 +215,56 @@ const FacturaGenerator: React.FC = () => {
   // Calcular totales a partir de los items del formulario
   const itemsParaCalculo: ItemFactura[] = items
     .filter(i => i.descripcion && i.precioUni > 0)
-    .map((item, idx) => ({
-      numItem: idx + 1,
-      tipoItem: item.tipoItem,
-      cantidad: item.cantidad,
-      codigo: item.codigo?.trim() ? item.codigo.trim() : null,
-      uniMedida: item.uniMedida,
-      descripcion: item.descripcion,
-      precioUni: item.precioUni,
-      montoDescu: 0,
-      ventaNoSuj: 0,
-      ventaExenta: item.esExento ? redondear(item.cantidad * item.precioUni, 2) : 0,
-      ventaGravada: item.esExento ? 0 : redondear(item.cantidad * item.precioUni, 2),
-      tributos: null, // Factura tipo 01 no permite tributos (código 20) en cuerpoDocumento
-      numeroDocumento: null,
-      codTributo: item.esExento ? null : '20',
-      psv: 0,
-      noGravado: 0,
-      ivaItem: item.esExento ? 0 : redondear(item.cantidad * item.precioUni * 0.13, 2),
-    }));
+    .map((item, idx) => {
+      const cantidad = Number(item.cantidad) || 0;
+      const precio = Number(item.precioUni) || 0;
+      const totalLinea = redondear(cantidad * precio, 2);
+      
+      let ventaGravada = 0;
+      let ivaItem = 0;
+      let codTributo: string | null = null;
 
-  const totales = calcularTotales(itemsParaCalculo);
+      if (item.esExento) {
+        ventaGravada = 0;
+        ivaItem = 0;
+        codTributo = null;
+      } else {
+        ventaGravada = totalLinea;
+        if (tipoDocumento === '01') {
+          // Factura: El precio YA incluye IVA.
+          // IVA = Total - (Total / 1.13)
+          ivaItem = redondear(ventaGravada - (ventaGravada / 1.13), 2);
+          codTributo = null; // No se detalla tributo 20 en items de Factura
+        } else {
+          // CCF: El precio NO incluye IVA.
+          // IVA = Total * 0.13
+          ivaItem = redondear(ventaGravada * 0.13, 2);
+          codTributo = '20';
+        }
+      }
 
+      return {
+        numItem: idx + 1,
+        tipoItem: item.tipoItem,
+        cantidad: cantidad,
+        codigo: item.codigo?.trim() ? item.codigo.trim() : null,
+        uniMedida: item.uniMedida,
+        descripcion: item.descripcion,
+        precioUni: precio,
+        montoDescu: 0,
+        ventaNoSuj: 0,
+        ventaExenta: item.esExento ? totalLinea : 0,
+        ventaGravada: item.esExento ? 0 : ventaGravada,
+        tributos: null,
+        numeroDocumento: null,
+        codTributo: codTributo,
+        psv: 0,
+        noGravado: 0,
+        ivaItem: ivaItem,
+      };
+    });
+
+  const totales = calcularTotales(itemsParaCalculo, tipoDocumento);
 
   const handleSaveEmisor = async () => {
     const nombreValid = emisorForm.nombre.trim().length >= 3;

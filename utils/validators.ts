@@ -54,13 +54,13 @@ export const formatEmailInput = (value: string): string => {
 
 export const formatTextInput = (value: string): string => {
   // Only normalize multiple spaces to single space, preserve single spaces
-  return (value || '').replace(/\s{2,}/g, ' ').trim();
+  return (value || '').replace(/\s{2,}/g, ' ');
 };
 
 export const formatMultilineTextInput = (value: string): string => {
   const normalized = (value || '').replace(/\r\n/g, '\n');
-  const lines = normalized.split('\n').map((line) => line.replace(/[ \t]+/g, ' ').trim());
-  return lines.join('\n').trim();
+  const lines = normalized.split('\n').map((line) => line.replace(/[ \t]+/g, ' '));
+  return lines.join('\n');
 };
 
 export const normalizeIdDigits = (value: string): string => {

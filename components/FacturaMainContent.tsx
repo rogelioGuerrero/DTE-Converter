@@ -182,6 +182,7 @@ export const FacturaMainContent: React.FC<FacturaMainContentProps> = ({
         selectedReceptor={selectedReceptor}
         generatedDTE={generatedDTE}
         formaPago={formaPago}
+        tipoDocumento={tipoDocumento}
         requiereStripe={requiereStripe}
         onOpenDTEPreview={onOpenDTEPreview}
         onTransmit={onTransmit}
