@@ -8,6 +8,8 @@ import TransmisionModal from './TransmisionModal';
 import DTEPreviewModal from './DTEPreviewModal';
 import QRClientCapture from './QRClientCapture';
 
+import type { ValidationResult } from '../utils/validators';
+
 interface FacturaModalsProps {
   // ResolveNoCodeModal
   showResolveModal: boolean;
@@ -37,10 +39,10 @@ interface FacturaModalsProps {
   setShowEmisorConfig: (value: boolean) => void;
   emisorForm: any;
   setEmisorForm: React.Dispatch<React.SetStateAction<any>>;
-  nitValidation: any;
-  nrcValidation: any;
-  telefonoValidation: any;
-  correoValidation: any;
+  nitValidation: ValidationResult;
+  nrcValidation: ValidationResult;
+  telefonoValidation: ValidationResult;
+  correoValidation: ValidationResult;
   formatTextInput: (value: string) => string;
   formatMultilineTextInput: (value: string) => string;
   handleSaveEmisor: () => void;

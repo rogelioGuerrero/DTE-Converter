@@ -554,22 +554,12 @@ const FacturaGenerator: React.FC = () => {
   };
 
   // Validación de NIT, NRC, etc. (helpers)
-  const nitValidation = (val: string) => {
-    const res = validateNIT(val);
-    return res.valid ? '' : res.message;
-  };
-  const nrcValidation = (val: string) => {
-    const res = validateNRC(val);
-    return res.valid ? '' : res.message;
-  };
-  const telefonoValidation = (val: string) => {
-    const res = validatePhone(val);
-    return res.valid ? '' : res.message;
-  };
-  const correoValidation = (val: string) => {
-    const res = validateEmail(val);
-    return res.valid ? '' : res.message;
-  };
+  const emisorValidations = useMemo(() => ({
+    nit: validateNIT(emisorForm.nit),
+    nrc: validateNRC(emisorForm.nrc),
+    telefono: validatePhone(emisorForm.telefono),
+    correo: validateEmail(emisorForm.correo),
+  }), [emisorForm]);
 
   // Calcular totales para la UI
   const itemsParaCalculoUI: ItemFactura[] = items.map((item, idx) => {
@@ -690,10 +680,10 @@ const FacturaGenerator: React.FC = () => {
         setShowEmisorConfig={setShowEmisorConfig}
         emisorForm={emisorForm}
         setEmisorForm={setEmisorForm}
-        nitValidation={nitValidation}
-        nrcValidation={nrcValidation}
-        telefonoValidation={telefonoValidation}
-        correoValidation={correoValidation}
+        nitValidation={emisorValidations.nit}
+        nrcValidation={emisorValidations.nrc}
+        telefonoValidation={emisorValidations.telefono}
+        correoValidation={emisorValidations.correo}
         formatTextInput={formatTextInput}
         formatMultilineTextInput={formatMultilineTextInput}
         handleSaveEmisor={handleSaveEmisor}
