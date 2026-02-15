@@ -51,7 +51,7 @@ export const generarHTMLFactura = async (options: PDFGeneratorOptions): Promise<
   
   const tipoDocNombre = getTipoDocumentoNombre(dte.identificacion.tipoDte);
   const qrData = resultado?.enlaceConsulta || 
-    `https://consultadte.mh.gob.sv/consulta/${dte.identificacion.codigoGeneracion}`;
+    `https://consultadte.mh.gob.sv/consulta/${dte.identificacion.codigoGeneracion}?ambiente=${dte.identificacion.ambiente}&fechaEmi=${dte.identificacion.fecEmi}`;
   const qrUrl = await generarQRDataUrl(qrData);
 
   const html = `

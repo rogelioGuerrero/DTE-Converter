@@ -71,66 +71,109 @@ export const consultarDTESandbox = async <T = unknown>(
 
 export const transmitirDTESandbox = async (jws: string, ambiente: '00' | '01' = '00'): Promise<TransmisionResult> => {
   const baseUrl = getProxyUrl();
-  const res = await fetch(`${baseUrl}/transmitir`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      dte: jws,
-      ambiente,
-    }),
-  });
+  const MAX_RETRIES = 3;
+  const TIMEOUT_MS = 8000;
 
-  const data = (await res.json().catch(() => ({}))) as TransmitirResponse;
+  let lastError: any;
 
-  const estadoRaw = (data.estado || '').toUpperCase();
-  const estado = (estadoRaw as TransmisionResult['estado']) || 'RECHAZADO';
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-  const selloRecepcion = (data.selloRecibido || data.selloRecepcion) as string | undefined;
-  const fechaHoraProcesamiento = (data.fechaHoraProcesamiento || data.fhProcesamiento) as string | undefined;
-  const mensaje = (data.mensaje || data.descripcionMsg) as string | undefined;
+      const res = await fetch(`${baseUrl}/transmitir`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          dte: jws,
+          ambiente,
+        }),
+        signal: controller.signal,
+      });
 
-  const obsErrores: ErrorValidacionMH[] | undefined = data.observaciones?.length
-    ? data.observaciones.map((o) => ({
-        codigo: data.codigoMsg || 'MH-OBS',
-        descripcion: o,
-        severidad: 'ERROR',
-      }))
-    : undefined;
+      clearTimeout(timeoutId);
 
-  const result: TransmisionResult = {
-    success: estado === 'PROCESADO' || estado === 'ACEPTADO' || estado === 'ACEPTADO_CON_ADVERTENCIAS',
-    estado,
-    codigoGeneracion: data.codigoGeneracion,
-    selloRecepcion,
-    numeroControl: data.numeroControl,
-    fechaHoraRecepcion: data.fechaHoraRecepcion,
-    fechaHoraProcesamiento,
-    mensaje,
-    enlaceConsulta: data.enlaceConsulta,
-    advertencias: mapAdvertencias(data.advertencias),
-    errores: obsErrores || mapErrores(data.errores),
-  };
+      const data = (await res.json().catch(() => ({}))) as TransmitirResponse;
 
-  if (!res.ok) {
-    return {
-      ...result,
-      success: false,
-      estado: 'RECHAZADO',
-      mensaje: result.mensaje || `Transmisión fallida (${res.status})`,
-      errores:
-        result.errores && result.errores.length > 0
-          ? result.errores
-          : [
-              {
-                codigo: `HTTP-${res.status}`,
-                descripcion: 'Error HTTP en transmisión',
-                severidad: 'ERROR',
-              },
-            ],
-    };
+      const estadoRaw = (data.estado || '').toUpperCase();
+      const estado = (estadoRaw as TransmisionResult['estado']) || 'RECHAZADO';
+
+      const selloRecepcion = (data.selloRecibido || data.selloRecepcion) as string | undefined;
+      const fechaHoraProcesamiento = (data.fechaHoraProcesamiento || data.fhProcesamiento) as string | undefined;
+      const mensaje = (data.mensaje || data.descripcionMsg) as string | undefined;
+
+      const obsErrores: ErrorValidacionMH[] | undefined = data.observaciones?.length
+        ? data.observaciones.map((o) => ({
+            codigo: data.codigoMsg || 'MH-OBS',
+            descripcion: o,
+            severidad: 'ERROR',
+          }))
+        : undefined;
+
+      const result: TransmisionResult = {
+        success: estado === 'PROCESADO' || estado === 'ACEPTADO' || estado === 'ACEPTADO_CON_ADVERTENCIAS',
+        estado,
+        codigoGeneracion: data.codigoGeneracion,
+        selloRecepcion,
+        numeroControl: data.numeroControl,
+        fechaHoraRecepcion: data.fechaHoraRecepcion,
+        fechaHoraProcesamiento,
+        mensaje,
+        enlaceConsulta: data.enlaceConsulta,
+        advertencias: mapAdvertencias(data.advertencias),
+        errores: obsErrores || mapErrores(data.errores),
+      };
+
+      if (!res.ok) {
+        // Si es un error del servidor (5xx) podríamos reintentar, pero por ahora devolvemos el error parseado
+        return {
+          ...result,
+          success: false,
+          estado: 'RECHAZADO',
+          mensaje: result.mensaje || `Transmisión fallida (${res.status})`,
+          errores:
+            result.errores && result.errores.length > 0
+              ? result.errores
+              : [
+                  {
+                    codigo: `HTTP-${res.status}`,
+                    descripcion: 'Error HTTP en transmisión',
+                    severidad: 'ERROR',
+                  },
+                ],
+        };
+      }
+
+      return result;
+
+    } catch (err: any) {
+      lastError = err;
+      const isTimeout = err.name === 'AbortError';
+      console.warn(`Intento ${attempt}/${MAX_RETRIES} fallido. ${isTimeout ? 'Timeout de 8s' : err.message}`);
+      
+      // Si es el último intento, no esperamos
+      if (attempt < MAX_RETRIES) {
+        // Esperar un poco antes de reintentar (exponential backoff opcional, aquí fijo 1s)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
   }
 
-  return result;
+  // Si llegamos aquí, fallaron todos los intentos
+  return {
+    success: false,
+    estado: 'RECHAZADO', // Usamos 'RECHAZADO' ya que 'ERROR' no es un estado válido en el tipo
+    mensaje: `Error de comunicación tras ${MAX_RETRIES} intentos: ${lastError?.message || 'Desconocido'}`,
+    errores: [
+      {
+        codigo: 'COM-ERR',
+        descripcion: lastError?.name === 'AbortError' 
+          ? 'Tiempo de espera agotado (8s) al contactar con MH' 
+          : `Error de red: ${lastError?.message}`,
+        severidad: 'ERROR',
+      },
+    ],
+  };
 };

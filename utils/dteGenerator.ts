@@ -190,7 +190,7 @@ export const numeroALetras = (num: number): string => {
   const entero = Math.floor(num);
   const centavos = Math.round((num - entero) * 100);
   
-  if (entero === 0) return `CERO ${centavos}/100 USD`;
+  if (entero === 0) return `CERO DÓLARES CON ${centavos.toString().padStart(2, '0')}/100 USD`;
   
   let resultado = '';
   
@@ -231,7 +231,8 @@ export const numeroALetras = (num: number): string => {
     }
   }
   
-  return `${resultado.trim()} ${centavos.toString().padStart(2, '0')}/100 USD`;
+  const moneda = entero === 1 ? 'DÓLAR' : 'DÓLARES';
+  return `${resultado.trim()} ${moneda} CON ${centavos.toString().padStart(2, '0')}/100 USD`;
 };
 
 // Obtener fecha actual en formato ISO
