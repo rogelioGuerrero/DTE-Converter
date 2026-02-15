@@ -47,7 +47,7 @@ export function getUserModeConfig(): UserModeConfig {
   }
   
   // Por defecto, modo profesional
-  return USER_MODE_CONFIGS.negocio;
+  return USER_MODE_CONFIGS.profesional;
 }
 
 export function setUserMode(mode: UserMode): void {
