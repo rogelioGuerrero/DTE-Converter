@@ -137,6 +137,10 @@ class InventarioService {
     this.hidratarDesdeStorage();
   }
 
+  public sincronizar(): void {
+    this.hidratarDesdeStorage();
+  }
+
   /**
    * Revierte una venta aplicada por `aplicarVentaDesdeDTE` usando el documentoReferencia.
    * Esto se usa cuando el DTE se elimina/cancela antes de transmitir a MH.

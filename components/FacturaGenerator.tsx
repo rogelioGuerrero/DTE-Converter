@@ -151,6 +151,9 @@ const FacturaGenerator: React.FC = () => {
   }, []);
 
   const loadData = async () => {
+    // Sincronizar datos del inventario simplificado para asegurar frescura
+    inventarioService.sincronizar();
+
     const [loadedClients, loadedProductsDb, loadedEmisor] = await Promise.all([
       getClients(),
       getProducts(),
@@ -377,6 +380,12 @@ const FacturaGenerator: React.FC = () => {
   };
 
   const getStockDisplayForCodigo = (codigo: string) => {
+    // 1. Inventario Simplificado
+    const prodService = inventarioService.findProductoByCodigo(codigo);
+    if (prodService && prodService.gestionarInventario) {
+      return prodService.existenciasTotales.toString();
+    }
+    // 2. Legacy
     const stock = stockByCode[codigo];
     if (!stock) return '0';
     return stock.onHand.toString();
@@ -405,11 +414,40 @@ const FacturaGenerator: React.FC = () => {
       }));
 
     if (goodsOnly.length > 0) {
-      const stockCheck = await validateStockForSale(goodsOnly);
-      if (!stockCheck.ok) {
-        setStockError(stockCheck.message);
-        addToast(stockCheck.message, 'error');
-        return;
+      const itemsToCheckInDb: typeof goodsOnly = [];
+      
+      for (const item of goodsOnly) {
+        const codeToSearch = (item.codigo || '').trim();
+        // Prioridad: Inventario Simplificado (Service)
+        const prodService = inventarioService.findProductoByCodigo(codeToSearch);
+        
+        if (prodService) {
+           // Encontrado en el nuevo sistema.
+           // Si gestiona inventario, validamos stock.
+           // Si NO gestiona inventario, asumimos stock infinito (no validamos).
+           // EN NINGÚN CASO caemos al sistema legacy si el producto existe aquí.
+           if (prodService.gestionarInventario) {
+             const config = inventarioService.getConfig();
+             if (!config.permitirVentaSinStock && prodService.existenciasTotales < item.cantidad) {
+               const msg = `Sin stock para ${codeToSearch}. Disponible: ${prodService.existenciasTotales.toFixed(2)}`;
+               setStockError(msg);
+               addToast(msg, 'error');
+               return;
+             }
+           }
+        } else {
+           // No está en service, agregar a lista para validar en legacy DB
+           itemsToCheckInDb.push(item);
+        }
+      }
+
+      if (itemsToCheckInDb.length > 0) {
+        const stockCheck = await validateStockForSale(itemsToCheckInDb);
+        if (!stockCheck.ok) {
+          setStockError(stockCheck.message);
+          addToast(stockCheck.message, 'error');
+          return;
+        }
       }
     }
 
@@ -481,6 +519,9 @@ const FacturaGenerator: React.FC = () => {
       setGeneratedDTE(dte);
       
       // Aplicar descuentos de inventario si corresponde
+      // 1. Inventario Simplificado (Prioridad)
+      await inventarioService.aplicarVentaDesdeDTE(dte);
+      // 2. Inventario Legacy (Opcional, mantenemos para no romper historial legacy si se usa)
       await applySalesFromDTE(dte);
       
       // Mostrar preview
@@ -514,7 +555,15 @@ const FacturaGenerator: React.FC = () => {
 
   const handleDeleteGeneratedDTE = async () => {
     if (generatedDTE) {
+      // 1. Revertir en Inventario Simplificado
+      const docRef = generatedDTE.identificacion.numeroControl;
+      if (docRef) {
+        await inventarioService.revertirVentaPorDocumentoReferencia(docRef);
+      }
+      
+      // 2. Revertir en Legacy
       await revertSalesFromDTE(generatedDTE);
+      
       setGeneratedDTE(null);
       addToast('DTE descartado y stock revertido', 'info');
       setShowDTEPreview(false);
