@@ -14,7 +14,7 @@ import { UserModeSetup } from './components/UserModeSetup';
 import { shouldShowUserModeSelection } from './utils/remoteLicensing';
 import { licenseValidator } from './utils/licenseValidator';
 import { NavigationTabs } from './components/NavigationTabs';
-import { LayoutDashboard, CheckCircle, Download, Lock } from 'lucide-react';
+import { LayoutDashboard, CheckCircle, Download } from 'lucide-react';
 import { downloadBackup, restoreBackupFromText } from './utils/backup';
 import { notify } from './utils/notifications';
 import ForceUpdateModal from './components/ForceUpdateModal';
@@ -248,15 +248,6 @@ const App: React.FC = () => {
           
           {/* Right Actions */}
           <div className="flex items-center gap-2">
-            {/* Admin Access */}
-            <button
-              onClick={() => setShowAdminModal(true)}
-              className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-              title="Configuración Avanzada"
-            >
-              <Lock className="w-4 h-4" />
-            </button>
-
             {/* Backup Button */}
             <div className="relative backup-dropdown">
               <input
