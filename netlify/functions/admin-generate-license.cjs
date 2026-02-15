@@ -49,7 +49,18 @@ exports.handler = async function(event, context) {
     // 4. Firmar licencia
     const sign = crypto.createSign('SHA256');
     sign.update(JSON.stringify(finalLicenseData));
-    const signature = sign.sign(privateKey.replace(/\\n/g, '\n'), 'base64');
+    
+    // Normalizar llave privada: manejar \n literales y asegurar formato PEM correcto
+    let normalizedKey = privateKey.replace(/\\n/g, '\n');
+    
+    // Si la llave quedó en una sola línea (por copy-paste), intentar arreglar headers
+    if (!normalizedKey.includes('\n')) {
+      normalizedKey = normalizedKey
+        .replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n')
+        .replace('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----');
+    }
+    
+    const signature = sign.sign(normalizedKey, 'base64');
 
     const license = {
       data: finalLicenseData,
