@@ -468,5 +468,21 @@ export const generarDTE = (datos: DatosFactura, correlativo: number, ambiente: s
   return dteJSON;
 };
 
+// Convertir DTE a Contingencia (Modelo Diferido)
+export const convertirAContingencia = (dte: DTEJSON, motivo: string = 'Falla en el servicio de Internet'): DTEJSON => {
+  const cloned = JSON.parse(JSON.stringify(dte));
+  
+  cloned.identificacion.tipoModelo = 2; // Modelo Diferido
+  cloned.identificacion.tipoOperacion = 2; // Transmisión por Contingencia
+  cloned.identificacion.tipoContingencia = 2; // 2 = Falla en el servicio de Internet (por defecto)
+  cloned.identificacion.motivoContin = motivo;
+  
+  // Actualizar fecha y hora a la actual (momento de la firma offline)
+  cloned.identificacion.fecEmi = obtenerFechaActual();
+  cloned.identificacion.horEmi = obtenerHoraActual();
+  
+  return cloned;
+};
+
 // Re-exportar catálogos desde ubicación centralizada
 export { tiposDocumento, formasPago, unidadesMedida } from '../catalogos';

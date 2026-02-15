@@ -21,6 +21,7 @@ export interface LibroGeneradoResult {
   registrosAceptados: number;
   registrosRechazados: number;
   registrosPendientes: number;
+  registrosContingencia: number;
   montoTotal: number;
   montoIVA: number;
   fechaGeneracion: string;
@@ -166,6 +167,7 @@ export const generarLibroDesdeDTEs = async (
       registrosAceptados: registrosFiltrados.filter(r => r.estado === 'ACEPTADO').length,
       registrosRechazados: registrosFiltrados.filter(r => r.estado === 'RECHAZADO').length,
       registrosPendientes: registrosFiltrados.filter(r => r.estado === 'PENDIENTE').length,
+      registrosContingencia: registrosFiltrados.filter(r => r.estado === 'CONTINGENCIA').length,
       montoTotal: registrosFiltrados.reduce((sum, r) => sum + r.montoTotal, 0),
       montoIVA: registrosFiltrados.reduce((sum, r) => sum + r.montoIva, 0),
       fechaGeneracion: new Date().toISOString()

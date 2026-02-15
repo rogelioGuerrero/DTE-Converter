@@ -182,7 +182,9 @@ export const guardarDTEEnHistorial = async (
     montoGravado: dte.resumen.totalGravada,
     montoIva: dte.resumen.tributos?.[0]?.valor || 0,
     
-    estado: respuestaMH.success ? 'ACEPTADO' : 'RECHAZADO',
+    estado: respuestaMH.estado === 'CONTINGENCIA' 
+      ? 'CONTINGENCIA' 
+      : (respuestaMH.success ? 'ACEPTADO' : 'RECHAZADO'),
     selloRecepcion: respuestaMH.selloRecepcion,
     
     dteJson: construirDTEArchivado(dte, respuestaMH, firmaElectronica),

@@ -16,7 +16,7 @@ export interface UserModeConfig {
 export const USER_MODE_CONFIGS: Record<UserMode, UserModeConfig> = {
   profesional: {
     mode: 'profesional',
-    allowedTabs: ['batch', 'clients', 'products', 'factura', 'historial'],
+    allowedTabs: ['batch', 'clients', 'factura', 'historial'],
     features: {
       librosIVA: true,
       facturacion: true,

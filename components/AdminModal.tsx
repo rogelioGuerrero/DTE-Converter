@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Save, Settings, Shield, X, Key } from 'lucide-react';
+import { Lock, Save, Settings, Shield, X, Key, LayoutTemplate, CheckCircle2 } from 'lucide-react';
 import { loadSettings, saveSettings, AppSettings } from '../utils/settings';
 import { validateAdminPin, hasAdminPin } from '../utils/adminPin';
+import { getUserModeConfig, setUserMode, UserMode } from '../utils/userMode';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
   const [pinInput, setPinInput] = useState('');
   const [activeTab, setActiveTab] = useState('general');
   const [error, setError] = useState('');
+  const [currentMode, setCurrentMode] = useState<UserMode>('negocio');
   
   // Reset state when modal opens
   useEffect(() => {
@@ -23,6 +25,7 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
       setPinInput('');
       setError('');
       setActiveTab('general');
+      setCurrentMode(getUserModeConfig().mode);
     }
   }, [isOpen]);
 
@@ -41,8 +44,16 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
     onClose();
   };
 
+  const handleModeChange = (mode: UserMode) => {
+    setUserMode(mode);
+    setCurrentMode(mode);
+    // Recargar para aplicar cambios en pestañas
+    window.location.reload();
+  };
+
   const tabs = [
     { id: 'general', label: 'General', icon: Settings },
+    { id: 'modo', label: 'Modo de Uso', icon: LayoutTemplate },
     { id: 'licencias', label: 'Licencias', icon: Shield }
   ];
 
@@ -136,6 +147,50 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                       <p className="text-xs text-gray-500 mt-1">
                         El PIN se configura via variable de entorno VITE_ADMIN_PIN
                       </p>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'modo' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-600">
+                      Seleccione la interfaz que mejor se adapte a su actividad. El cambio recargará la aplicación.
+                    </p>
+                    
+                    <div className="grid gap-3">
+                      <button
+                        onClick={() => handleModeChange('profesional')}
+                        className={`p-4 rounded-xl border-2 text-left transition-all relative ${
+                          currentMode === 'profesional' 
+                            ? 'border-indigo-500 bg-indigo-50' 
+                            : 'border-gray-200 hover:border-indigo-200'
+                        }`}
+                      >
+                        <div className="font-semibold text-gray-900 flex justify-between items-center">
+                          Profesional / Servicios
+                          {currentMode === 'profesional' && <CheckCircle2 className="w-5 h-5 text-indigo-500" />}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Interfaz simplificada. <strong>Oculta Inventario y Productos</strong>. Ideal para venta de servicios.
+                        </p>
+                      </button>
+
+                      <button
+                        onClick={() => handleModeChange('negocio')}
+                        className={`p-4 rounded-xl border-2 text-left transition-all relative ${
+                          currentMode === 'negocio' 
+                            ? 'border-indigo-500 bg-indigo-50' 
+                            : 'border-gray-200 hover:border-indigo-200'
+                        }`}
+                      >
+                        <div className="font-semibold text-gray-900 flex justify-between items-center">
+                          Negocio / Tienda
+                          {currentMode === 'negocio' && <CheckCircle2 className="w-5 h-5 text-indigo-500" />}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Interfaz completa. Incluye <strong>Inventario y Catálogo de Productos</strong>. Para comercios.
+                        </p>
+                      </button>
                     </div>
                   </div>
                 )}

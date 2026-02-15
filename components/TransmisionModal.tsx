@@ -10,9 +10,10 @@ import {
   AlertTriangle,
   Copy,
   Download,
-  RefreshCw
+  RefreshCw,
+  WifiOff
 } from 'lucide-react';
-import { DTEJSON } from '../utils/dteGenerator';
+import { DTEJSON, convertirAContingencia } from '../utils/dteGenerator';
 import TemplateSelector from './TemplateSelector';
 import { construirDTEArchivado, guardarDTEEnHistorial } from '../utils/dteHistoryDb';
 import { generarLibroDesdeDTEs } from '../utils/librosAutoGenerator';
@@ -56,11 +57,13 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
   const [jwsFirmado, setJwsFirmado] = useState<string | null>(null);
   const [dteTransmitido, setDteTransmitido] = useState<DTEJSON | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isConnectionError, setIsConnectionError] = useState(false);
 
   const iniciarTransmision = async () => {
     setEstado('firmando');
     setError(null);
     setResultado(null);
+    setIsConnectionError(false);
 
     try {
       const processed = processDTE(dte);
@@ -123,37 +126,7 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
         setEstado('procesado');
         
         // Guardar en historial local
-        try {
-          await guardarDTEEnHistorial(processed.dte, transmisionResult, ambienteFinal, jwsFirmado);
-
-          try {
-            const settings = loadSettings();
-            const normalizeId = (id: string) => (id || '').toString().replace(/[\s-]/g, '').trim();
-            const myNit = normalizeId(settings.myNit || '');
-            const myNrc = normalizeId(settings.myNrc || '');
-            const emisorNit = normalizeId(processed.dte?.emisor?.nit || '');
-            const emisorNrc = normalizeId(processed.dte?.emisor?.nrc || '');
-            const receptorNit = normalizeId(processed.dte?.receptor?.numDocumento || '');
-            const receptorNrc = normalizeId(processed.dte?.receptor?.nrc || '');
-
-            const isMyCompanyEmitter = (myNit && emisorNit === myNit) || (myNrc && emisorNrc === myNrc);
-            const isMyCompanyReceiver = (myNit && receptorNit === myNit) || (myNrc && receptorNrc === myNrc);
-            const modoLibro = isMyCompanyReceiver && !isMyCompanyEmitter ? 'compras' : 'ventas';
-            const periodo = (processed.dte?.identificacion?.fecEmi || '').substring(0, 7);
-            if (periodo && /^\d{4}-\d{2}$/.test(periodo)) {
-              await generarLibroDesdeDTEs({
-                modo: modoLibro,
-                periodo,
-                incluirPendientes: false,
-                incluirRechazados: false,
-              });
-            }
-          } catch (autoLibroError) {
-            console.error('Error generando libro automático:', autoLibroError);
-          }
-        } catch (historyError) {
-          console.error('Error guardando en historial:', historyError);
-        }
+        await guardarDTEHistory(processed.dte, transmisionResult, ambienteFinal, jwsFirmado);
         
         if (transmisionResult.selloRecepcion) {
           onSuccess(transmisionResult.selloRecepcion, transmisionResult);
@@ -161,11 +134,118 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
           onSuccess('', transmisionResult);
         }
       } else {
+        // Verificar si es error de comunicación
+        const isCommError = transmisionResult.errores?.some(e => e.codigo === 'COM-ERR' || e.codigo.startsWith('HTTP-'));
+        if (isCommError) {
+          setIsConnectionError(true);
+        }
         setEstado('rechazado');
       }
     } catch (err) {
       setEstado('error');
       setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const handleEmitirContingencia = async () => {
+    // Validar restricción: solo Factura (01)
+    if (dte.identificacion.tipoDte !== '01') {
+      alert('Por seguridad, el modo de contingencia solo está habilitado para Facturas (01) en este momento.');
+      return;
+    }
+
+    try {
+      setEstado('firmando');
+      setError(null);
+
+      // 1. Convertir a contingencia
+      const dteContingencia = convertirAContingencia(dte);
+      const processed = processDTE(dteContingencia);
+      setDteTransmitido(processed.dte);
+      
+      const ambienteFinal = (processed.dte?.identificacion?.ambiente === '01' ? '01' : '00') as '00' | '01';
+
+      // 2. Firmar nuevamente (necesitamos password)
+      const stored = await getCertificate();
+      const passwordPri = stored?.password
+        ? stored.password
+        : (window.prompt('Modo Contingencia: Ingresa la contraseña/PIN del certificado para firmar:') || '').trim();
+      
+      if (!passwordPri) {
+        setEstado('rechazado');
+        return;
+      }
+
+      const dteLimpio = limpiarDteParaFirma(processed.dte as unknown as Record<string, unknown>);
+      const nitEmisor = (processed.dte?.emisor?.nit || '').toString().replace(/[\s-]/g, '').trim();
+
+      const jwsContingencia = await firmarDocumento({
+        nit: nitEmisor,
+        passwordPri,
+        dteJson: dteLimpio,
+      });
+
+      setJwsFirmado(jwsContingencia);
+
+      // 3. Crear resultado simulado de contingencia
+      const resultContingencia: TransmisionResult = {
+        success: false, // No transmitido a MH aún
+        estado: 'CONTINGENCIA',
+        codigoGeneracion: processed.dte.identificacion.codigoGeneracion,
+        numeroControl: processed.dte.identificacion.numeroControl,
+        fechaHoraRecepcion: new Date().toISOString(),
+        mensaje: 'Documento generado en Contingencia (Offline). Pendiente de transmisión.',
+        errores: [],
+        advertencias: [{
+          codigo: 'CONTINGENCIA',
+          descripcion: 'Documento emitido en modo diferido por falla de conexión.',
+          severidad: 'ALTA'
+        }]
+      };
+
+      setResultado(resultContingencia);
+      setEstado('procesado'); // Lo marcamos como procesado (guardado localmente)
+
+      // 4. Guardar en historial
+      await guardarDTEHistory(processed.dte, resultContingencia, ambienteFinal, jwsContingencia);
+
+    } catch (err) {
+      setEstado('error');
+      setError(err instanceof Error ? err.message : 'Error al generar contingencia');
+    }
+  };
+
+  const guardarDTEHistory = async (dteObj: DTEJSON, result: TransmisionResult, ambienteFinal: '00' | '01', jws: string | null) => {
+    try {
+      await guardarDTEEnHistorial(dteObj, result, ambienteFinal, jws || undefined);
+
+      try {
+        const settings = loadSettings();
+        const normalizeId = (id: string) => (id || '').toString().replace(/[\s-]/g, '').trim();
+        const myNit = normalizeId(settings.myNit || '');
+        const myNrc = normalizeId(settings.myNrc || '');
+        const emisorNit = normalizeId(dteObj.emisor?.nit || '');
+        const emisorNrc = normalizeId(dteObj.emisor?.nrc || '');
+        const receptorNit = normalizeId(dteObj.receptor?.numDocumento || '');
+        const receptorNrc = normalizeId(dteObj.receptor?.nrc || '');
+
+        const isMyCompanyEmitter = (myNit && emisorNit === myNit) || (myNrc && emisorNrc === myNrc);
+        const isMyCompanyReceiver = (myNit && receptorNit === myNit) || (myNrc && receptorNrc === myNrc);
+        const modoLibro = isMyCompanyReceiver && !isMyCompanyEmitter ? 'compras' : 'ventas';
+        const periodo = (dteObj.identificacion?.fecEmi || '').substring(0, 7);
+        if (periodo && /^\d{4}-\d{2}$/.test(periodo)) {
+          await generarLibroDesdeDTEs({
+            modo: modoLibro,
+            periodo,
+            incluirPendientes: true, // Incluimos pendientes/contingencia
+            incluirRechazados: false,
+          });
+        }
+      } catch (autoLibroError) {
+        console.error('Error generando libro automático:', autoLibroError);
+      }
+    } catch (historyError) {
+      console.error('Error guardando en historial:', historyError);
     }
   };
 
@@ -239,122 +319,140 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
     );
   };
 
-  const renderExito = () => (
-    <div className="py-4">
-      {/* Header de éxito */}
-      <div className="text-center mb-4">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-          <CheckCircle2 className="w-8 h-8 text-green-500" />
-        </div>
-        <h3 className="text-lg font-bold text-gray-900">¡DTE Autorizado!</h3>
-        <p className="text-sm text-gray-500">{resultado?.mensaje || 'DTE autorizado (fase de prueba)'}</p>
-      </div>
-      
-      {/* Datos de la respuesta */}
-      <div className="space-y-3 mb-4">
-        {/* Sello de Recepción */}
-        {resultado?.selloRecepcion && (
-          <div className="bg-green-50 rounded-xl p-3 border border-green-100">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs font-medium text-green-700">Sello de Recepción</p>
-              <button
-                onClick={() => handleCopiar(resultado.selloRecepcion!, 'sello')}
-                className="text-xs text-green-600 hover:text-green-800 flex items-center gap-1"
-              >
-                {copiedField === 'sello' ? '¡Copiado!' : <><Copy className="w-3 h-3" /> Copiar</>}
-              </button>
-            </div>
-            <code className="text-xs font-mono text-green-800 break-all block">
-              {resultado.selloRecepcion}
-            </code>
+  const renderExito = () => {
+    const esContingencia = resultado?.estado === 'CONTINGENCIA';
+    
+    return (
+      <div className="py-4">
+        {/* Header de éxito */}
+        <div className="text-center mb-4">
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${esContingencia ? 'bg-amber-100' : 'bg-green-100'}`}>
+            {esContingencia ? (
+              <WifiOff className="w-8 h-8 text-amber-500" />
+            ) : (
+              <CheckCircle2 className="w-8 h-8 text-green-500" />
+            )}
           </div>
-        )}
-
-        {/* Número de Control y Código Generación */}
-        <div className="grid grid-cols-2 gap-2">
-          {resultado?.numeroControl && (
-            <div className="bg-gray-50 rounded-lg p-2">
-              <p className="text-[10px] text-gray-500 uppercase">Número Control</p>
-              <p className="text-xs font-mono text-gray-800 truncate" title={resultado.numeroControl}>
-                {resultado.numeroControl}
-              </p>
-            </div>
-          )}
-          {resultado?.codigoGeneracion && (
-            <div className="bg-gray-50 rounded-lg p-2">
-              <p className="text-[10px] text-gray-500 uppercase">Código Generación</p>
-              <p className="text-xs font-mono text-gray-800 truncate" title={resultado.codigoGeneracion}>
-                {resultado.codigoGeneracion.substring(0, 8)}...
-              </p>
-            </div>
-          )}
+          <h3 className="text-lg font-bold text-gray-900">
+            {esContingencia ? 'Guardado en Contingencia' : '¡DTE Autorizado!'}
+          </h3>
+          <p className="text-sm text-gray-500">{resultado?.mensaje || 'Proceso finalizado'}</p>
         </div>
+        
+        {/* Datos de la respuesta */}
+        <div className="space-y-3 mb-4">
+          {/* Sello de Recepción */}
+          {resultado?.selloRecepcion ? (
+            <div className="bg-green-50 rounded-xl p-3 border border-green-100">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-medium text-green-700">Sello de Recepción</p>
+                <button
+                  onClick={() => handleCopiar(resultado.selloRecepcion!, 'sello')}
+                  className="text-xs text-green-600 hover:text-green-800 flex items-center gap-1"
+                >
+                  {copiedField === 'sello' ? '¡Copiado!' : <><Copy className="w-3 h-3" /> Copiar</>}
+                </button>
+              </div>
+              <code className="text-xs font-mono text-green-800 break-all block">
+                {resultado.selloRecepcion}
+              </code>
+            </div>
+          ) : esContingencia && (
+            <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+              <p className="text-xs font-medium text-amber-700 mb-1">Estado Offline</p>
+              <p className="text-xs text-amber-600">
+                El documento ha sido firmado y guardado localmente. Deberás transmitirlo cuando restablezcas la conexión.
+              </p>
+            </div>
+          )}
 
-        {/* Fecha de procesamiento */}
-        {resultado?.fechaHoraProcesamiento && (
+          {/* Número de Control y Código Generación */}
+          <div className="grid grid-cols-2 gap-2">
+            {resultado?.numeroControl && (
+              <div className="bg-gray-50 rounded-lg p-2">
+                <p className="text-[10px] text-gray-500 uppercase">Número Control</p>
+                <p className="text-xs font-mono text-gray-800 truncate" title={resultado.numeroControl}>
+                  {resultado.numeroControl}
+                </p>
+              </div>
+            )}
+            {resultado?.codigoGeneracion && (
+              <div className="bg-gray-50 rounded-lg p-2">
+                <p className="text-[10px] text-gray-500 uppercase">Código Generación</p>
+                <p className="text-xs font-mono text-gray-800 truncate" title={resultado.codigoGeneracion}>
+                  {resultado.codigoGeneracion.substring(0, 8)}...
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Fecha de procesamiento */}
           <div className="flex items-center justify-between text-xs text-gray-500 px-1">
-            <span>Procesado:</span>
-            <span>{new Date(resultado.fechaHoraProcesamiento).toLocaleString()}</span>
+            <span>{esContingencia ? 'Generado:' : 'Procesado:'}</span>
+            <span>{new Date().toLocaleString()}</span>
           </div>
-        )}
 
-        {/* Advertencias */}
-        {resultado?.advertencias && resultado.advertencias.length > 0 && (
-          <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
-            <p className="text-xs font-medium text-amber-700 mb-2 flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3" /> Advertencias
-            </p>
-            <ul className="space-y-1">
-              {resultado.advertencias.map((adv, i) => (
-                <li key={i} className="text-xs text-amber-700">
-                  <span className="font-mono text-amber-600">[{adv.codigo}]</span> {adv.descripcion}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+          {/* Advertencias */}
+          {resultado?.advertencias && resultado.advertencias.length > 0 && (
+            <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+              <p className="text-xs font-medium text-amber-700 mb-2 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> Advertencias
+              </p>
+              <ul className="space-y-1">
+                {resultado.advertencias.map((adv, i) => (
+                  <li key={i} className="text-xs text-amber-700">
+                    <span className="font-mono text-amber-600">[{adv.codigo}]</span> {adv.descripcion}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
         </div>
 
-      {/* Botones de acción */}
-      <div className="space-y-2">
-        {resultado && (
-          <button
-            onClick={() => setShowTemplateSelector(true)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 font-medium shadow-lg shadow-indigo-200"
-          >
-            <Download className="w-4 h-4" />
-            Descargar PDF
-          </button>
-        )}
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              const dteArchivado = construirDTEArchivado(dteTransmitido || dte, resultado || undefined, jwsFirmado || undefined);
-              const json = JSON.stringify(dteArchivado, null, 2);
-              const blob = new Blob([json], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `DTE-${dte.identificacion.codigoGeneracion}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 text-sm"
-          >
-            <Download className="w-4 h-4" />
-            JSON
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 text-sm font-medium"
-          >
-            Cerrar
-          </button>
+        {/* Botones de acción */}
+        <div className="space-y-2">
+          {resultado && (
+            <button
+              onClick={() => setShowTemplateSelector(true)}
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 text-white rounded-xl font-medium shadow-lg 
+                ${esContingencia 
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-amber-200' 
+                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-indigo-200'}`}
+            >
+              <Download className="w-4 h-4" />
+              Descargar PDF {esContingencia && '(Contingencia)'}
+            </button>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                const dteArchivado = construirDTEArchivado(dteTransmitido || dte, resultado || undefined, jwsFirmado || undefined);
+                const json = JSON.stringify(dteArchivado, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `DTE-${dte.identificacion.codigoGeneracion}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 text-sm"
+            >
+              <Download className="w-4 h-4" />
+              JSON
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 text-sm font-medium"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderError = () => (
     <div className="py-4">
@@ -408,6 +506,27 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
         </div>
       )}
 
+      {/* Opción de Contingencia si es error de conexión */}
+      {isConnectionError && dte.identificacion.tipoDte === '01' && (
+        <div className="bg-amber-50 rounded-xl p-4 mb-4 border border-amber-200">
+          <div className="flex items-start gap-3">
+            <WifiOff className="w-6 h-6 text-amber-600 shrink-0 mt-1" />
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-amber-800 mb-1">Problemas de Conexión</h4>
+              <p className="text-xs text-amber-700 mb-3">
+                No se pudo conectar con Hacienda. Puedes emitir este documento en <strong>Modo Contingencia (Offline)</strong> y transmitirlo después.
+              </p>
+              <button
+                onClick={handleEmitirContingencia}
+                className="w-full py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 transition-colors shadow-sm"
+              >
+                Emitir en Contingencia
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Botones */}
       <div className="flex gap-3">
         <button
@@ -447,15 +566,21 @@ const TransmisionModal: React.FC<TransmisionModalProps> = ({
           <div className="flex items-center gap-3">
             <div className={`
               w-10 h-10 rounded-xl flex items-center justify-center
-              ${estado === 'procesado' ? 'bg-green-100' : estado === 'rechazado' || estado === 'error' ? 'bg-red-100' : 'bg-indigo-100'}
+              ${estado === 'procesado' ? (resultado?.estado === 'CONTINGENCIA' ? 'bg-amber-100' : 'bg-green-100') : estado === 'rechazado' || estado === 'error' ? 'bg-red-100' : 'bg-indigo-100'}
             `}>
-              <Send className={`
-                w-5 h-5
-                ${estado === 'procesado' ? 'text-green-600' : estado === 'rechazado' || estado === 'error' ? 'text-red-600' : 'text-indigo-600'}
-              `} />
+              {estado === 'procesado' && resultado?.estado === 'CONTINGENCIA' ? (
+                <WifiOff className="w-5 h-5 text-amber-600" />
+              ) : (
+                <Send className={`
+                  w-5 h-5
+                  ${estado === 'procesado' ? 'text-green-600' : estado === 'rechazado' || estado === 'error' ? 'text-red-600' : 'text-indigo-600'}
+                `} />
+              )}
             </div>
             <div>
-              <h2 className="font-semibold text-gray-900">Transmitir DTE</h2>
+              <h2 className="font-semibold text-gray-900">
+                {estado === 'procesado' && resultado?.estado === 'CONTINGENCIA' ? 'DTE Offline' : 'Transmitir DTE'}
+              </h2>
               <p className="text-xs text-gray-500">
                 Ambiente: {ambiente === '00' ? 'Pruebas' : 'Producción'}
               </p>
