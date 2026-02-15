@@ -23,6 +23,7 @@ import { resolveProductForDescription } from '../utils/facturaGeneratorHelpers';
 import { useStockByCode } from '../hooks/useStockByCode';
 import { requiereStripe } from '../catalogos/pagos';
 import { useMobile } from '../hooks/useMobile';
+import { mergeProducts } from '../utils/inventoryAdapter';
 import { 
   getPresentacionesForCodigo as getPresentacionesForCodigoHelper,
 } from '../utils/facturaGeneratorInventoryHelpers';
@@ -150,13 +151,20 @@ const FacturaGenerator: React.FC = () => {
   }, []);
 
   const loadData = async () => {
-    const [loadedClients, loadedProducts, loadedEmisor] = await Promise.all([
+    const [loadedClients, loadedProductsDb, loadedEmisor] = await Promise.all([
       getClients(),
       getProducts(),
       getEmisor()
     ]);
+
+    // Obtener productos del inventario simplificado
+    const inventoryProducts = inventarioService.getProductos();
+    
+    // Fusionar ambas fuentes
+    const finalProducts = mergeProducts(loadedProductsDb, inventoryProducts);
+
     setClients(loadedClients);
-    setProducts(loadedProducts);
+    setProducts(finalProducts);
     setEmisor(loadedEmisor);
     if (loadedEmisor) {
       const { id, ...rest } = loadedEmisor;

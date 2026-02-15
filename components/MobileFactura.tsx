@@ -42,6 +42,8 @@ import {
   formatMultilineTextInput,
 } from '../utils/validators';
 import { getProducts, ProductData } from '../utils/productDb';
+import { inventarioService } from '../utils/inventario/inventarioService';
+import { mergeProducts } from '../utils/inventoryAdapter';
 
 interface MobileFacturaProps {
   onShowEmisorConfig: () => void;
@@ -202,8 +204,10 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
 
   useEffect(() => {
     const load = async () => {
-      const data = await getProducts();
-      setProducts(data);
+      const dbProducts = await getProducts();
+      const inventoryProducts = inventarioService.getProductos();
+      const finalProducts = mergeProducts(dbProducts, inventoryProducts);
+      setProducts(finalProducts);
     };
     load();
   }, []);
