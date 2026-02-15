@@ -51,6 +51,8 @@ const App: React.FC = () => {
   // TODO: Implementar modal de restauración
   // const [showRestoreModal, setShowRestoreModal] = useState(false);
   const restoreFileInputRef = useRef<HTMLInputElement | null>(null);
+  const clickCountRef = useRef(0);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const readForceUpdateInfo = () => {
     try {
@@ -129,6 +131,18 @@ const App: React.FC = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showBackupMenu]);
+
+  const handleLogoClick = () => {
+    clickCountRef.current += 1;
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = setTimeout(() => {
+      clickCountRef.current = 0;
+    }, 1500);
+    if (clickCountRef.current >= 5) {
+      clickCountRef.current = 0;
+      setShowAdminModal(true);
+    }
+  };
 
   const handleSetupComplete = () => {
     localStorage.setItem('dte_setup_completed', 'true');
