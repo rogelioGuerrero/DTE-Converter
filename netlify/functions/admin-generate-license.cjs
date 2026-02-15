@@ -51,13 +51,23 @@ exports.handler = async function(event, context) {
     sign.update(JSON.stringify(finalLicenseData));
     
     // Normalizar llave privada: manejar \n literales y asegurar formato PEM correcto
-    let normalizedKey = privateKey.replace(/\\n/g, '\n');
+    let normalizedKey = privateKey.trim();
     
-    // Si la llave quedó en una sola línea (por copy-paste), intentar arreglar headers
-    if (!normalizedKey.includes('\n')) {
-      normalizedKey = normalizedKey
-        .replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n')
-        .replace('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----');
+    // 1. Manejar saltos de línea escapados (ej: variables de entorno en una línea)
+    if (normalizedKey.includes('\\n')) {
+      normalizedKey = normalizedKey.replace(/\\n/g, '\n');
+    }
+    
+    // 2. Si después de lo anterior sigue sin tener saltos de línea reales (y parece tener headers)
+    if (!normalizedKey.includes('\n') && normalizedKey.includes('PRIVATE KEY')) {
+        // Extraer el cuerpo limpiando headers y espacios
+        const body = normalizedKey
+            .replace(/-----BEGIN [A-Z ]+-----/, '')
+            .replace(/-----END [A-Z ]+-----/, '')
+            .replace(/\s/g, ''); // Quitar espacios internos
+            
+        // Reconstruir formato PEM estándar
+        normalizedKey = `-----BEGIN PRIVATE KEY-----\n${body}\n-----END PRIVATE KEY-----`;
     }
     
     const signature = sign.sign(normalizedKey, 'base64');
