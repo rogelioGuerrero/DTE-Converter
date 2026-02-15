@@ -96,6 +96,15 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
 }) => {
   const [clients, setClients] = useState<ClientData[]>([]);
   const [products, setProducts] = useState<ProductData[]>([]);
+  const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
+  const [showClientDrawer, setShowClientDrawer] = useState(false);
+  const [clientSearch, setClientSearch] = useState('');
+  const [items, setItems] = useState<ItemForm[]>([]);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [newItem, setNewItem] = useState({ codigo: '', descripcion: '', precioUni: 0, cantidad: 1, tipoItem: 1 });
+  const [tipoDoc, setTipoDoc] = useState('01');
+  const [formaPago, setFormaPago] = useState('01');
+
   const productSuggestions = useMemo<ProductData[]>(() => {
     const term = (newItem.descripcion || '').trim().toLowerCase();
     if (term.length < 2) return [];
@@ -108,14 +117,6 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
 
     return matches.slice(0, 6);
   }, [newItem.descripcion, products]);
-  const [selectedClient, setSelectedClient] = useState<ClientData | null>(null);
-  const [showClientDrawer, setShowClientDrawer] = useState(false);
-  const [clientSearch, setClientSearch] = useState('');
-  const [items, setItems] = useState<ItemForm[]>([]);
-  const [showAddItem, setShowAddItem] = useState(false);
-  const [newItem, setNewItem] = useState({ codigo: '', descripcion: '', precioUni: 0, cantidad: 1, tipoItem: 1 });
-  const [tipoDoc, setTipoDoc] = useState('01');
-  const [formaPago, setFormaPago] = useState('01');
 
   // Recalcular precios al cambiar tipo de documento (Móvil)
   const handleSetTipoDoc = (nuevoTipo: string) => {
@@ -197,7 +198,7 @@ const MobileFactura: React.FC<MobileFacturaProps> = ({
         handleSetTipoDoc('01');
       }
     }
-  }, [selectedClient, clienteEsConsumidorFinal]); // Removed tipoDoc dependency to avoid loop with new handler
+  }, [selectedClient, clienteEsConsumidorFinal]);
 
   useEffect(() => {
     const load = async () => {
