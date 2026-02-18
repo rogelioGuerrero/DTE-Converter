@@ -11,11 +11,11 @@ interface NavigationTabsProps {
 }
 
 const TABS_CONFIG = [
-  { key: 'batch', label: 'Libros IVA', icon: LayoutDashboard, color: 'indigo' },
+  { key: 'factura', label: 'Facturar', icon: FileText, color: 'green' },
   { key: 'clients', label: 'Clientes', icon: Users, color: 'blue' },
   { key: 'inventory', label: 'Inventario', icon: Boxes, color: 'amber' },
-  { key: 'factura', label: 'Facturar', icon: FileText, color: 'green' },
-  { key: 'historial', label: 'Historial', icon: History, color: 'purple' }
+  { key: 'historial', label: 'Historial', icon: History, color: 'purple' },
+  { key: 'batch', label: 'Libros IVA', icon: LayoutDashboard, color: 'indigo' },
 ];
 
 export const NavigationTabs: React.FC<NavigationTabsProps> = ({ 

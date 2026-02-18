@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Lock, Save, Settings, Shield, X, Key, LayoutTemplate, CheckCircle2, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
-import QRCode from 'qrcode';
+import * as QRCode from 'qrcode';
 import { loadSettings, saveSettings, AppSettings } from '../utils/settings';
 import { validateAdminPin, hasAdminPin } from '../utils/adminPin';
 import { getUserModeConfig, setUserMode, UserMode } from '../utils/userMode';
