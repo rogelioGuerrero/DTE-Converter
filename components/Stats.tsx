@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileCheck, FileWarning, DollarSign } from 'lucide-react';
+import { FileCheck, FileWarning, DollarSign, FileText } from 'lucide-react';
 
 interface StatsProps {
   totalFiles: number;
@@ -12,8 +12,11 @@ interface StatsProps {
 }
 
 const Stats: React.FC<StatsProps> = ({ totalFiles, successCount, errorCount, totalAmount, totalNeto, totalIva }) => {
+  // Calcular F14 estimado (1.75% del neto gravado)
+  const f14Estimado = totalNeto * 0.0175;
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl mx-auto mt-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-7xl mx-auto mt-8">
       
       {/* Card: Total Amount */}
       <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200 transform transition-all hover:-translate-y-1">
@@ -81,6 +84,37 @@ const Stats: React.FC<StatsProps> = ({ totalFiles, successCount, errorCount, tot
         ) : (
            <p className="text-xs text-green-600 mt-4 font-medium">Todo se ve bien</p>
         )}
+      </div>
+
+      {/* Card: F14 Estimado */}
+      <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl p-6 border border-emerald-200 shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex justify-between items-start mb-3">
+          <div>
+            <p className="text-emerald-700 font-medium text-sm mb-1">F14 Estimado</p>
+            <div className="flex items-baseline space-x-2">
+              <h3 className="text-3xl font-bold text-emerald-900">
+                ${f14Estimado.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h3>
+            </div>
+          </div>
+          <div className="bg-emerald-600 p-2 rounded-lg">
+            <FileText className="w-6 h-6 text-white" />
+          </div>
+        </div>
+        <div className="space-y-1 mt-4">
+          <div className="flex justify-between text-xs">
+            <span className="text-emerald-600">Base Gravada:</span>
+            <span className="font-medium text-emerald-800">${totalNeto.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-emerald-600">Tasa:</span>
+            <span className="font-medium text-emerald-800">1.75%</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-emerald-600">Retenciones:</span>
+            <span className="font-medium text-green-600">-$0.00</span>
+          </div>
+        </div>
       </div>
 
     </div>

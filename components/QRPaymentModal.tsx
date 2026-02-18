@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { QrCode, CreditCard, Copy, CheckCircle, Smartphone, ArrowLeft } from 'lucide-react';
 import { useToast } from './Toast';
-import QRCode from 'qrcode';
+import * as QRCode from 'qrcode';
 
 interface QRPaymentModalProps {
   isOpen: boolean;

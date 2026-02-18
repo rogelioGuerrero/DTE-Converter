@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import QRCode from 'qrcode';
+import * as QRCode from 'qrcode';
 import { 
   QrCode, 
   Share2, 
