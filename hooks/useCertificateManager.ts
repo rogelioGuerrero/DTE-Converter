@@ -101,8 +101,7 @@ export const useCertificateManager = (params: {
           nit: nit.replace(/-/g, ''), // Limpiar guiones
           nrc: nrc.replace(/-/g, ''),
           passwordPri: certificatePassword,
-          ambiente,
-          businessId: nit.replace(/-/g, '')
+          ambiente
         })
       });
 
