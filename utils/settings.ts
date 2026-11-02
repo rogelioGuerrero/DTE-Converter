@@ -58,4 +58,5 @@ export const loadSettings = (): AppSettings => {
 
 export const saveSettings = (settings: AppSettings): void => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  window.dispatchEvent(new Event('dte-settings-changed'));
 };

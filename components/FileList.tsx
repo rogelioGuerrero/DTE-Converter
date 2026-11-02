@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 
 import { GroupedData, ProcessedFile, AppMode } from '../types';
 
@@ -49,14 +49,23 @@ interface FileListProps {
 
 
 const COMPRAS_TIPO_COSTO_OPTIONS = [
-  { value: '1', label: 'Gtos. venta' },
-  { value: '2', label: 'Gtos. admón.' },
-  { value: '3', label: 'Gtos. financieros' },
-  { value: '4', label: 'Costo art. import.' },
-  { value: '5', label: 'Costo art. internos' },
-  { value: '6', label: 'Costos ind. fabr.' },
+  { value: '1', label: 'Gastos de venta sin donación' },
+  { value: '2', label: 'Gastos de administración sin donación' },
+  { value: '3', label: 'Gastos financieros sin donación' },
+  { value: '4', label: 'Costo de artículos importados / internaciones' },
+  { value: '5', label: 'Costo de artículos internos' },
+  { value: '6', label: 'Costos indirectos de fabricación' },
   { value: '7', label: 'Mano de obra' },
 ];
+
+const COMPRAS_T_LABELS: Record<string, string> = Object.fromEntries(
+  COMPRAS_TIPO_COSTO_OPTIONS.map(o => [o.value, o.label])
+);
+
+// Tipos de costo/gasto válidos según la clasificación R (catálogo oficial):
+// R=Costo usa 4-7 (costos), R=Gasto usa 1-3 (gastos)
+const T_FOR_COSTO = ['4', '5', '6', '7'];
+const T_FOR_GASTO = ['1', '2', '3'];
 
 // Celda editable de clasificación de renta (columnas R y T del Anexo 3)
 const ClasificacionCompraCell: React.FC<{
@@ -64,20 +73,50 @@ const ClasificacionCompraCell: React.FC<{
   onChange: (overrides: { clasificacion?: string; tipoCosto?: string }) => void;
 }> = ({ file, onChange }) => {
   const [editing, setEditing] = useState(false);
-  const defaults = loadSettings();
-  const r = file.anexoOverrides?.clasificacion || defaults.comprasClasificacion || '1';
-  const t = file.anexoOverrides?.tipoCosto || defaults.comprasTipoCosto || '5';
-  const hasOverride = !!(file.anexoOverrides?.clasificacion || file.anexoOverrides?.tipoCosto);
+  const [defaults, setDefaults] = useState(loadSettings);
+
+  // Refrescar si el usuario cambia su default en Configuración
+  useEffect(() => {
+    const handler = () => setDefaults(loadSettings());
+    window.addEventListener('dte-settings-changed', handler);
+    return () => window.removeEventListener('dte-settings-changed', handler);
+  }, []);
+
+  const rOverride = file.anexoOverrides?.clasificacion;
+  const tOverride = file.anexoOverrides?.tipoCosto;
+  const r = rOverride || defaults.comprasClasificacion || '1';
+  const t = tOverride || defaults.comprasTipoCosto || '5';
+  const esGasto = r === '2';
+  const tOptions = COMPRAS_TIPO_COSTO_OPTIONS.filter(o =>
+    (esGasto ? T_FOR_GASTO : T_FOR_COSTO).includes(o.value)
+  );
 
   if (!editing) {
     return (
       <button
         onClick={() => setEditing(true)}
-        title="Clasificación de renta (R · T). Clic para editar por documento."
-        className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-mono border border-transparent hover:border-indigo-200 hover:bg-indigo-50 text-gray-600 transition-all"
+        title="Clasificación de renta por documento (columnas R y T del Anexo 3). Clic para editar."
+        className="flex items-center gap-1 px-1.5 py-1 rounded-md hover:bg-indigo-50 transition-all"
       >
-        <span className={hasOverride ? 'text-indigo-700 font-bold' : ''}>
-          {r === '2' ? 'Gasto' : 'Costo'} · T{t}
+        <span
+          title={`R · Clasificación: ${r} — ${esGasto ? 'Gasto' : 'Costo'}${rOverride ? ' (editado a mano)' : ' (default global)'}`}
+          className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+            rOverride
+              ? 'bg-indigo-100 text-indigo-700 border border-indigo-300'
+              : esGasto
+                ? 'bg-sky-50 text-sky-700'
+                : 'bg-emerald-50 text-emerald-700'
+          }`}
+        >
+          {esGasto ? 'Gasto' : 'Costo'}
+        </span>
+        <span
+          title={`T · Tipo de costo/gasto: ${t} — ${COMPRAS_T_LABELS[t] || ''}${tOverride ? ' (editado a mano)' : ' (default global)'}`}
+          className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
+            tOverride ? 'bg-indigo-100 text-indigo-700 border border-indigo-300' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          T{t}
         </span>
         <Pencil className="w-3 h-3 text-gray-400" />
       </button>
@@ -87,24 +126,24 @@ const ClasificacionCompraCell: React.FC<{
   return (
     <div className="flex items-center gap-1">
       <select
-        value={file.anexoOverrides?.clasificacion || ''}
+        value={rOverride || ''}
         onChange={(e) => onChange({ ...file.anexoOverrides, clasificacion: e.target.value || undefined })}
-        className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white"
-        title="Columna R — Clasificación"
+        className="text-[11px] border border-gray-300 rounded px-1 py-1 bg-white"
+        title="R — Clasificación de la compra"
       >
-        <option value="">R: global</option>
-        <option value="1">1 Costo</option>
-        <option value="2">2 Gasto</option>
+        <option value="">Global ({r === '2' ? 'Gasto' : 'Costo'})</option>
+        <option value="1">1 — Costo (para revender)</option>
+        <option value="2">2 — Gasto (uso propio)</option>
       </select>
       <select
-        value={file.anexoOverrides?.tipoCosto || ''}
+        value={tOverride || ''}
         onChange={(e) => onChange({ ...file.anexoOverrides, tipoCosto: e.target.value || undefined })}
-        className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white"
-        title="Columna T — Tipo de costo/gasto"
+        className="text-[11px] border border-gray-300 rounded px-1 py-1 bg-white"
+        title={`T — Tipo de ${esGasto ? 'gasto' : 'costo'} (solo opciones válidas para ${esGasto ? 'Gasto' : 'Costo'})`}
       >
-        <option value="">T: global</option>
-        {COMPRAS_TIPO_COSTO_OPTIONS.map(o => (
-          <option key={o.value} value={o.value}>{o.value} {o.label}</option>
+        <option value="">Global ({defaults.comprasTipoCosto} — {COMPRAS_T_LABELS[defaults.comprasTipoCosto || '5']})</option>
+        {tOptions.map(o => (
+          <option key={o.value} value={o.value}>{o.value} — {o.label}</option>
         ))}
       </select>
       <button
@@ -1003,7 +1042,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
 
                     <th className="px-6 py-3 text-right font-medium">Monto</th>
 
-                    {appMode === 'compras' && <th className="px-4 py-3 font-medium" title="Clasificación de renta para el Anexo 3 (R · T)">Clasif. F-07</th>}
+                    {appMode === 'compras' && <th className="px-4 py-3 font-medium" title="Clasificación de renta por documento (columnas R · T del Anexo 3). Vacío = usa tu default de Configuración.">Costo / Gasto</th>}
 
                     <th className="px-6 py-3 font-medium">Archivo</th>
 
