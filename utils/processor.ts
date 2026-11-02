@@ -1,5 +1,6 @@
 import { DTEData, ProcessedFile, FieldConfiguration, AppMode } from '../types';
 import { extractValue, VENTAS_CONFIG } from './fieldMapping';
+import { comprasRowFromDTE, buildComprasCsvLine, ComprasRowData } from './anexoCompras';
 import { loadSettings } from './settings';
 
 // Standard DTE Types for El Salvador
@@ -126,11 +127,18 @@ export const processJsonContent = (
     const displayExentas = (tipoDte === '05' ? -Math.abs(data.resumen?.totalExenta || 0) : (data.resumen?.totalExenta || 0)).toFixed(2);
 
     // Dynamic CSV Line Generation
-    const csvFields = config
-      .filter(field => field.enabled)
-      .map(field => extractValue(data, field, tipoDte));
-    
-    const linea = csvFields.join(';') + '\n';
+    // Compras usa el generador canónico del Anexo 3 (mismo formato que la exportación tardía)
+    let comprasRow: ComprasRowData | null = null;
+    let linea: string;
+    if (effectiveMode === 'compras') {
+      comprasRow = comprasRowFromDTE(data);
+      linea = buildComprasCsvLine(comprasRow, settings) + '\n';
+    } else {
+      const csvFields = config
+        .filter(field => field.enabled)
+        .map(field => extractValue(data, field, tipoDte));
+      linea = csvFields.join(';') + '\n';
+    }
 
     // Validar si está fuera del plazo (solo para compras)
     let isOutOfTime = false;
@@ -175,6 +183,12 @@ export const processJsonContent = (
         tipoDTE: tipoDte, // Agregar tipo de DTE
         codigoGeneracion: data.identificacion?.codigoGeneracion || '', // Agregar código de generación
         selloRecibido: data.selloRecibido || '', // Agregar sello de recepción
+        // Datos del proveedor para regenerar el anexo de compras al exportar
+        proveedorNit: data.emisor?.nit || '',
+        proveedorNrc: data.emisor?.nrc || '',
+        proveedorDui: data.emisor?.numDocumento || '',
+        comprasExentasNoSuj: comprasRow ? comprasRow.exentasNoSuj.toFixed(2) : undefined,
+        comprasGravadas: comprasRow ? comprasRow.gravadas.toFixed(2) : undefined,
       },
       taxpayer: taxpayerInfo,
       dteType: tipoDte,

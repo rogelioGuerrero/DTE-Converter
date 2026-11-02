@@ -1,4 +1,6 @@
 import { FieldConfiguration, DTEData } from '../types';
+import { loadSettings } from './settings';
+import { getComprasMontos, getTipoOperacionCompras } from './anexoCompras';
 
 // --- VENTAS CONFIGURATION (Legacy/Default) ---
 // Based on F-07 Manual for Sales
@@ -35,13 +37,13 @@ export const COMPRAS_CONFIG: FieldConfiguration = [
   { id: 'c1', columnLetter: 'A', label: 'Fecha Emisión', sourceType: 'json', value: 'identificacion.fecEmi', transformation: 'date_ddmmyyyy', enabled: true },
   { id: 'c2', columnLetter: 'B', label: 'Clase Doc', sourceType: 'static', value: '4', transformation: 'none', enabled: true },
   { id: 'c3', columnLetter: 'C', label: 'Tipo Doc', sourceType: 'json', value: 'identificacion.tipoDte', transformation: 'none', enabled: true },
-  { id: 'c4', columnLetter: 'D', label: 'Num. Resolución/Gen', sourceType: 'json', value: 'identificacion.codigoGeneracion', transformation: 'remove_hyphens', enabled: true }, // For DTE usually generation code
-  { id: 'c5', columnLetter: 'E', label: 'NRC Proveedor', sourceType: 'json', value: 'emisor.nrc', transformation: 'none', enabled: true },
+  { id: 'c4', columnLetter: 'D', label: 'Num. Documento', sourceType: 'json', value: 'identificacion.codigoGeneracion', transformation: 'remove_hyphens', enabled: true }, // Anexo 3: código de generación sin guiones
+  { id: 'c5', columnLetter: 'E', label: 'NIT o NRC Proveedor', sourceType: 'conditional', value: 'proveedorNitNrc', transformation: 'none', enabled: true },
   { id: 'c6', columnLetter: 'F', label: 'Nombre Proveedor', sourceType: 'json', value: 'emisor.nombre', transformation: 'none', enabled: true },
-  { id: 'c7', columnLetter: 'G', label: 'Comp. Int. Exentas', sourceType: 'json', value: 'resumen.totalExenta', transformation: 'currency', enabled: true },
+  { id: 'c7', columnLetter: 'G', label: 'Comp. Int. Exentas y/o No Sujetas', sourceType: 'conditional', value: 'comprasExentasNoSuj', transformation: 'none', enabled: true },
   { id: 'c8', columnLetter: 'H', label: 'Internaciones Exentas', sourceType: 'static', value: '0.00', transformation: 'none', enabled: true },
   { id: 'c9', columnLetter: 'I', label: 'Importaciones Exentas', sourceType: 'static', value: '0.00', transformation: 'none', enabled: true },
-  { id: 'c10', columnLetter: 'J', label: 'Comp. Int. Gravadas', sourceType: 'json', value: 'resumen.totalGravada', transformation: 'currency', enabled: true },
+  { id: 'c10', columnLetter: 'J', label: 'Comp. Int. Gravadas', sourceType: 'conditional', value: 'comprasGravadas', transformation: 'none', enabled: true },
   { id: 'c11', columnLetter: 'K', label: 'Internaciones Gravadas', sourceType: 'static', value: '0.00', transformation: 'none', enabled: true },
   { id: 'c12', columnLetter: 'L', label: 'Importaciones Gravadas', sourceType: 'static', value: '0.00', transformation: 'none', enabled: true },
   { id: 'c13', columnLetter: 'M', label: 'Imp. Grav. Servicios', sourceType: 'static', value: '0.00', transformation: 'none', enabled: true },
@@ -94,32 +96,39 @@ const getConditionalValue = (data: DTEData, field: string, tipoDte?: string): an
       if (tipoDte === '11' || totalExenta > 0 || totalNoSujeta > 0) return '1';
       return '3'; // Default a anexo 3 para operaciones gravadas
       
-    case 'tipoOperacionCompras':
-      // Columna Q: Tipo Operación en compras
-      // 1=Operación gravada, 2=Operación exenta, 3=Operación no sujeta
-      if (totalGravada > 0) return '1';
-      if (totalExenta > 0) return '2';
-      if (totalNoSujeta > 0) return '3';
-      return '1'; // Default a gravada
-      
+    case 'proveedorNitNrc':
+      // Columna E: NIT o NRC del proveedor (emisor), sin guiones
+      return String(data.emisor?.nrc || data.emisor?.nit || '').replace(/[-\s]/g, '');
+
+    case 'comprasExentasNoSuj': {
+      // Columna G: Compras internas exentas y/o no sujetas - descuentos
+      const { exentasNoSuj } = getComprasMontos(data);
+      return exentasNoSuj.toFixed(2);
+    }
+
+    case 'comprasGravadas': {
+      // Columna J: Compras internas gravadas - descuGravada
+      const { gravadas } = getComprasMontos(data);
+      return gravadas.toFixed(2);
+    }
+
+    case 'tipoOperacionCompras': {
+      // Columna Q: 1=gravada, 2=no gravada/exenta, 3=no sujeta, 4=mixta, 0=sin datos
+      const { exentasNoSuj, gravadas } = getComprasMontos(data);
+      return getTipoOperacionCompras(exentasNoSuj, gravadas);
+    }
+
     case 'clasificacionCompra':
-      // Columna R: Clasificación (1=Costo, 2=Gasto)
-      // Lógica: Si es factura de compra (01, 03, 08) y tiene items de inventario -> Costo
-      // Si es factura de servicios -> Gasto
-      // Por ahora, default a Costo para compras locales
-      if (tipoDte === '01' || tipoDte === '03' || tipoDte === '08') return '1'; // Costo
-      if (tipoDte === '02' || tipoDte === '04') return '2'; // Gasto (servicios)
-      return '1'; // Default a Costo
-      
+      // Columna R: Clasificación (1=Costo, 2=Gasto) — configurable por el contribuyente
+      return loadSettings().comprasClasificacion || '1';
+
     case 'sectorCompra':
-      // Columna S: Sector (1=Industria, 2=Comercio, 3=Servicios, 4=Agropecuario, 5=Otros)
-      // Por ahora, default a Industria
-      return '1';
-      
+      // Columna S: Sector del sujeto pasivo — configurable por el contribuyente
+      return loadSettings().comprasSector || '4';
+
     case 'tipoCostoCompra':
-      // Columna T: Tipo Costo (1=Inicial, 2=Desarrollo, 3=Terminados, 4=Otros)
-      // Por ahora, default a Otros
-      return '4';
+      // Columna T: Tipo de costo/gasto (catálogo 1-7) — configurable por el contribuyente
+      return loadSettings().comprasTipoCosto || '5';
       
     case 'numeroAnexoCompras':
       // Columna U: Número Anexo para compras

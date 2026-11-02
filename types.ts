@@ -9,6 +9,7 @@ export interface DTEEmisor {
   nit: string;
   nrc: string;
   nombre: string;
+  numDocumento?: string; // DUI del proveedor (persona natural sin NRC)
 } 
 
 export interface DTEReceptor {
@@ -30,6 +31,9 @@ export interface DTEResumen {
   subTotal: number;
   montoTotalOperacion: number;
   tributos: DTETributo[] | null;
+  descuExenta?: number;
+  descuNoSuj?: number;
+  descuGravada?: number;
 }
 
 export interface DTEData {
@@ -57,6 +61,12 @@ export interface ProcessedFile {
     tipoDTE?: string; // Tipo de DTE (01, 03, 05, 06)
     codigoGeneracion?: string; // Código de generación
     selloRecibido?: string; // Sello de recepción
+    // Datos del proveedor (emisor) para regenerar el anexo de compras al exportar
+    proveedorNit?: string;
+    proveedorNrc?: string;
+    proveedorDui?: string;
+    comprasExentasNoSuj?: string; // totalExenta + totalNoSuj - descuentos
+    comprasGravadas?: string; // totalGravada - descuGravada
   };
   taxpayer?: {
     nombre: string;
@@ -68,6 +78,12 @@ export interface ProcessedFile {
   errorMessage?: string;
   detectedMode?: AppMode; // Mode detected in auto-detection (ventas or compras)
   isOutOfTime?: boolean; // true si está fuera del plazo de 3 meses para compras
+  // Overrides por documento para las columnas de renta del Anexo 3 (compras).
+  // Si un valor está ausente, se usa el default global de settings al exportar.
+  anexoOverrides?: {
+    clasificacion?: string; // Columna R: '1' costo, '2' gasto
+    tipoCosto?: string;     // Columna T: catálogo '1'..'7'
+  };
 }
 
 export interface GroupedData {

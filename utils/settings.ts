@@ -17,6 +17,11 @@ export interface AppSettings {
   inventoryFallbackByDescription?: boolean; // por defecto ON
   inventoryAutoMatchThreshold?: number; // 0..1
   inventoryAskMatchThreshold?: number; // 0..1
+
+  // --- Anexo 3 (Compras) F-07: columnas de renta asignadas por el contribuyente ---
+  comprasClasificacion?: string; // R: '1' Costo, '2' Gasto
+  comprasSector?: string;        // S: '1' Industria, '2' Comercio, '3' Agropecuaria, '4' Servicios/Prof/Artes/Oficios
+  comprasTipoCosto?: string;     // T: '1'..'7' según catálogo DGII
 }
 
 const SETTINGS_KEY = 'dte_app_settings';
@@ -31,7 +36,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   inventoryShowLotProvider: false,
   inventoryFallbackByDescription: true,
   inventoryAutoMatchThreshold: 0.9,
-  inventoryAskMatchThreshold: 0.75
+  inventoryAskMatchThreshold: 0.75,
+  comprasClasificacion: '1',
+  comprasSector: '4',
+  comprasTipoCosto: '5'
   // licensingEnabled eliminado - ahora es controlado remotamente
 };
 

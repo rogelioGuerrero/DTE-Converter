@@ -6,6 +6,7 @@ import FieldManager from './FieldManager';
 import DownloadModal from './DownloadModal';
 import History from './History';
 import { processJsonContent, downloadCSV } from '../utils/processor';
+import { comprasRowFromFile, buildComprasCsvLine } from '../utils/anexoCompras';
 import { VENTAS_CONFIG, COMPRAS_CONFIG } from '../utils/fieldMapping';
 import { addHistoryEntry, computeSHA256 } from '../utils/historyDb';
 import { consumeExportSlot, getUsageInfo } from '../utils/usageLimit';
@@ -233,6 +234,17 @@ const BatchDashboard: React.FC = () => {
       setGroupedData(newData);
   };
 
+  // Actualizar un archivo (ej: overrides de clasificación del anexo de compras)
+  const handleUpdateFile = (month: string, updatedFile: ProcessedFile) => {
+    setGroupedData(prev => {
+      const updatedFiles = (prev[month] || []).map(f =>
+        f.id === updatedFile.id ? updatedFile : f
+      );
+      saveLibroData(appMode, month, { [month]: updatedFiles });
+      return { ...prev, [month]: updatedFiles };
+    });
+  };
+
   const handleReset = async () => {
     setGroupedData({});
     setErrors([]);
@@ -258,7 +270,12 @@ const BatchDashboard: React.FC = () => {
       const files = groupedData[month];
       if (files && files.length > 0) {
         files.forEach(f => {
-          allLines += f.csvLine;
+          if (appMode === 'compras') {
+            const row = comprasRowFromFile(f);
+            allLines += row ? buildComprasCsvLine(row, settings, f.anexoOverrides) + '\n' : f.csvLine;
+          } else {
+            allLines += f.csvLine;
+          }
           exportTotalAmount += parseFloat(f.data.total);
         });
         exportFileCount += files.length;
@@ -594,6 +611,7 @@ const BatchDashboard: React.FC = () => {
                 searchTerm={searchTerm} 
                 onReorder={handleReorder}
                 onRemoveFiles={handleRemoveFiles}
+                onUpdateFile={handleUpdateFile}
                 appMode={appMode}
               />
             </div>

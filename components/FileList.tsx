@@ -4,11 +4,15 @@ import { GroupedData, ProcessedFile, AppMode } from '../types';
 
 
 
-import { Download, FileText, AlertCircle, Calendar, Search, Eye, AlertTriangle, GripVertical, Trash2, CheckSquare, Minimize2 } from 'lucide-react';
+import { Download, FileText, AlertCircle, Calendar, Search, Eye, AlertTriangle, GripVertical, Trash2, CheckSquare, Minimize2, Pencil } from 'lucide-react';
 
 
 
 import { downloadCSV } from '../utils/processor';
+
+import { buildComprasCsvLine, comprasRowFromFile } from '../utils/anexoCompras';
+
+import { loadSettings } from '../utils/settings';
 
 import { consumeExportSlot } from '../utils/usageLimit';
 
@@ -38,11 +42,82 @@ interface FileListProps {
 
   appMode: AppMode;
 
+  onUpdateFile?: (month: string, file: ProcessedFile) => void; // Persistir overrides por documento (anexo compras)
+
 }
 
 
 
-const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, onReorder, onRemoveFiles, appMode }) => {
+const COMPRAS_TIPO_COSTO_OPTIONS = [
+  { value: '1', label: 'Gtos. venta' },
+  { value: '2', label: 'Gtos. admón.' },
+  { value: '3', label: 'Gtos. financieros' },
+  { value: '4', label: 'Costo art. import.' },
+  { value: '5', label: 'Costo art. internos' },
+  { value: '6', label: 'Costos ind. fabr.' },
+  { value: '7', label: 'Mano de obra' },
+];
+
+// Celda editable de clasificación de renta (columnas R y T del Anexo 3)
+const ClasificacionCompraCell: React.FC<{
+  file: ProcessedFile;
+  onChange: (overrides: { clasificacion?: string; tipoCosto?: string }) => void;
+}> = ({ file, onChange }) => {
+  const [editing, setEditing] = useState(false);
+  const defaults = loadSettings();
+  const r = file.anexoOverrides?.clasificacion || defaults.comprasClasificacion || '1';
+  const t = file.anexoOverrides?.tipoCosto || defaults.comprasTipoCosto || '5';
+  const hasOverride = !!(file.anexoOverrides?.clasificacion || file.anexoOverrides?.tipoCosto);
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        title="Clasificación de renta (R · T). Clic para editar por documento."
+        className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-mono border border-transparent hover:border-indigo-200 hover:bg-indigo-50 text-gray-600 transition-all"
+      >
+        <span className={hasOverride ? 'text-indigo-700 font-bold' : ''}>
+          {r === '2' ? 'Gasto' : 'Costo'} · T{t}
+        </span>
+        <Pencil className="w-3 h-3 text-gray-400" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        value={file.anexoOverrides?.clasificacion || ''}
+        onChange={(e) => onChange({ ...file.anexoOverrides, clasificacion: e.target.value || undefined })}
+        className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white"
+        title="Columna R — Clasificación"
+      >
+        <option value="">R: global</option>
+        <option value="1">1 Costo</option>
+        <option value="2">2 Gasto</option>
+      </select>
+      <select
+        value={file.anexoOverrides?.tipoCosto || ''}
+        onChange={(e) => onChange({ ...file.anexoOverrides, tipoCosto: e.target.value || undefined })}
+        className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white"
+        title="Columna T — Tipo de costo/gasto"
+      >
+        <option value="">T: global</option>
+        {COMPRAS_TIPO_COSTO_OPTIONS.map(o => (
+          <option key={o.value} value={o.value}>{o.value} {o.label}</option>
+        ))}
+      </select>
+      <button
+        onClick={() => setEditing(false)}
+        className="text-[11px] text-indigo-600 hover:underline px-1"
+      >
+        OK
+      </button>
+    </div>
+  );
+};
+
+const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, onReorder, onRemoveFiles, appMode, onUpdateFile }) => {
 
   const [selectedFile, setSelectedFile] = useState<ProcessedFile | null>(null);
 
@@ -208,6 +283,76 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
 
 
 
+    // En modo compras el CSV mensual es el Anexo 3 - Detalle de Compras (21 columnas)
+
+    if (appMode === 'compras') {
+
+      const validFiles = files.filter(f => !f.isOutOfTime);
+
+      const skipped = files.length - validFiles.length;
+
+      if (validFiles.length === 0) {
+
+        notify('No hay documentos dentro del plazo para exportar en este mes.', 'info');
+
+        return;
+
+      }
+
+
+
+      const settings = loadSettings();
+
+      const content = validFiles
+
+        .map(f => {
+
+          const row = comprasRowFromFile(f);
+
+          return row ? buildComprasCsvLine(row, settings, f.anexoOverrides) : f.csvLine.replace(/\n+$/, '');
+
+        })
+
+        .join('\n') + '\n';
+
+
+
+      const fileName = `LIBRO_COMPRAS_${month}.csv`;
+
+      downloadCSV(content, fileName);
+
+
+
+      const totalAmount = validFiles.reduce((sum, f) => sum + parseFloat(f.data.total), 0);
+
+      const hash = await computeSHA256(content);
+
+      await addHistoryEntry({
+
+        timestamp: Date.now(),
+
+        mode: 'compras',
+
+        fileName,
+
+        totalAmount,
+
+        fileCount: validFiles.length,
+
+        hash,
+
+      });
+
+
+
+      notify(`Se exportaron ${validFiles.length} documentos${skipped > 0 ? ` (${skipped} fuera de plazo omitidos)` : ''}`, 'success');
+
+      return;
+
+    }
+
+
+
     // Separar archivos por tipo de DTE
 
     const contribuyentesFiles = files.filter(f => f.dteType === '03'); // CCF
@@ -286,7 +431,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
 
           timestamp: Date.now(),
 
-          mode: 'ventas',
+          mode: appMode,
 
           fileName,
 
@@ -382,7 +527,7 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
 
           timestamp: Date.now(),
 
-          mode: 'ventas',
+          mode: appMode,
 
           fileName,
 
@@ -438,9 +583,53 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
 
       
 
-      const content = selectedFiles.map(f => f.csvLine).join('');
+      const settings = loadSettings();
+
+      const content = selectedFiles.map(f => {
+
+          if (appMode === 'compras') {
+
+              const row = comprasRowFromFile(f);
+
+              if (row) return buildComprasCsvLine(row, settings, f.anexoOverrides) + '\n';
+
+          }
+
+          return f.csvLine;
+
+      }).join('');
 
       downloadCSV(content, `seleccionados_export.csv`);
+
+  };
+
+
+
+  const handleBulkClasificar = (patch: { clasificacion?: string; tipoCosto?: string }) => {
+
+      if (!onUpdateFile) return;
+
+      months.forEach(month => {
+
+          groupedData[month].forEach(file => {
+
+              if (selectedIds.has(file.id)) {
+
+                  onUpdateFile(month, {
+
+                      ...file,
+
+                      anexoOverrides: { ...file.anexoOverrides, ...patch },
+
+                  });
+
+              }
+
+          });
+
+      });
+
+      notify('Clasificación actualizada en los documentos seleccionados', 'success');
 
   };
 
@@ -622,6 +811,54 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
 
               </span>
 
+              {appMode === 'compras' && selectedIds.size > 0 && onUpdateFile && (
+
+                  <div className="flex items-center gap-1 ml-4 pl-4 border-l border-gray-200">
+
+                      <span className="text-xs text-gray-500">Clasificar {selectedIds.size}:</span>
+
+                      <select
+
+                          className="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white"
+
+                          defaultValue=""
+
+                          onChange={(e) => handleBulkClasificar({ clasificacion: e.target.value || undefined })}
+
+                      >
+
+                          <option value="" disabled>R…</option>
+
+                          <option value="1">1 Costo</option>
+
+                          <option value="2">2 Gasto</option>
+
+                      </select>
+
+                      <select
+
+                          className="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white"
+
+                          defaultValue=""
+
+                          onChange={(e) => handleBulkClasificar({ tipoCosto: e.target.value || undefined })}
+
+                      >
+
+                          <option value="" disabled>T…</option>
+
+                          {COMPRAS_TIPO_COSTO_OPTIONS.map(o => (
+
+                              <option key={o.value} value={o.value}>{o.value} {o.label}</option>
+
+                          ))}
+
+                      </select>
+
+                  </div>
+
+              )}
+
           </div>
 
       )}
@@ -766,6 +1003,8 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
 
                     <th className="px-6 py-3 text-right font-medium">Monto</th>
 
+                    {appMode === 'compras' && <th className="px-4 py-3 font-medium" title="Clasificación de renta para el Anexo 3 (R · T)">Clasif. F-07</th>}
+
                     <th className="px-6 py-3 font-medium">Archivo</th>
 
                     <th className="px-6 py-3 text-center font-medium">Acción</th>
@@ -845,6 +1084,22 @@ const FileList: React.FC<FileListProps> = ({ groupedData, errors, searchTerm, on
                         <td className="px-6 py-4 font-mono text-xs text-gray-500">{file.data.controlNumber}</td>
 
                         <td className="px-6 py-4 text-right font-bold text-gray-700">${file.data.total}</td>
+
+                        {appMode === 'compras' && (
+
+                            <td className="px-4 py-4">
+
+                                <ClasificacionCompraCell
+
+                                    file={file}
+
+                                    onChange={(overrides) => onUpdateFile?.(month, { ...file, anexoOverrides: overrides })}
+
+                                />
+
+                            </td>
+
+                        )}
 
                         <td className="px-6 py-4 text-xs text-gray-400 truncate max-w-[150px]" title={file.fileName}>{file.fileName}</td>
 

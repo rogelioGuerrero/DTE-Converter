@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Save, Settings, Shield, X, Key, LayoutTemplate, CheckCircle2, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
+import { Lock, Save, Settings, Shield, X, Key, LayoutTemplate, CheckCircle2, ShieldCheck, Smartphone, Trash2, ShoppingCart } from 'lucide-react';
 import QRCode from 'qrcode';
 import { loadSettings, saveSettings, AppSettings } from '../utils/settings';
 import { validateAdminPin, hasAdminPin } from '../utils/adminPin';
@@ -114,6 +114,7 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
   const tabs = [
     { id: 'general', label: 'General', icon: Settings },
     { id: 'modo', label: 'Modo de Uso', icon: LayoutTemplate },
+    { id: 'compras', label: 'Compras', icon: ShoppingCart },
     { id: 'security', label: 'Seguridad', icon: ShieldCheck },
     { id: 'licencias', label: 'Licencias', icon: Shield }
   ];
@@ -266,6 +267,72 @@ const AdminModal: React.FC<AdminModalProps> = ({ isOpen, onClose }) => {
                         </p>
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {activeTab === 'compras' && (
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700">Anexo 3 — Detalle de Compras (F-07)</h4>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Valores de renta que se aplican al exportar el CSV de compras. El tipo de operación (Q) se calcula automáticamente según los montos de cada documento.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
+                          Clasificación (columna R)
+                        </label>
+                        <select
+                          value={settings.comprasClasificacion || '1'}
+                          onChange={(e) => setSettings({ ...settings, comprasClasificacion: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                        >
+                          <option value="1">1 — Costo</option>
+                          <option value="2">2 — Gasto</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
+                          Sector del contribuyente (columna S)
+                        </label>
+                        <select
+                          value={settings.comprasSector || '4'}
+                          onChange={(e) => setSettings({ ...settings, comprasSector: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                        >
+                          <option value="1">1 — Industria</option>
+                          <option value="2">2 — Comercio</option>
+                          <option value="3">3 — Agropecuario</option>
+                          <option value="4">4 — Servicios, profesiones, artes y oficios</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
+                          Tipo de costo o gasto (columna T)
+                        </label>
+                        <select
+                          value={settings.comprasTipoCosto || '5'}
+                          onChange={(e) => setSettings({ ...settings, comprasTipoCosto: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                        >
+                          <option value="1">1 — Gastos de venta sin donación</option>
+                          <option value="2">2 — Gastos de administración sin donación</option>
+                          <option value="3">3 — Gastos financieros sin donación</option>
+                          <option value="4">4 — Costo de artículos importados / internaciones</option>
+                          <option value="5">5 — Costo de artículos internos</option>
+                          <option value="6">6 — Costos indirectos de fabricación</option>
+                          <option value="7">7 — Mano de obra</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-gray-400">
+                      Estos valores los define tu contador según la naturaleza de tus compras; se aplican a todos los documentos del anexo.
+                    </p>
                   </div>
                 )}
 
